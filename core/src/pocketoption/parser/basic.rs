@@ -1,5 +1,16 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+
+use crate::pocketoption::types::update::float_time;
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateStream {
+    active: String,
+    #[serde(with = "float_time")]
+    time: DateTime<Utc>,
+    value: f64
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -61,7 +72,8 @@ struct OptionData {
     arr: Vec<String>,
     in9: i128,
     val: bool,
-    times: Vec<Time>,
+    // #[serde(with = "float_time")]
+    times: Vec<DateTime<Utc>>,
     in10: i32,
     in11: i32,
     in12: i128
@@ -76,10 +88,12 @@ struct Time {
 
 #[cfg(test)]
 mod tests {
+    use crate::pocketoption::types::order::OpenOrder;
+
     use super::*;
     use std::{error::Error, fs::File, io::BufReader};
 
-    use serde_json::{Deserializer, Value};
+    use serde_json::{json, Deserializer, Value};
     
     #[test]
     fn try_serialize() -> Result<(), Box<dyn Error>> {
@@ -119,6 +133,17 @@ mod tests {
         let reader = BufReader::new(file);
         let test: Vec<OptionData> = serde_json::from_reader(reader)?;
         dbg!(test.first());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_data() -> Result<(), Box<dyn Error>> {
+        let msg = r#"["openOrder",{"asset":"EURTRY_otc","amount":1,"action":"call","isDemo":1,"requestId":18837031,"optionType":100,"time":60}]"#;
+        let (order, data): (Value, OpenOrder) = serde_json::from_str(msg)?;
+        dbg!(&order);
+        dbg!(&data);
+        let reparsed = serde_json::to_string(&json!([order, data]))?;
+        dbg!(&reparsed);
         Ok(())
     }
 }

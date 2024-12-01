@@ -1,12 +1,18 @@
 use core::fmt;
-use std::{error::Error, str::Bytes};
 
-use serde::{de::Error as SerdeError, Deserialize, Serialize};
-use serde_json::{Deserializer, Value};
+use serde::{Deserialize, Serialize};
 
 use crate::pocketoption::error::PocketOptionError;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SessionData {
+    session_id: String,
+    ip_address: String,
+    user_agent: String,
+    last_activity: u64
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Demo {
     session: String,
@@ -15,10 +21,10 @@ pub struct Demo {
     platform: u32
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Real {
-    session: String,
+    session: SessionData,
     is_demo: u32,
     uid: u32,
     platform: u32,
@@ -26,7 +32,7 @@ pub struct Real {
 }
 
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(untagged)]
 pub enum Ssid {
     Demo(Demo),
@@ -45,7 +51,7 @@ impl Ssid {
             let real = Real {
                 raw: data,
                 is_demo: ssid.is_demo,
-                session: ssid.session,
+                session: php_serde::from_bytes(ssid.session.as_bytes()).map_err(|e| PocketOptionError::SsidParsingError(format!("Error parsing session data, {e}")))?,
                 uid: ssid.uid,
                 platform: ssid.platform
             };
@@ -72,5 +78,35 @@ impl fmt::Display for Ssid {
             Self::Demo(demo) => demo.fmt(f),
             Self::Real(real) => real.fmt(f),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error;
+
+    #[test]
+    fn test_descerialize_session() -> Result<(), Box<dyn Error>> {
+        let session_raw = b"a:4:{s:10:\"session_id\";s:32:\"ae3aa847add89c341ec18d8ae5bf8527\";s:10:\"ip_address\";s:15:\"191.113.157.139\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1732926685;}31666d2dc07fdd866353937b97901e2b";
+        let session: SessionData = php_serde::from_bytes(session_raw)?;
+        dbg!(&session);
+        let session_php = php_serde::to_vec(&session)?;
+        dbg!(String::from_utf8(session_php).unwrap());
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_ssid() -> Result<(), Box<dyn Error>> {
+        let ssids = [
+            r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#,
+            r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"ae3aa847add89c341ec18d8ae5bf8527\";s:10:\"ip_address\";s:15:\"191.113.157.139\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1732926685;}31666d2dc07fdd866353937b97901e2b","isDemo":0,"uid":87742848,"platform":2}]	"#,
+            r#"42["auth",{"session":"vtftn12e6f5f5008moitsd6skl","isDemo":1,"uid":27658142,"platform":2}]"#,
+        ];
+        for ssid in ssids {
+            let valid = Ssid::parse(ssid)?;
+            dbg!(valid);
+        }
+        Ok(())
     }
 }

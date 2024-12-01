@@ -33,6 +33,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.93"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c95c10ba0b00a02636238b814946408b1322d5ac4760326e6fb8ec956d85775"
+
+[[package]]
+name = "async-trait"
+version = "0.1.83"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "721cae7de5c34fbb2acd27e21e6d2cf7b886dce0c27388d46c4e6c47ea4318dd"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -57,9 +74,12 @@ dependencies = [
 name = "binary-option-tools-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "chrono",
  "futures-util",
  "native-tls",
+ "php_serde",
  "rand",
  "serde",
  "serde_json",
@@ -676,6 +696,17 @@ name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
+
+[[package]]
+name = "php_serde"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d29c4b527a25374d7db49a66b65150378dbbe61ce5ff29a32799f8d4d47325b"
+dependencies = [
+ "ryu",
+ "serde",
+ "smallvec",
+]
 
 [[package]]
 name = "pin-project-lite"
