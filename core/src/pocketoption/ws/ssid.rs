@@ -2,7 +2,9 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::pocketoption::error::PocketOptionError;
+use crate::pocketoption::error::{PocketOptionError, PocketResult};
+
+use super::regions::Regions;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionData {
@@ -41,7 +43,7 @@ pub enum Ssid {
 
 
 impl Ssid {
-    pub fn parse(data: impl ToString) -> Result<Self, PocketOptionError> {
+    pub fn parse(data: impl ToString) -> PocketResult<Self> {
         let data = data.to_string();
         let parsed = data.trim().strip_prefix(r#"42["auth","#).ok_or(PocketOptionError::SsidParsingError("Error parsing ssid string into object".into()))?.strip_suffix("]").ok_or(PocketOptionError::SsidParsingError("Error parsing ssid string into object".into()))?;
         let ssid: Demo = serde_json::from_str(parsed).map_err(|e| PocketOptionError::SsidParsingError(e.to_string()))?;
@@ -56,6 +58,20 @@ impl Ssid {
                 platform: ssid.platform
             };
             Ok(Self::Real(real))
+        }
+    }
+
+    pub async fn server(&self) -> PocketResult<String> {
+        match self {
+            Self::Demo(_) => Ok(Regions::DEMO.to_string()),
+            Self::Real(_) => Regions.get_servers().await?.first().map(|s| s.to_string()).ok_or(PocketOptionError::UnreachableError("Error getting servers".into()))
+        }
+    }
+
+    pub fn user_agent(&self) -> String {
+        match self {
+            Self::Demo(_) => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".into(),
+            Self::Real(real) => real.session.user_agent.clone()
         }
     }
 }

@@ -1,9 +1,10 @@
-use chrono::{DateTime, Duration, TimeDelta, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateStream(Vec<UpdateStreamItem>);
+
+
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateStreamItem {
@@ -52,12 +53,12 @@ struct OptionData {
     in7: i32,
     in8: i32,
     arr: Vec<String>,
-    in9: i128,
+    in9: i64,
     val: bool,
     times: Vec<TimeCandle>,
     in10: i32,
     in11: i32,
-    in12: i128
+    in12: i64
 }
 
 #[derive(Debug, Deserialize, Serialize)]

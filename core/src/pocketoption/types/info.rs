@@ -21,7 +21,9 @@ pub enum MessageInfo {
     UpdateOpenedDeals,
     UpdateClosedDeals,
     SuccessopenOrder,
-    UpdateCharts
+    UpdateCharts,
+    SubscribeSymbol,
+    None
 }
 
 impl Display for MessageInfo {

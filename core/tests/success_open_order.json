@@ -1,0 +1,23 @@
+{
+  "id": "27897152-8199-4d2f-946a-59de837b85d6",
+  "openTime": "2024-12-04 23:58:48",
+  "closeTime": "2024-12-04 23:59:48",
+  "openTimestamp": 1733356728,
+  "closeTimestamp": 1733356788,
+  "uid": 87742848,
+  "isDemo": 1,
+  "amount": 1,
+  "profit": 0.92,
+  "percentProfit": 92,
+  "percentLoss": 100,
+  "openPrice": 37.81209,
+  "copyTicket": "",
+  "closePrice": 0,
+  "command": 0,
+  "asset": "EURTRY_otc",
+  "requestId": 19656019,
+  "openMs": 601,
+  "optionType": 100,
+  "isCopySignal": false,
+  "currency": "USD"
+}

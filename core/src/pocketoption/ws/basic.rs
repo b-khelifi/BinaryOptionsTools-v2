@@ -1,13 +1,17 @@
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio_tungstenite::tungstenite::Message;
+use std::sync::Arc;
 
-use crate::pocketoption::{error::PocketOptionError, parser::message::WebSocketMessage, types::update::UpdateBalance};
+use tokio::{net::TcpStream, sync::{mpsc::{Receiver, Sender}, Mutex}};
+use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::{handshake::client::generate_key, http::Request, Message}, Connector, MaybeTlsStream, WebSocketStream};
+use url::Url;
+
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{info::MessageInfo, update::UpdateBalance}};
 
 use super::ssid::Ssid;
 
 
 pub struct WebSocketClient {
     pub ssid: Ssid,
+    pub ws: Arc<Mutex<Option<WebSocketStream<MaybeTlsStream<TcpStream>>>>>
     // pub sender: Sender<Message>,
     // pub receiver: Receiver<Message>,
     // pub balance: UpdateBalance
@@ -15,41 +19,74 @@ pub struct WebSocketClient {
 }
 
 impl WebSocketClient {
-    pub fn handle_binary_msg(&self, bytes: Vec<u8>) -> Result<WebSocketMessage, PocketOptionError> {
+    pub async fn connect(&self) -> PocketResult<()> {
+        let tls_connector = native_tls::TlsConnector::builder()
+        .build()
+        .unwrap();
+
+        let connector = Connector::NativeTls(tls_connector);
+
+        let url = self.ssid.server().await?;
+        let user_agent = self.ssid.user_agent();
+        let t_url = Url::parse(&url).map_err(|e| PocketOptionError::GeneralParsingError(format!("Error getting host, {e}")))?;
+        let host = t_url.host_str().ok_or(PocketOptionError::GeneralParsingError("Host not found".into()))?;
+        let request = Request::builder().uri(url)
+            .header("Origin", "https://pocketoption.com")
+            .header("Cache-Control", "no-cache")
+            .header("User-Agent", user_agent)
+            .header("Upgrade", "websocket")
+            .header("Connection", "upgrade")
+            .header("Sec-Websocket-Key", generate_key())
+            .header("Sec-Websocket-Version", "13")
+            .header("Host", host)
+
+            .body(())?;
+
+        let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await?;
+
+
+        Ok(())
+    }
+
+    pub fn handle_binary_msg(&self, bytes: Vec<u8>, previous: MessageInfo) -> PocketResult<WebSocketMessage> {
         let msg = String::from_utf8(bytes)?;
-        let message = WebSocketMessage::parse(msg)?;
+        let message = WebSocketMessage::parse_with_context(msg, previous)?;
         if let WebSocketMessage::UpdateAssets(_) = &message {
             dbg!("Recieved update assets");
+        } else if let WebSocketMessage::UpdateHistoryNew(_) = &message {
+            dbg!("Recieved update history new");
+
         } else {
             dbg!("Binary Message: ", &message);
         }
         Ok(message)
     }
 
-    pub fn process_message(&self, message: Message) -> Result<(), PocketOptionError> {
+    pub fn process_message(&self, message: Message, previous: MessageInfo) -> PocketResult<Option<MessageInfo>> {
         match message {
-            Message::Binary(binary) => {self.handle_binary_msg(binary)?;},
-            Message::Text(text) => {},
+            Message::Binary(binary) => {self.handle_binary_msg(binary, previous)?;},
+            Message::Text(text) => {
+
+            },
             Message::Frame(frame) => {},
             Message::Ping(binary) => {},
             Message::Pong(binary) => {},
             Message::Close(close) => {},
-        }
-        
-        Ok(())
+        } 
+        Ok(None)
 
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
+    use std::{error::Error, sync::Arc};
 
     use chrono::{format, Utc};
     use serde_json::Value;
     use tokio_tungstenite::{tungstenite::protocol::Message, connect_async_tls_with_config, tungstenite::{error::TlsError, handshake::client::generate_key, http::{Request, Uri}}, Connector};
     use futures_util::{future, pin_mut, SinkExt, StreamExt};
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::Mutex};
 
     use crate::pocketoption::{parser::message::WebSocketMessage, types::info::MessageInfo, utils::basic::get_index, ws::{basic::WebSocketClient, ssid::Ssid}};
 
@@ -78,7 +115,7 @@ mod tests {
         let connector = Connector::NativeTls(tls_connector);
         let ssid: Ssid = Ssid::parse(r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#)?;
 
-        let client = WebSocketClient { ssid: ssid.clone() };
+        let client = WebSocketClient { ssid: ssid.clone(), ws: Arc::new(Mutex::new(None)) };
         let url = url::Url::parse("wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket")?;
         let host = url.host_str().unwrap();
         let request = Request::builder().uri(url.to_string())
@@ -101,11 +138,18 @@ mod tests {
         // write.send(Message::Text(msg)).await?;
         // write.flush().await?;
         println!("sent");
-        
+        let mut lop = 0;
+
         while let Some(msg) = read.next().await {
+            lop += 1;
+            if lop % 5 == 0 {
+                write.send(Message::Text(r#"42["changeSymbol",{"asset":"EURTRY_otc","period":3600}]"#.into())).await.unwrap();
+                write.flush().await.unwrap();
+
+            }
             println!("receiving...");
             let message = msg.unwrap();
-            client.process_message(message.clone());
+            client.process_message(message.clone(), MessageInfo::None);
             let msg = match message {
                 Message::Binary(bin) | Message::Ping(bin) | Message::Pong(bin) => {
                     let msg = String::from_utf8(bin).unwrap();
@@ -141,7 +185,6 @@ mod tests {
                 Message::Close(close_frame) => String::from("Closed"),
                 Message::Frame(frame) => unimplemented!(), 
             };
-            println!("Message: {:?}", msg);
 
         }
     

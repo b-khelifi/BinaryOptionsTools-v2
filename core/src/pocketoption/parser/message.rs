@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde_json::from_str;
 
-use crate::pocketoption::{error::PocketOptionError, types::update::{UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{Auth, ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}}};
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
@@ -10,12 +10,23 @@ pub enum WebSocketMessage {
     UpdateHistoryNew(UpdateHistoryNew),
     UpdateAssets(UpdateAssets),
     UpdateBalance(UpdateBalance),
+    OpenOrder(OpenOrder),
+    SuccessAuth(SuccessAuth),
+    UpdateClosedDeals(UpdateClosedDeals),
+    SuccesscloseOrder(SuccessCloseOrder),
+    SuccessopenOrder(SuccessOpenOrder),
+    ChangeSymbol(ChangeSymbol),
+    SubscribeSymbol(SubscribeSymbol),
+    SuccessupdateBalance(UpdateBalance),
+    UpdateOpenedDeals(UpdateOpenedDeals),
+    Auth(Auth),
+    None
 }
 
 
 
 impl WebSocketMessage {
-    pub fn parse(data: impl ToString) -> Result<Self, PocketOptionError> {
+    pub fn parse(data: impl ToString) -> PocketResult<Self> {
         let data = data.to_string();
         let message: Result<Self, serde_json::Error> = from_str(&data);
         match message {
@@ -37,6 +48,109 @@ impl WebSocketMessage {
             }
         }
     }
+
+    pub fn parse_with_context(data: impl ToString, previous: MessageInfo) -> PocketResult<Self> {
+        let data = data.to_string();
+        match previous 
+        {
+            MessageInfo::OpenOrder => {
+                if let Ok(order) = from_str::<OpenOrder>(&data) {
+                    return Ok(Self::OpenOrder(order));
+                }
+            },
+            MessageInfo::UpdateStream => {
+                if let Ok(stream) = from_str::<UpdateStream>(&data) {
+                    return Ok(Self::UpdateStream(stream));
+                }
+            },
+            MessageInfo::UpdateHistoryNew => {
+                if let Ok(history) = from_str::<UpdateHistoryNew>(&data) {
+                    return Ok(Self::UpdateHistoryNew(history));
+                }
+            },
+            MessageInfo::UpdateAssets => {
+                if let Ok(assets) = from_str::<UpdateAssets>(&data) {
+                    return Ok(Self::UpdateAssets(assets));
+                }
+            },
+            MessageInfo::UpdateBalance => {
+                if let Ok(balance) = from_str::<UpdateBalance>(&data) {
+                    return Ok(Self::UpdateBalance(balance));
+                }
+            },
+            MessageInfo::SuccesscloseOrder => {
+                if let Ok(order) = from_str::<SuccessCloseOrder>(&data) {
+                    return Ok(Self::SuccesscloseOrder(order));
+                }
+            },
+            MessageInfo::Auth => {
+                if let Ok(auth) = from_str::<Auth>(&data) {
+                    return Ok(Self::Auth(auth));
+                }
+            },
+            MessageInfo::ChangeSymbol => {
+                if let Ok(symbol) = from_str::<ChangeSymbol>(&data) {
+                    return Ok(Self::ChangeSymbol(symbol));
+                }
+            },
+            MessageInfo::SuccessupdateBalance => {
+                if let Ok(balance) = from_str::<UpdateBalance>(&data) {
+                    return Ok(Self::SuccessupdateBalance(balance));
+                }
+            },
+            MessageInfo::SuccessupdatePending => todo!(),
+            MessageInfo::SubscribeSymbol => {
+                if let Ok(symbol) = from_str::<SubscribeSymbol>(&data) {
+                    return Ok(Self::SubscribeSymbol(symbol));
+                }
+            },
+            MessageInfo::Successauth => {
+                if let Ok(auth) = from_str::<SuccessAuth>(&data) {
+                    return Ok(Self::SuccessAuth(auth));
+                }
+            },
+            MessageInfo::UpdateOpenedDeals => {
+                if let Ok(deals) = from_str::<UpdateOpenedDeals>(&data) {
+                    return Ok(Self::UpdateOpenedDeals(deals))
+                }
+            },
+            MessageInfo::UpdateClosedDeals => {
+                if let Ok(deals) = from_str::<UpdateClosedDeals>(&data) {
+                    return Ok(Self::UpdateClosedDeals(deals));
+                }
+            },
+            MessageInfo::SuccessopenOrder => {
+                if let Ok(order) = from_str::<SuccessOpenOrder>(&data) {
+                    return Ok(Self::SuccessopenOrder(order));
+                }
+            },
+            MessageInfo::UpdateCharts => {
+                // TODO: Add this 
+            },
+            MessageInfo::None => todo!(),
+        }
+        Err(PocketOptionError::GeneralParsingError("Error ".to_string()))
+    }
+
+    pub fn info(&self) -> MessageInfo {
+        match self {
+            Self::UpdateStream(_) => MessageInfo::UpdateStream,
+            Self::UpdateHistoryNew(_) => MessageInfo::UpdateHistoryNew,
+            Self::UpdateAssets(_) => MessageInfo::UpdateAssets,
+            Self::UpdateBalance(_) => MessageInfo::UpdateBalance,
+            Self::OpenOrder(_) => MessageInfo::OpenOrder,
+            Self::SuccessAuth(_) => MessageInfo::Successauth,
+            Self::UpdateClosedDeals(_) => MessageInfo::UpdateClosedDeals,
+            Self::SuccesscloseOrder(_) => MessageInfo::SuccesscloseOrder,
+            Self::SuccessopenOrder(_) => MessageInfo::SuccessopenOrder,
+            Self::ChangeSymbol(_) => MessageInfo::ChangeSymbol,
+            Self::Auth(_) => MessageInfo::Auth,
+            Self::SuccessupdateBalance(_) => MessageInfo::SuccessupdateBalance,
+            Self::UpdateOpenedDeals(_) => MessageInfo::UpdateOpenedDeals,
+            Self::SubscribeSymbol(_) => MessageInfo::SubscribeSymbol,
+            Self::None => MessageInfo::None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -44,6 +158,27 @@ mod tests {
     use super::*;
 
     use std::{error::Error, fs::File, io::{BufReader, Read}};
+
+    use std::fs;
+    use std::path::Path;
+
+    fn get_files_in_directory(path: &str) -> Result<Vec<String>, std::io::Error> {
+        let dir_path = Path::new(path);
+        
+        match fs::read_dir(dir_path) {
+            Ok(entries) => {
+                let mut file_names = Vec::new();
+                
+                for entry in entries {
+                    let file_name = entry?.file_name().to_string_lossy().to_string();
+                    file_names.push(format!("{path}/{file_name}"));
+                }
+                
+                Ok(file_names)
+            },
+            Err(e) => Err(e),
+        }
+    }
 
     #[test]
     fn test_descerialize_message() -> Result<(), Box<dyn Error>> {
@@ -60,15 +195,29 @@ mod tests {
         let mut history_raw = File::open("tests/update_history_new.txt")?;
         let mut content = String::new();
         history_raw.read_to_string(&mut content)?;
-        let history_new: WebSocketMessage = WebSocketMessage::parse(content)?;
+        let history_new: WebSocketMessage = from_str(&content)?;
         dbg!(history_new);
         
-        let mut assets_raw = File::open("tests/data.txt")?;
+        let mut assets_raw = File::open("tests/data.json")?;
         let mut content = String::new();
         assets_raw.read_to_string(&mut content)?;
-        let assets_raw = WebSocketMessage::parse(content)?;
+        let assets_raw: WebSocketMessage = from_str(&content)?;
         dbg!(assets_raw);
 
+        Ok(())
+    }
+
+    #[test]
+    fn deep_test_descerialize_message() -> anyhow::Result<()> {
+        let dirs = get_files_in_directory("tests")?;
+        for dir in dirs {
+            dbg!(&dir);
+            let file = File::open(dir)?;
+
+            let reader = BufReader::new(file);
+            let _: WebSocketMessage = serde_json::from_reader(reader)?;
+        }
+        
         Ok(())
     }
 }
