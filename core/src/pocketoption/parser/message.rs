@@ -49,7 +49,7 @@ impl WebSocketMessage {
         }
     }
 
-    pub fn parse_with_context(data: impl ToString, previous: MessageInfo) -> PocketResult<Self> {
+    pub fn parse_with_context(data: impl ToString, previous: &MessageInfo) -> PocketResult<Self> {
         let data = data.to_string();
         match previous 
         {
@@ -98,7 +98,7 @@ impl WebSocketMessage {
                     return Ok(Self::SuccessupdateBalance(balance));
                 }
             },
-            MessageInfo::SuccessupdatePending => todo!(),
+            MessageInfo::SuccessupdatePending => {},
             MessageInfo::SubscribeSymbol => {
                 if let Ok(symbol) = from_str::<SubscribeSymbol>(&data) {
                     return Ok(Self::SubscribeSymbol(symbol));

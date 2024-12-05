@@ -61,10 +61,12 @@ impl Ssid {
         }
     }
 
-    pub async fn server(&self) -> PocketResult<String> {
-        match self {
-            Self::Demo(_) => Ok(Regions::DEMO.to_string()),
-            Self::Real(_) => Regions.get_servers().await?.first().map(|s| s.to_string()).ok_or(PocketOptionError::UnreachableError("Error getting servers".into()))
+    pub async fn server(&self, demo: bool) -> PocketResult<String> {
+        
+        match (self, demo) {
+            (Self::Demo(_), true) => Ok(Regions::DEMO.to_string()),
+            (Self::Demo(_), false) => Err(PocketOptionError::Unallowed("Could not connect to real server while using a demo SSID".into())),
+            _ => Regions.get_servers().await?.first().map(|s| s.to_string()).ok_or(PocketOptionError::UnreachableError("Error getting servers".into()))
         }
     }
 

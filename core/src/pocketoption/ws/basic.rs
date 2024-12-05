@@ -1,33 +1,49 @@
 use std::sync::Arc;
 
-use tokio::{net::TcpStream, sync::{mpsc::{Receiver, Sender}, Mutex}};
+use futures_util::StreamExt;
+use tokio::{net::TcpStream, sync::{mpsc::{Receiver, Sender}, Mutex}, task::JoinHandle};
 use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::{handshake::client::generate_key, http::Request, Message}, Connector, MaybeTlsStream, WebSocketStream};
+use tracing::{debug, info, warn};
 use url::Url;
 
 use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{info::MessageInfo, update::UpdateBalance}};
 
-use super::ssid::Ssid;
+use super::{listener::EventListener, ssid::Ssid};
 
+const MAX_ALLOWED_LOOPS: u32 = 128;
 
-pub struct WebSocketClient {
+pub struct WebSocketClient<T: EventListener> {
     pub ssid: Ssid,
-    pub ws: Arc<Mutex<Option<WebSocketStream<MaybeTlsStream<TcpStream>>>>>
-    // pub sender: Sender<Message>,
-    // pub receiver: Receiver<Message>,
+    pub demo: bool,
+    pub sender: Sender<Message>,
+    pub reciever: Receiver<Message>,
+    pub handler: T
     // pub balance: UpdateBalance
 
 }
 
-impl WebSocketClient {
-    pub async fn connect(&self) -> PocketResult<()> {
+impl<T: EventListener> WebSocketClient<T> {
+    pub async fn new(ssid: impl ToString, demo: bool, handler: T) -> PocketResult<Self> {
+        let ssid = Ssid::parse(ssid)?;
+        let _connection = Self::connect(ssid.clone(), demo).await?;
+        let (sender, reciever) = tokio::sync::mpsc::channel(128);
+        Ok(Self {
+            ssid,
+            demo,
+            sender,
+            reciever,
+            handler
+        })
+    }   
+
+    pub async fn connect(ssid: Ssid, demo: bool) -> PocketResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
         let tls_connector = native_tls::TlsConnector::builder()
-        .build()
-        .unwrap();
+            .build()?;
 
         let connector = Connector::NativeTls(tls_connector);
 
-        let url = self.ssid.server().await?;
-        let user_agent = self.ssid.user_agent();
+        let url = ssid.server(demo).await?;
+        let user_agent = ssid.user_agent();
         let t_url = Url::parse(&url).map_err(|e| PocketOptionError::GeneralParsingError(format!("Error getting host, {e}")))?;
         let host = t_url.host_str().ok_or(PocketOptionError::GeneralParsingError("Host not found".into()))?;
         let request = Request::builder().uri(url)
@@ -45,37 +61,73 @@ impl WebSocketClient {
         let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await?;
 
 
+        Ok(ws)
+    }
+
+    async fn create_background_job(&self) -> PocketResult<JoinHandle<()>> {
+
+        let handler = self.handler.clone();
+        let ssid = self.ssid.clone();
+        let demo = self.demo;
+        let ws = WebSocketClient::<T>::connect(ssid.clone(), demo).await?;
+        
+        let task = tokio::task::spawn(async move {
+            let mut ws = ws;
+            let previous = MessageInfo::None;
+            let mut loops = 0;
+            loop {
+                match WebSocketClient::<T>::event_loop(handler.clone(), previous.clone(), &mut ws, ssid.clone(), demo).await {
+                    Ok(_) => {
+                        info!("Disconnectet, trying to reconnect");
+                        if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
+                            ws = websocket;
+                        } else {
+                            loops += 1;
+                            if loops >= MAX_ALLOWED_LOOPS {
+                                panic!("Too many failed connections");
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        warn!("Error in event loop, {e}, reconnecting...");
+                        if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
+                            ws = websocket;
+                        } else {
+                            loops += 1;
+                            if loops >= MAX_ALLOWED_LOOPS {
+                                panic!("Too many failed connections");
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        todo!()
+    }
+
+    async fn event_loop(handler: T, mut previous: MessageInfo, ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, ssid: Ssid, demo: bool) -> PocketResult<()> {
+        while let Some(msg) = &ws.next().await {
+            match msg {
+                Ok(msg) => {
+                    match handler.process_message(msg, &previous) {
+                        Ok((msg, close)) => {
+                            if close {
+                                return Ok(())
+                            }
+                        },
+                        Err(e) => {
+                            debug!("Error processing message, {e}");
+                        }
+                    }
+                },
+                Err(e) => {
+                    warn!("Error recieving websocket message, {e}");
+                }
+            }
+        }
         Ok(())
     }
-
-    pub fn handle_binary_msg(&self, bytes: Vec<u8>, previous: MessageInfo) -> PocketResult<WebSocketMessage> {
-        let msg = String::from_utf8(bytes)?;
-        let message = WebSocketMessage::parse_with_context(msg, previous)?;
-        if let WebSocketMessage::UpdateAssets(_) = &message {
-            dbg!("Recieved update assets");
-        } else if let WebSocketMessage::UpdateHistoryNew(_) = &message {
-            dbg!("Recieved update history new");
-
-        } else {
-            dbg!("Binary Message: ", &message);
-        }
-        Ok(message)
-    }
-
-    pub fn process_message(&self, message: Message, previous: MessageInfo) -> PocketResult<Option<MessageInfo>> {
-        match message {
-            Message::Binary(binary) => {self.handle_binary_msg(binary, previous)?;},
-            Message::Text(text) => {
-
-            },
-            Message::Frame(frame) => {},
-            Message::Ping(binary) => {},
-            Message::Pong(binary) => {},
-            Message::Close(close) => {},
-        } 
-        Ok(None)
-
-    }
+    
 }
 
 #[cfg(test)]
@@ -115,7 +167,7 @@ mod tests {
         let connector = Connector::NativeTls(tls_connector);
         let ssid: Ssid = Ssid::parse(r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#)?;
 
-        let client = WebSocketClient { ssid: ssid.clone(), ws: Arc::new(Mutex::new(None)) };
+        // let client = WebSocketClient { ssid: ssid.clone(), ws: Arc::new(Mutex::new(None)) };
         let url = url::Url::parse("wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket")?;
         let host = url.host_str().unwrap();
         let request = Request::builder().uri(url.to_string())
@@ -149,7 +201,7 @@ mod tests {
             }
             println!("receiving...");
             let message = msg.unwrap();
-            client.process_message(message.clone(), MessageInfo::None);
+            // client.process_message(message.clone(), MessageInfo::None);
             let msg = match message {
                 Message::Binary(bin) | Message::Ping(bin) | Message::Pong(bin) => {
                     let msg = String::from_utf8(bin).unwrap();

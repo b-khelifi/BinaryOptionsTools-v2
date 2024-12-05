@@ -11,6 +11,8 @@ pub enum PocketOptionError {
     GeneralParsingError(String),
     #[error("Error making http request: {0}")]
     HTTPError(#[from] http::Error),
+    #[error("TLS Certificate error, {0}")]
+    TLSError(#[from] native_tls::Error),
     #[error("Failed to connect to websocket server: {0}")]
     WebsocketConnectionError(#[from] tokio_tungstenite::tungstenite::Error),
     #[error("Failed to parse recieved data to Message: {0}")]
@@ -23,6 +25,8 @@ pub enum PocketOptionError {
     RequestError(#[from] reqwest::Error),
     #[error("If you are having this error please contact the developpers, {0}")]
     UnreachableError(String),
+    #[error("Unallowed operation, {0}")]
+    Unallowed(String)
 }
 
 pub type PocketResult<T> = Result<T, PocketOptionError>;
