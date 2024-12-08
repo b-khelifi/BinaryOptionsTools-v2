@@ -1,37 +1,38 @@
 use std::sync::Arc;
 
-use futures_util::StreamExt;
+use futures_util::{future::try_join, stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
 use tokio::{net::TcpStream, sync::{mpsc::{Receiver, Sender}, Mutex}, task::JoinHandle};
 use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::{handshake::client::generate_key, http::Request, Message}, Connector, MaybeTlsStream, WebSocketStream};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
 use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{info::MessageInfo, update::UpdateBalance}};
 
-use super::{listener::EventListener, ssid::Ssid};
+use super::{listener::{EventListener, Handler}, ssid::Ssid};
 
 const MAX_ALLOWED_LOOPS: u32 = 128;
 
 pub struct WebSocketClient<T: EventListener> {
     pub ssid: Ssid,
     pub demo: bool,
-    pub sender: Sender<Message>,
-    pub reciever: Receiver<Message>,
     pub handler: T
     // pub balance: UpdateBalance
 
 }
 
 impl<T: EventListener> WebSocketClient<T> {
-    pub async fn new(ssid: impl ToString, demo: bool, handler: T) -> PocketResult<Self> {
+    pub async fn new(ssid: impl ToString, demo: bool) -> PocketResult<WebSocketClient<Handler>> {
+        let handler = Handler::new(Ssid::parse(ssid.to_string().clone())?);
+        WebSocketClient::init(ssid, demo, handler).await
+    }
+
+    pub async fn init(ssid: impl ToString, demo: bool, handler: T) -> PocketResult<Self> {
         let ssid = Ssid::parse(ssid)?;
         let _connection = Self::connect(ssid.clone(), demo).await?;
-        let (sender, reciever) = tokio::sync::mpsc::channel(128);
+        println!("Connected");
         Ok(Self {
             ssid,
             demo,
-            sender,
-            reciever,
             handler
         })
     }   
@@ -59,60 +60,68 @@ impl<T: EventListener> WebSocketClient<T> {
             .body(())?;
 
         let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await?;
-
+        println!("Connected!");
 
         Ok(ws)
     }
 
-    async fn create_background_job(&self) -> PocketResult<JoinHandle<()>> {
+    async fn create_listener_job(&self) -> PocketResult<JoinHandle<()>> {
 
         let handler = self.handler.clone();
         let ssid = self.ssid.clone();
         let demo = self.demo;
-        let ws = WebSocketClient::<T>::connect(ssid.clone(), demo).await?;
-        
+        let (mut write, mut read) = WebSocketClient::<T>::connect(ssid.clone(), demo).await?.split();
+        let (sender, mut reciever) = tokio::sync::mpsc::channel(128);
         let task = tokio::task::spawn(async move {
-            let mut ws = ws;
             let previous = MessageInfo::None;
             let mut loops = 0;
             loop {
-                match WebSocketClient::<T>::event_loop(handler.clone(), previous.clone(), &mut ws, ssid.clone(), demo).await {
+
+                let listener_future = WebSocketClient::<T>::listener_loop(handler.clone(), previous.clone(), &mut read, &sender);
+                let sender_future = WebSocketClient::<T>::sender_loop(&mut write, &mut reciever);
+                match try_join(listener_future, sender_future).await {
                     Ok(_) => {
-                        info!("Disconnectet, trying to reconnect");
                         if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
-                            ws = websocket;
+                            (write, read) = websocket.split();
                         } else {
                             loops += 1;
                             if loops >= MAX_ALLOWED_LOOPS {
                                 panic!("Too many failed connections");
                             }
                         }
+
                     },
                     Err(e) => {
                         warn!("Error in event loop, {e}, reconnecting...");
                         if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
-                            ws = websocket;
+                            (write, read) = websocket.split();
                         } else {
                             loops += 1;
                             if loops >= MAX_ALLOWED_LOOPS {
-                                panic!("Too many failed connections");
+                                error!("Too many failed connections");
+                                break
                             }
                         }
-                    }
+
+                    }                
                 }
             }
         });
-        todo!()
+        Ok(task)
     }
 
-    async fn event_loop(handler: T, mut previous: MessageInfo, ws: &mut WebSocketStream<MaybeTlsStream<TcpStream>>, ssid: Ssid, demo: bool) -> PocketResult<()> {
+    async fn listener_loop(handler: T, mut previous: MessageInfo, ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, sender: &Sender<Message>) -> PocketResult<()> {        
         while let Some(msg) = &ws.next().await {
+            println!("Recieved message");
             match msg {
                 Ok(msg) => {
-                    match handler.process_message(msg, &previous) {
+                    match handler.process_message(msg, &previous, sender).await {
                         Ok((msg, close)) => {
                             if close {
                                 return Ok(())
+                            }
+                            if let Some(msg) = msg {
+                                previous = msg;
                             }
                         },
                         Err(e) => {
@@ -124,6 +133,22 @@ impl<T: EventListener> WebSocketClient<T> {
                     warn!("Error recieving websocket message, {e}");
                 }
             }
+        }
+        Ok(())
+    }
+
+    async fn sender_loop(ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, reciever: &mut Receiver<Message>) -> PocketResult<()> {
+        while let Some(msg) = reciever.recv().await {
+            match ws.send(msg).await {
+                Ok(_) => {
+                    debug!("Sent message");
+                    println!("Sent message");
+                },
+                Err(e) => {
+                    warn!("Error sending message: {}", e);
+                } 
+            }
+            ws.flush().await?;
         }
         Ok(())
     }
@@ -140,7 +165,7 @@ mod tests {
     use futures_util::{future, pin_mut, SinkExt, StreamExt};
     use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::Mutex};
 
-    use crate::pocketoption::{parser::message::WebSocketMessage, types::info::MessageInfo, utils::basic::get_index, ws::{basic::WebSocketClient, ssid::Ssid}};
+    use crate::pocketoption::{parser::message::WebSocketMessage, types::info::MessageInfo, utils::basic::get_index, ws::{basic::WebSocketClient, listener::Handler, ssid::Ssid}};
 
     use crate::pocketoption::parser::basic::LoadHistoryPeriod;
     
@@ -241,6 +266,17 @@ mod tests {
         }
     
     
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_websocket_client() -> anyhow::Result<()> {
+        tracing_subscriber::fmt::init();
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let demo = true;
+        let client = WebSocketClient::<Handler>::new(ssid, demo).await?;
+        let res = client.create_listener_job().await?;
+        res.await?;
         Ok(())
     }
 

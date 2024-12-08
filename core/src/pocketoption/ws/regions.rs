@@ -25,45 +25,42 @@ impl Regions {
     pub const ASIA: &str = "wss://api-asia.po.market/socket.io/?EIO=4&transport=websocket";
 
 
-    async fn get_closest_server(&self, ip_address: &str) -> PocketResult<Vec<(&str, f64)>> {
+    async fn get_closest_server(&self, ip_address: &str) -> PocketResult<(&str, f64)> {
         let user_location = get_user_location(ip_address).await?;
         
         let server_locations = [
-            (Self::EUROPE, 50.0, 10.0),
-            (Self::SEYCHELLES, -4.0, 55.0),
-            (Self::HONG_KONG, 22.0, 114.0),
-            (Self::RUSSIA_SPB, 60.0, 30.0),
-            (Self::FRANCE_2, 46.0, 2.0),
-            (Self::US_WEST_4, 37.0, -122.0),
-            (Self::US_WEST_3, 34.0, -118.0),
-            (Self::US_WEST_2, 39.0, -77.0),
-            (Self::US_NORTH, 42.0, -71.0),
-            (Self::RUSSIA_MOSCOW, 55.0, 37.0),
-            (Self::LATIN_AMERICA, 0.0, -45.0),
-            (Self::INDIA, 20.0, 77.0),
-            (Self::FRANCE, 46.0, 2.0),
-            (Self::FINLAND, 62.0, 27.0),
-            (Self::CHINA, 35.0, 105.0),
-            (Self::ASIA, 10.0, 100.0),
+            ("Self::EUROPE", 50.0, 10.0),
+            ("Self::SEYCHELLES", -4.0, 55.0),
+            ("Self::HONG_KONG", 22.0, 114.0),
+            ("Self::RUSSIA_SPB", 60.0, 30.0),
+            ("Self::FRANCE_2", 46.0, 2.0),
+            ("Self::US_WEST_4", 37.0, -122.0),
+            ("Self::US_WEST_3", 34.0, -118.0),
+            ("Self::US_WEST_2", 39.0, -77.0),
+            ("Self::US_NORTH", 42.0, -71.0),
+            ("Self::RUSSIA_MOSCOW", 55.0, 37.0),
+            ("Self::LATIN_AMERICA", 0.0, -45.0),
+            ("Self::INDIA", 20.0, 77.0),
+            ("Self::FRANCE", 46.0, 2.0),
+            ("Self::FINLAND", 62.0, 27.0),
+            ("Self::CHINA", 35.0, 105.0),
+            ("Self::ASIA", 10.0, 100.0),
         ];
-    
-        let mut distances: Vec<(&'static str, f64)> = server_locations
-            .iter()
-            .map(|(name, lat, lon)| {
-                let distance = calculate_distance(user_location.0, user_location.1, *lat, *lon);
-                (*name, distance)
-            })
-            .collect();
-    
-        distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-    
-        Ok(distances)
+        let mut closest = ("", f64::INFINITY);
+        server_locations.iter().for_each(|(server, lat, lon)| {
+            let distance = calculate_distance(user_location.0, user_location.1, *lat, *lon);
+            if distance < closest.1 {
+                closest = (*server, distance)
+            }
+
+        });
+        Ok(closest)
     }
 
-    pub async fn get_servers(&self) -> PocketResult<Vec<&str>> {
+    pub async fn get_server(&self) -> PocketResult<&str> {
         let ip = get_public_ip().await?;
-        let servers = self.get_closest_server(&ip).await?;
-        Ok(servers.iter().map(|(server, _)| *server).collect())
+        let server = self.get_closest_server(&ip).await?;
+        Ok(server.0)
     }
 }
 
@@ -76,7 +73,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_closest_server() -> anyhow::Result<()> {
         let ip = get_public_ip().await?;
-        let server = Regions.get_closest_server(&ip).await?;
+        let server = Regions.get_server().await?;
         dbg!(server);
         Ok(())
     }

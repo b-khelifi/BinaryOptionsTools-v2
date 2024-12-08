@@ -1,3 +1,5 @@
+use core::fmt;
+
 use serde::Deserialize;
 use serde_json::from_str;
 
@@ -20,6 +22,8 @@ pub enum WebSocketMessage {
     SuccessupdateBalance(UpdateBalance),
     UpdateOpenedDeals(UpdateOpenedDeals),
     Auth(Auth),
+
+
     None
 }
 
@@ -150,6 +154,29 @@ impl WebSocketMessage {
             Self::SubscribeSymbol(_) => MessageInfo::SubscribeSymbol,
             Self::None => MessageInfo::None,
         }
+    }
+}
+
+impl fmt::Display for WebSocketMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WebSocketMessage::UpdateStream(update_stream) => write!(f, "{:?}", update_stream),
+            WebSocketMessage::UpdateHistoryNew(update_history_new) => write!(f, "{:?}", update_history_new),
+            WebSocketMessage::UpdateAssets(update_assets) => write!(f, "{:?}", update_assets),
+            WebSocketMessage::UpdateBalance(update_balance) => write!(f, "{:?}", update_balance),
+            WebSocketMessage::OpenOrder(open_order) => write!(f, "{:?}", open_order),
+            WebSocketMessage::SuccessAuth(success_auth) => write!(f, "{:?}", success_auth),
+            WebSocketMessage::UpdateClosedDeals(update_closed_deals) => write!(f, "{:?}", update_closed_deals),
+            WebSocketMessage::SuccesscloseOrder(success_close_order) => write!(f, "{:?}", success_close_order),
+            WebSocketMessage::SuccessopenOrder(success_open_order) => write!(f, "{:?}", success_open_order),
+            WebSocketMessage::ChangeSymbol(change_symbol) => {
+                write!(f, "42[{},{}]", serde_json::to_string(&MessageInfo::ChangeSymbol).map_err(|_| fmt::Error)?, serde_json::to_string(&change_symbol).map_err(|_| fmt::Error)?)
+            },
+            WebSocketMessage::SubscribeSymbol(subscribe_symbol) => write!(f, "{:?}", subscribe_symbol),
+            WebSocketMessage::SuccessupdateBalance(update_balance) => write!(f, "{:?}", update_balance),
+            WebSocketMessage::UpdateOpenedDeals(update_opened_deals) => write!(f, "{:?}", update_opened_deals),
+            WebSocketMessage::Auth(auth) => write!(f, "{:?}", auth),
+            WebSocketMessage::None => write!(f, "None")}
     }
 }
 

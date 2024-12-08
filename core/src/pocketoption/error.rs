@@ -1,7 +1,7 @@
 use std::string::FromUtf8Error;
 
 use thiserror::Error;
-use tokio_tungstenite::tungstenite::http;
+use tokio_tungstenite::tungstenite::{http, Message};
 
 #[derive(Error, Debug)]
 pub enum PocketOptionError {
@@ -21,6 +21,8 @@ pub enum PocketOptionError {
     WebSocketMessageProcessingError(#[from] anyhow::Error),
     #[error("Failed to convert bytes to string, {0}")]
     WebSocketMessageByteSerializationError(#[from] FromUtf8Error),
+    #[error("Failed to send message to websocket sender, {0}")]
+    MessageSendingError(#[from] tokio::sync::mpsc::error::SendError<Message>),
     #[error("Failed to make request, {0}")]
     RequestError(#[from] reqwest::Error),
     #[error("If you are having this error please contact the developpers, {0}")]
