@@ -1,15 +1,17 @@
 use core::fmt;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::from_str;
+use uuid::Uuid;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{Auth, ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{Auth, ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}}};
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum WebSocketMessage {
     UpdateStream(UpdateStream),
     UpdateHistoryNew(UpdateHistoryNew),
+    LoadHistoryPeriod(LoadHistoryPeriodResult),
     UpdateAssets(UpdateAssets),
     UpdateBalance(UpdateBalance),
     OpenOrder(OpenOrder),
@@ -23,10 +25,17 @@ pub enum WebSocketMessage {
     UpdateOpenedDeals(UpdateOpenedDeals),
     Auth(Auth),
 
-
+    UserRequest(Box<UserRequest>),
     None
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UserRequest {
+    id: Uuid,
+    message: Box<WebSocketMessage>,
+    #[serde(skip)]
+    sender: Option<tokio::sync::oneshot::Sender<WebSocketMessage>>
+}
 
 
 impl WebSocketMessage {
@@ -128,6 +137,11 @@ impl WebSocketMessage {
                     return Ok(Self::SuccessopenOrder(order));
                 }
             },
+            MessageInfo::LoadHistoryPeriod => {
+                if let Ok(history) = from_str::<LoadHistoryPeriodResult>(&data) {
+                    return Ok(Self::LoadHistoryPeriod(history))
+                }
+            }
             MessageInfo::UpdateCharts => {
                 // TODO: Add this 
             },
@@ -152,6 +166,8 @@ impl WebSocketMessage {
             Self::SuccessupdateBalance(_) => MessageInfo::SuccessupdateBalance,
             Self::UpdateOpenedDeals(_) => MessageInfo::UpdateOpenedDeals,
             Self::SubscribeSymbol(_) => MessageInfo::SubscribeSymbol,
+            Self::LoadHistoryPeriod(_) => MessageInfo::LoadHistoryPeriod,
+            Self::UserRequest(_) => MessageInfo::None,
             Self::None => MessageInfo::None,
         }
     }
@@ -176,7 +192,10 @@ impl fmt::Display for WebSocketMessage {
             WebSocketMessage::SuccessupdateBalance(update_balance) => write!(f, "{:?}", update_balance),
             WebSocketMessage::UpdateOpenedDeals(update_opened_deals) => write!(f, "{:?}", update_opened_deals),
             WebSocketMessage::Auth(auth) => write!(f, "{:?}", auth),
-            WebSocketMessage::None => write!(f, "None")}
+            WebSocketMessage::None => write!(f, "None"),
+            WebSocketMessage::LoadHistoryPeriod(period) => write!(f, "{:?}", period),
+            WebSocketMessage::UserRequest(user) => write!(f, "Request by user of id {:?}", user.id)
+        }
     }
 }
 
@@ -239,6 +258,9 @@ mod tests {
         let dirs = get_files_in_directory("tests")?;
         for dir in dirs {
             dbg!(&dir);
+            if !dir.ends_with(".json") {
+                continue;
+            }
             let file = File::open(dir)?;
 
             let reader = BufReader::new(file);

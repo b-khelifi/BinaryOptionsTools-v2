@@ -22,13 +22,33 @@ pub struct UpdateHistoryNew {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct LoadHistoryPeriodResult {
+    asset: String,
+    index: i128,
+    data: Vec<Candle>,
+    period: u32
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Candle {
+    symbol_id: i32,
+    #[serde(with = "float_time")]
+    time: DateTime<Utc>,
+    open: f64,
+    close: f64,
+    high: f64,
+    low: f64,
+    asset: String
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateCandle {
     #[serde(with = "float_time")]
     time: DateTime<Utc>,
     price: f64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateBalance {
     is_demo: u32,
@@ -36,16 +56,16 @@ pub struct UpdateBalance {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct UpdateAssets(Vec<OptionData>);
+pub struct UpdateAssets(pub Vec<Asset>);
 
 #[derive(Debug, Deserialize, Serialize)]
-struct OptionData {
+pub struct Asset {
     id: i32,
-    symbol: String,
+    pub symbol: String,
     name: String,
     asset_type: AssetType,
     in1: i32,
-    in2: i32,
+    pub payout: i32,
     in3: i32,
     in4: i32,
     in5: i32,
@@ -75,6 +95,15 @@ enum AssetType {
 pub struct TimeCandle {
     #[serde(with = "duration")]
     time: Duration
+}
+
+impl Default for UpdateBalance {
+    fn default() -> Self {
+        Self {
+            is_demo: 1,
+            balance: 0.
+        }
+    }
 }
 
 pub mod float_time {
@@ -189,4 +218,15 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_descerialize_load_history() -> Result<(), Box<dyn Error>> {
+        let history_raw = File::open("tests/load_history_period.json")?;
+        let bufreader = BufReader::new(history_raw);
+        let history_new: LoadHistoryPeriodResult = serde_json::from_reader(bufreader)?;
+        dbg!(history_new);
+
+        Ok(())
+    }
+
 }

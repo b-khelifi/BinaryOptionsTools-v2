@@ -17,19 +17,19 @@ pub struct OpenOrder {
     time: u32
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UpdateClosedDeals(Vec<Deal>);
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateClosedDeals(pub Vec<Deal>);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SuccessCloseOrder {
     profit: f64,
     deals: Vec<Deal>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UpdateOpenedDeals(Vec<Deal>);
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct UpdateOpenedDeals(pub Vec<Deal>);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Deal {
     id: Uuid,
@@ -93,7 +93,9 @@ pub struct SuccessOpenOrder {
 
 #[cfg(test)]
 mod tests {
-    use std::{error::Error, fs::File, io::BufReader};
+    use std::{error::Error, fs::{read_to_string, File}, io::BufReader};
+
+    use crate::pocketoption::{parser::message::WebSocketMessage, types::info::MessageInfo};
 
     use super::*;
 
@@ -102,7 +104,12 @@ mod tests {
         let history_raw = File::open("tests/update_closed_deals.json")?;
         let bufreader = BufReader::new(history_raw);
         let deals: UpdateClosedDeals = serde_json::from_reader(bufreader)?;
-        dbg!(deals);
+        let deals2 = WebSocketMessage::parse_with_context(read_to_string("tests/update_closed_deals.json")?, &MessageInfo::UpdateClosedDeals)?;
+        if let WebSocketMessage::UpdateClosedDeals(d) = deals2 {
+            assert_eq!(d, deals);
+        } else {
+            panic!("WebSocketMessage should be UpdateClosedDeals variant")
+        }
 
         Ok(())
     }
@@ -111,8 +118,12 @@ mod tests {
         let history_raw = File::open("tests/update_close_order.json")?;
         let bufreader = BufReader::new(history_raw);
         let deals: SuccessCloseOrder = serde_json::from_reader(bufreader)?;
-        dbg!(deals);
-
+        let deals2 = WebSocketMessage::parse_with_context(read_to_string("tests/update_close_order.json")?, &MessageInfo::SuccesscloseOrder)?;
+        if let WebSocketMessage::SuccesscloseOrder(d) = deals2 {
+            assert_eq!(d, deals);
+        } else {
+            panic!("WebSocketMessage should be UpdateClosedDeals variant")
+        }
         Ok(())
     }
 

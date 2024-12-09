@@ -23,6 +23,7 @@ pub enum MessageInfo {
     SuccessopenOrder,
     UpdateCharts,
     SubscribeSymbol,
+    LoadHistoryPeriod,
     None
 }
 

@@ -1,22 +1,25 @@
 use std::sync::Arc;
 
-use futures_util::{future::try_join, stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
+use futures_util::{future::{try_join, try_join3}, stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
 use tokio::{net::TcpStream, sync::{mpsc::{Receiver, Sender}, Mutex}, task::JoinHandle};
 use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::{handshake::client::generate_key, http::Request, Message}, Connector, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 use url::Url;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{info::MessageInfo, update::UpdateBalance}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo, update::UpdateBalance}};
 
 use super::{listener::{EventListener, Handler}, ssid::Ssid};
 
-const MAX_ALLOWED_LOOPS: u32 = 128;
+const MAX_ALLOWED_LOOPS: u32 = 8;
 
 pub struct WebSocketClient<T: EventListener> {
     pub ssid: Ssid,
     pub demo: bool,
-    pub handler: T
+    pub handler: T,
     // pub balance: UpdateBalance
+    pub data: Data,
+    sender: Sender<WebSocketMessage>,
+    event_loop: JoinHandle<()>
 
 }
 
@@ -29,11 +32,16 @@ impl<T: EventListener> WebSocketClient<T> {
     pub async fn init(ssid: impl ToString, demo: bool, handler: T) -> PocketResult<Self> {
         let ssid = Ssid::parse(ssid)?;
         let _connection = Self::connect(ssid.clone(), demo).await?;
-        println!("Connected");
+        let data = Data::default();
+        let (event_loop, sender) = Self::start_loops(handler.clone(), ssid.clone(), demo, data.clone()).await?;
+        println!("Initialized");
         Ok(Self {
             ssid,
             demo,
-            handler
+            handler,
+            data,
+            sender,
+            event_loop
         })
     }   
 
@@ -65,21 +73,21 @@ impl<T: EventListener> WebSocketClient<T> {
         Ok(ws)
     }
 
-    async fn create_listener_job(&self) -> PocketResult<JoinHandle<()>> {
+    pub async fn start_loops(handler: T, ssid: Ssid, demo: bool, data: Data) -> PocketResult<(JoinHandle<()>, Sender<WebSocketMessage>)> {
 
-        let handler = self.handler.clone();
-        let ssid = self.ssid.clone();
-        let demo = self.demo;
         let (mut write, mut read) = WebSocketClient::<T>::connect(ssid.clone(), demo).await?.split();
         let (sender, mut reciever) = tokio::sync::mpsc::channel(128);
+        let (msg_sender, mut msg_reciever) = tokio::sync::mpsc::channel(128);
+        let sender_msg = msg_sender.clone();
         let task = tokio::task::spawn(async move {
             let previous = MessageInfo::None;
             let mut loops = 0;
             loop {
 
-                let listener_future = WebSocketClient::<T>::listener_loop(handler.clone(), previous.clone(), &mut read, &sender);
+                let listener_future = WebSocketClient::<T>::listener_loop(handler.clone(), previous.clone(), &mut read, &sender, &sender_msg);
                 let sender_future = WebSocketClient::<T>::sender_loop(&mut write, &mut reciever);
-                match try_join(listener_future, sender_future).await {
+                let update_loop = WebSocketClient::<T>::update_loop(data.clone(), &mut msg_reciever);
+                match try_join3(listener_future, sender_future, update_loop).await {
                     Ok(_) => {
                         if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
                             (write, read) = websocket.split();
@@ -107,10 +115,10 @@ impl<T: EventListener> WebSocketClient<T> {
                 }
             }
         });
-        Ok(task)
+        Ok((task, msg_sender))
     }
 
-    async fn listener_loop(handler: T, mut previous: MessageInfo, ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, sender: &Sender<Message>) -> PocketResult<()> {        
+    async fn listener_loop(handler: T, mut previous: MessageInfo, ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, sender: &Sender<Message>, msg_sender: &Sender<WebSocketMessage>) -> PocketResult<()> {        
         while let Some(msg) = &ws.next().await {
             println!("Recieved message");
             match msg {
@@ -152,18 +160,31 @@ impl<T: EventListener> WebSocketClient<T> {
         }
         Ok(())
     }
+
+    async fn update_loop(data: Data, reciever: &mut Receiver<WebSocketMessage>) -> PocketResult<()> {
+        while let Some(msg) = reciever.recv().await {
+            match msg {
+                WebSocketMessage::SuccessupdateBalance(balance) => data.update_balance(balance).await,
+                WebSocketMessage::UpdateAssets(assets) => data.update_payout_data(assets).await,
+                WebSocketMessage::UpdateClosedDeals(deals) => data.update_closed_deals(deals).await,
+                WebSocketMessage::UpdateOpenedDeals(deals) => data.update_opened_deals(deals).await,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
     
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{error::Error, sync::Arc};
+    use std::{error::Error, sync::Arc, time::Duration};
 
     use chrono::{format, Utc};
     use serde_json::Value;
     use tokio_tungstenite::{tungstenite::protocol::Message, connect_async_tls_with_config, tungstenite::{error::TlsError, handshake::client::generate_key, http::{Request, Uri}}, Connector};
     use futures_util::{future, pin_mut, SinkExt, StreamExt};
-    use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::Mutex};
+    use tokio::{io::{AsyncReadExt, AsyncWriteExt}, sync::Mutex, time::sleep};
 
     use crate::pocketoption::{parser::message::WebSocketMessage, types::info::MessageInfo, utils::basic::get_index, ws::{basic::WebSocketClient, listener::Handler, ssid::Ssid}};
 
@@ -275,8 +296,12 @@ mod tests {
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let demo = true;
         let client = WebSocketClient::<Handler>::new(ssid, demo).await?;
-        let res = client.create_listener_job().await?;
-        res.await?;
+        let mut test = 0;
+        while test < 1000 {
+            test += 1;
+            sleep(Duration::from_millis(100)).await;
+            println!("{test}");
+        }
         Ok(())
     }
 
