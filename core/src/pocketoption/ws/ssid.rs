@@ -1,6 +1,7 @@
 use core::fmt;
 
-use serde::{Deserialize, Serialize};
+use serde::{de::Error, Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::pocketoption::error::{PocketOptionError, PocketResult};
 
@@ -96,6 +97,15 @@ impl fmt::Display for Ssid {
             Self::Demo(demo) => demo.fmt(f),
             Self::Real(real) => real.fmt(f),
         }
+    }
+}
+
+impl<'de> Deserialize<'de> for Ssid {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de> {
+        let data: Value = Value::deserialize(deserializer)?;
+        Ssid::parse(data).map_err(|e| serde::de::Error::custom(e))
     }
 }
 

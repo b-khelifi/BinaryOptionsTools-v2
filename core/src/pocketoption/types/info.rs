@@ -4,7 +4,7 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum MessageInfo {
     OpenOrder,
@@ -24,6 +24,7 @@ pub enum MessageInfo {
     UpdateCharts,
     SubscribeSymbol,
     LoadHistoryPeriod,
+    GetCandles,
     None
 }
 

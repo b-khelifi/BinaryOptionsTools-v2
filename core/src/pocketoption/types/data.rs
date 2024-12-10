@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::pocketoption::parser::message::WebSocketMessage;
 
-use super::{order::{Deal, UpdateClosedDeals, UpdateOpenedDeals}, update::{UpdateAssets, UpdateBalance}};
+use super::{info::MessageInfo, order::{Deal, UpdateClosedDeals, UpdateOpenedDeals}, update::{UpdateAssets, UpdateBalance}};
 
 #[derive(Default, Clone)]
 pub struct Data {
@@ -13,7 +13,7 @@ pub struct Data {
     opened_deals: Arc<Mutex<UpdateOpenedDeals>>,
     closed_deals: Arc<Mutex<UpdateClosedDeals>>,
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
-    pending_requests: Arc<Mutex<HashMap<Uuid, tokio::sync::oneshot::Sender<WebSocketMessage>>>>
+    pending_requests: Arc<Mutex<HashMap<MessageInfo, Vec<(Box<dyn Fn(&WebSocketMessage) -> bool + Send + Sync>, tokio::sync::oneshot::Sender<WebSocketMessage>)>>>>
 }
 
 impl From<UpdateAssets> for HashMap<String, i32> {
@@ -63,13 +63,31 @@ impl Data {
         self.payout_data.lock().await.get(&asset.to_string()).cloned()
     }
 
-    pub async fn add_user_request(&self, id: Uuid, sender: tokio::sync::oneshot::Sender<WebSocketMessage>) {
+    pub async fn add_user_request(&self, info: MessageInfo, validator: impl Fn(&WebSocketMessage) -> bool + Send + Sync + 'static, sender: tokio::sync::oneshot::Sender<WebSocketMessage>) {
         let mut requests = self.pending_requests.lock().await;
-        requests.insert(id, sender);
+        if let Some(reqs) = requests.get_mut(&info) {
+            reqs.push((Box::new(validator), sender));
+            return;
+        }
+
+        requests.insert(info, vec![(Box::new(validator), sender)]);
     }
 
-    pub async fn get_request(&self, id: Uuid) -> Option<tokio::sync::oneshot::Sender<WebSocketMessage>> {
+    pub async fn get_request(&self, message: &WebSocketMessage) -> Option<tokio::sync::oneshot::Sender<WebSocketMessage>> {
         let mut requests = self.pending_requests.lock().await;
-        requests.remove(&id)
+        let info = message.info();
+        
+        if let Some(reqs) = requests.get_mut(&info) {
+            // Find the index of the matching validator
+            let element = reqs.iter().enumerate().position(|(_, (v, _))| v(message));
+            
+            if let Some(idx) = element {
+                // Remove the validator and return the sender
+                let (_, s) = reqs.remove(idx);
+                return Some(s);
+            }
+        }
+        
+        None
     }
-}
+    }

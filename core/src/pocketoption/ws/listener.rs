@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::{self, WebSocketMessage}, types::info::MessageInfo};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::{self, WebSocketMessage}, types::{data::Data, info::MessageInfo}};
 
-use super::{basic::WebSocketClient, ssid::Ssid};
+use super::ssid::Ssid;
 
 #[async_trait]
 pub trait EventListener: Clone + Send + Sync + 'static {
@@ -18,7 +18,7 @@ pub trait EventListener: Clone + Send + Sync + 'static {
         Ok(message)
     }
 
-    async fn process_message(&self, message: &Message, previous: &MessageInfo, sender: &Sender<Message>) -> PocketResult<(Option<MessageInfo>, bool)> {
+    async fn process_message(&self, message: &Message, previous: &MessageInfo, sender: &Sender<Message>, data: &Data) -> PocketResult<(Option<MessageInfo>, bool)> {
         Ok((None,false))
     }
 
@@ -45,6 +45,7 @@ impl Handler {
     pub fn handle_binary_msg(&self, bytes: &Vec<u8>, previous: &MessageInfo) -> PocketResult<WebSocketMessage> {
         let msg = String::from_utf8(bytes.to_owned())?;
         let message = WebSocketMessage::parse_with_context(msg, previous)?;
+
         Ok(message)
     }
 
@@ -75,9 +76,14 @@ impl Handler {
 
 #[async_trait::async_trait]
 impl EventListener for Handler {
-    async fn process_message(&self, message: &Message, previous: &MessageInfo, sender: &Sender<Message>) -> PocketResult<(Option<MessageInfo> ,bool)> {
+    async fn process_message(&self, message: &Message, previous: &MessageInfo, sender: &Sender<Message>, data: &Data) -> PocketResult<(Option<MessageInfo> ,bool)> {
         match message {
-            Message::Binary(binary) => {self.handle_binary_msg(binary, previous)?;},
+            Message::Binary(binary) => {
+                let msg = self.handle_binary_msg(binary, previous)?;
+                if let Some(sender) = data.get_request(&msg).await {
+                    sender.send(msg)?;
+                }
+            },
             Message::Text(text) => {
                 let res = self.handle_text_msg(text, sender).await?;
                 println!("{:?}", res);

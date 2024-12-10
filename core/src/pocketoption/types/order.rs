@@ -3,13 +3,22 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::pocketoption::{error::PocketResult, utils::basic::get_index};
+
 use super::update::float_time;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Action {
+    Call, // Buy
+    Put // Sell
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenOrder {
     asset: String,
-    action: String,
+    action: Action,
     amount: f64,
     is_demo: u32,
     option_type: u32,
@@ -84,11 +93,33 @@ pub struct SuccessOpenOrder {
     close_price: f64,
     command: i32,
     asset: String,
-    request_id: u64,
+    pub request_id: u64,
     open_ms: i32,
     option_type: i32,
     is_copy_signal: bool,
     currency: String,
+}
+
+impl OpenOrder {
+    pub fn new(amount: f64, asset: String, action: Action, duration: u32, demo: u32) -> PocketResult<Self> {
+        Ok(Self {
+            amount,
+            asset,
+            action,
+            is_demo: demo,
+            option_type: 100, // FIXME: Check why it always is 100
+            request_id: get_index()?,
+            time: duration
+        })
+    }
+
+    pub fn put(amount: f64, asset: String, duration: u32, demo: u32) -> PocketResult<Self> {
+        Self::new(amount, asset, Action::Put, duration, demo)
+    }
+
+    pub fn call(amount: f64, asset: String, duration: u32, demo: u32) -> PocketResult<Self> {
+        Self::new(amount, asset, Action::Call, duration, demo)
+    }
 }
 
 #[cfg(test)]

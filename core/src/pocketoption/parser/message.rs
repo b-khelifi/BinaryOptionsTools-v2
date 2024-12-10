@@ -1,42 +1,39 @@
 use core::fmt;
+use std::fmt::write;
 
 use serde::{Deserialize, Serialize};
 use serde_json::from_str;
+use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{Auth, ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{Auth, ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}, user::UserRequest}, ws::ssid::Ssid};
+
+use super::basic::LoadHistoryPeriod;
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum WebSocketMessage {
+    OpenOrder(OpenOrder),
+    ChangeSymbol(ChangeSymbol),
+    Auth(Ssid),
+    GetCandles(LoadHistoryPeriod),
+
+    LoadHistoryPeriod(LoadHistoryPeriodResult),
     UpdateStream(UpdateStream),
     UpdateHistoryNew(UpdateHistoryNew),
-    LoadHistoryPeriod(LoadHistoryPeriodResult),
+    SubscribeSymbol(SubscribeSymbol),
     UpdateAssets(UpdateAssets),
     UpdateBalance(UpdateBalance),
-    OpenOrder(OpenOrder),
     SuccessAuth(SuccessAuth),
     UpdateClosedDeals(UpdateClosedDeals),
     SuccesscloseOrder(SuccessCloseOrder),
     SuccessopenOrder(SuccessOpenOrder),
-    ChangeSymbol(ChangeSymbol),
-    SubscribeSymbol(SubscribeSymbol),
     SuccessupdateBalance(UpdateBalance),
     UpdateOpenedDeals(UpdateOpenedDeals),
-    Auth(Auth),
 
     UserRequest(Box<UserRequest>),
     None
 }
-
-#[derive(Debug, Deserialize)]
-pub struct UserRequest {
-    id: Uuid,
-    message: Box<WebSocketMessage>,
-    #[serde(skip)]
-    sender: Option<tokio::sync::oneshot::Sender<WebSocketMessage>>
-}
-
 
 impl WebSocketMessage {
     pub fn parse(data: impl ToString) -> PocketResult<Self> {
@@ -97,7 +94,7 @@ impl WebSocketMessage {
                 }
             },
             MessageInfo::Auth => {
-                if let Ok(auth) = from_str::<Auth>(&data) {
+                if let Ok(auth) = from_str::<Ssid>(&data) {
                     return Ok(Self::Auth(auth));
                 }
             },
@@ -145,7 +142,12 @@ impl WebSocketMessage {
             MessageInfo::UpdateCharts => {
                 // TODO: Add this 
             },
-            MessageInfo::None => todo!(),
+            MessageInfo::GetCandles => {
+                if let Ok(candles) = from_str::<LoadHistoryPeriod>(&data) {
+                    return Ok(Self::GetCandles(candles));
+                }
+            }
+            MessageInfo::None => return WebSocketMessage::parse(data.clone()),
         }
         Err(PocketOptionError::GeneralParsingError("Error ".to_string()))
     }
@@ -167,6 +169,7 @@ impl WebSocketMessage {
             Self::UpdateOpenedDeals(_) => MessageInfo::UpdateOpenedDeals,
             Self::SubscribeSymbol(_) => MessageInfo::SubscribeSymbol,
             Self::LoadHistoryPeriod(_) => MessageInfo::LoadHistoryPeriod,
+            Self::GetCandles(_) => MessageInfo::GetCandles,
             Self::UserRequest(_) => MessageInfo::None,
             Self::None => MessageInfo::None,
         }
@@ -176,29 +179,45 @@ impl WebSocketMessage {
 impl fmt::Display for WebSocketMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            WebSocketMessage::ChangeSymbol(change_symbol) => {
+                write!(f, "42[{},{}]", serde_json::to_string(&MessageInfo::ChangeSymbol).map_err(|_| fmt::Error)?, serde_json::to_string(&change_symbol).map_err(|_| fmt::Error)?)
+            },
+            WebSocketMessage::Auth(auth) => write!(f, "{:?}", auth),
+            WebSocketMessage::GetCandles(candles) => write!(f, "GetCandles"),
+            WebSocketMessage::OpenOrder(open_order) => write!(f, "{:?}", open_order),
+            WebSocketMessage::SubscribeSymbol(subscribe_symbol) => write!(f, "{:?}", subscribe_symbol),
+            
             WebSocketMessage::UpdateStream(update_stream) => write!(f, "{:?}", update_stream),
             WebSocketMessage::UpdateHistoryNew(update_history_new) => write!(f, "{:?}", update_history_new),
             WebSocketMessage::UpdateAssets(update_assets) => write!(f, "{:?}", update_assets),
             WebSocketMessage::UpdateBalance(update_balance) => write!(f, "{:?}", update_balance),
-            WebSocketMessage::OpenOrder(open_order) => write!(f, "{:?}", open_order),
             WebSocketMessage::SuccessAuth(success_auth) => write!(f, "{:?}", success_auth),
             WebSocketMessage::UpdateClosedDeals(update_closed_deals) => write!(f, "{:?}", update_closed_deals),
             WebSocketMessage::SuccesscloseOrder(success_close_order) => write!(f, "{:?}", success_close_order),
             WebSocketMessage::SuccessopenOrder(success_open_order) => write!(f, "{:?}", success_open_order),
-            WebSocketMessage::ChangeSymbol(change_symbol) => {
-                write!(f, "42[{},{}]", serde_json::to_string(&MessageInfo::ChangeSymbol).map_err(|_| fmt::Error)?, serde_json::to_string(&change_symbol).map_err(|_| fmt::Error)?)
-            },
-            WebSocketMessage::SubscribeSymbol(subscribe_symbol) => write!(f, "{:?}", subscribe_symbol),
             WebSocketMessage::SuccessupdateBalance(update_balance) => write!(f, "{:?}", update_balance),
             WebSocketMessage::UpdateOpenedDeals(update_opened_deals) => write!(f, "{:?}", update_opened_deals),
-            WebSocketMessage::Auth(auth) => write!(f, "{:?}", auth),
             WebSocketMessage::None => write!(f, "None"),
-            WebSocketMessage::LoadHistoryPeriod(period) => write!(f, "{:?}", period),
-            WebSocketMessage::UserRequest(user) => write!(f, "Request by user of id {:?}", user.id)
+            // 42["loadHistoryPeriod",{"asset":"#AXP_otc","index":173384282247,"time":1733482800,"offset":540000,"period":3600}]	
+            WebSocketMessage::LoadHistoryPeriod(period) => {
+                write!(f, "42[{}, {}]", serde_json::to_string(&MessageInfo::LoadHistoryPeriod).map_err(|_| fmt::Error)?,  serde_json::to_string(&period).map_err(|_| fmt::Error)?)
+            },
+            WebSocketMessage::UserRequest(user) => write!(f, "Request of type {:?}", user.response_type)
         }
     }
 }
 
+impl From<WebSocketMessage> for Message {
+    fn from(value: WebSocketMessage) -> Self {
+        Box::new(value).into()
+    }
+}
+
+impl From<Box<WebSocketMessage>> for Message {
+    fn from(value: Box<WebSocketMessage>) -> Self {
+        Message::Text(value.to_string())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

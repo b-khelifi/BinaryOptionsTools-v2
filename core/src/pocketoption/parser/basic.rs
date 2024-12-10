@@ -22,12 +22,12 @@ enum AssetType {
     Index
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoadHistoryPeriod {
     pub active: String,
     pub period: i32,
     pub time: i64,
-    pub index: i128,
+    pub index: u64,
     pub offset: i32
 }
 

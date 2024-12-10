@@ -5,6 +5,7 @@ use tokio::{net::TcpStream, sync::{mpsc::{Receiver, Sender}, Mutex}, task::JoinH
 use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::{handshake::client::generate_key, http::Request, Message}, Connector, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 use url::Url;
+use uuid::Uuid;
 
 use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo, update::UpdateBalance}};
 
@@ -45,6 +46,11 @@ impl<T: EventListener> WebSocketClient<T> {
         })
     }   
 
+    pub async fn buy(&self, asset: String, amount: f64) -> PocketResult<Uuid> {
+        
+        todo!()
+    }
+
     pub async fn connect(ssid: Ssid, demo: bool) -> PocketResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
         let tls_connector = native_tls::TlsConnector::builder()
             .build()?;
@@ -73,7 +79,7 @@ impl<T: EventListener> WebSocketClient<T> {
         Ok(ws)
     }
 
-    pub async fn start_loops(handler: T, ssid: Ssid, demo: bool, data: Data) -> PocketResult<(JoinHandle<()>, Sender<WebSocketMessage>)> {
+    async fn start_loops(handler: T, ssid: Ssid, demo: bool, data: Data) -> PocketResult<(JoinHandle<()>, Sender<WebSocketMessage>)> {
 
         let (mut write, mut read) = WebSocketClient::<T>::connect(ssid.clone(), demo).await?.split();
         let (sender, mut reciever) = tokio::sync::mpsc::channel(128);
@@ -84,9 +90,9 @@ impl<T: EventListener> WebSocketClient<T> {
             let mut loops = 0;
             loop {
 
-                let listener_future = WebSocketClient::<T>::listener_loop(handler.clone(), previous.clone(), &mut read, &sender, &sender_msg);
+                let listener_future = WebSocketClient::<T>::listener_loop(data.clone(), handler.clone(), previous.clone(), &mut read, &sender, &sender_msg);
                 let sender_future = WebSocketClient::<T>::sender_loop(&mut write, &mut reciever);
-                let update_loop = WebSocketClient::<T>::update_loop(data.clone(), &mut msg_reciever);
+                let update_loop = WebSocketClient::<T>::update_loop(data.clone(), &mut msg_reciever, &sender);
                 match try_join3(listener_future, sender_future, update_loop).await {
                     Ok(_) => {
                         if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
@@ -118,12 +124,12 @@ impl<T: EventListener> WebSocketClient<T> {
         Ok((task, msg_sender))
     }
 
-    async fn listener_loop(handler: T, mut previous: MessageInfo, ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, sender: &Sender<Message>, msg_sender: &Sender<WebSocketMessage>) -> PocketResult<()> {        
+    async fn listener_loop(data: Data, handler: T, mut previous: MessageInfo, ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, sender: &Sender<Message>, msg_sender: &Sender<WebSocketMessage>) -> PocketResult<()> {        
         while let Some(msg) = &ws.next().await {
             println!("Recieved message");
             match msg {
                 Ok(msg) => {
-                    match handler.process_message(msg, &previous, sender).await {
+                    match handler.process_message(msg, &previous, sender, &data).await {
                         Ok((msg, close)) => {
                             if close {
                                 return Ok(())
@@ -161,13 +167,17 @@ impl<T: EventListener> WebSocketClient<T> {
         Ok(())
     }
 
-    async fn update_loop(data: Data, reciever: &mut Receiver<WebSocketMessage>) -> PocketResult<()> {
+    async fn update_loop(data: Data, reciever: &mut Receiver<WebSocketMessage>, sender: &Sender<Message>) -> PocketResult<()> {
         while let Some(msg) = reciever.recv().await {
             match msg {
                 WebSocketMessage::SuccessupdateBalance(balance) => data.update_balance(balance).await,
                 WebSocketMessage::UpdateAssets(assets) => data.update_payout_data(assets).await,
                 WebSocketMessage::UpdateClosedDeals(deals) => data.update_closed_deals(deals).await,
                 WebSocketMessage::UpdateOpenedDeals(deals) => data.update_opened_deals(deals).await,
+                WebSocketMessage::UserRequest(request) => {
+                    data.add_user_request(request.response_type, request.validator, request.sender).await;
+                    sender.send(request.message.into());
+                }
                 _ => {}
             }
         }

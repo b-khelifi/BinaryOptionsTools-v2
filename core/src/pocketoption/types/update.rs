@@ -23,9 +23,9 @@ pub struct UpdateHistoryNew {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoadHistoryPeriodResult {
-    asset: String,
-    index: i128,
-    data: Vec<Candle>,
+    pub asset: String,
+    pub index: u64,
+    pub data: Vec<Candle>,
     period: u32
 }
 

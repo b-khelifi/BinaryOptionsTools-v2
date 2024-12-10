@@ -4,7 +4,7 @@ use rand::{thread_rng, Rng};
 use crate::pocketoption::error::{PocketOptionError, PocketResult};
 
 
-pub fn get_index() -> PocketResult<i128> {
+pub fn get_index() -> PocketResult<u64> {
     // rand = str(random.randint(10, 99))
     // cu = int(time.time())
     // t = str(cu + (2 * 60 * 60))
@@ -13,6 +13,6 @@ pub fn get_index() -> PocketResult<i128> {
 
     let rand = rng.gen_range(10..99);
     let time = (Utc::now() + Duration::hours(2)).timestamp();
-    format!("{}{}",time, rand ).parse::<i128>().map_err(|e| PocketOptionError::GeneralParsingError(e.to_string()))
+    format!("{}{}", time, rand).parse::<u64>().map_err(|e| PocketOptionError::GeneralParsingError(e.to_string()))
 }
 
