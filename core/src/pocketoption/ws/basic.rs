@@ -7,7 +7,7 @@ use tracing::{debug, error, info, warn};
 use url::Url;
 use uuid::Uuid;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo, update::UpdateBalance}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo, order::{OpenOrder, SuccessOpenOrder}, update::UpdateBalance, user::UserRequest}, validators::order_validator};
 
 use super::{listener::{EventListener, Handler}, ssid::Ssid};
 
@@ -19,8 +19,8 @@ pub struct WebSocketClient<T: EventListener> {
     pub handler: T,
     // pub balance: UpdateBalance
     pub data: Data,
-    sender: Sender<WebSocketMessage>,
-    event_loop: JoinHandle<()>
+    pub sender: Sender<WebSocketMessage>,
+    _event_loop: JoinHandle<()>
 
 }
 
@@ -34,7 +34,7 @@ impl<T: EventListener> WebSocketClient<T> {
         let ssid = Ssid::parse(ssid)?;
         let _connection = Self::connect(ssid.clone(), demo).await?;
         let data = Data::default();
-        let (event_loop, sender) = Self::start_loops(handler.clone(), ssid.clone(), demo, data.clone()).await?;
+        let (_event_loop, sender) = Self::start_loops(handler.clone(), ssid.clone(), demo, data.clone()).await?;
         println!("Initialized");
         Ok(Self {
             ssid,
@@ -42,14 +42,37 @@ impl<T: EventListener> WebSocketClient<T> {
             handler,
             data,
             sender,
-            event_loop
+            _event_loop
         })
     }   
 
-    pub async fn buy(&self, asset: String, amount: f64) -> PocketResult<Uuid> {
-        
-        todo!()
+    pub async fn send_message(&self, msg: WebSocketMessage, response_type: MessageInfo, validator: impl Fn(&WebSocketMessage) -> bool + Send + Sync + 'static) -> PocketResult<WebSocketMessage> {
+        let (request, reciever) = UserRequest::new(msg, response_type, validator);
+        self.sender.send(WebSocketMessage::UserRequest(Box::new(request))).await?;
+        Ok(reciever.await?)
     }
+
+    pub async fn buy(&self, asset: String, amount: f64, time: u32) -> PocketResult<(Uuid, SuccessOpenOrder)> {
+        let order = OpenOrder::call(amount, asset, time, self.demo as u32)?;
+        let request_id = order.request_id;
+        let res = self.send_message(WebSocketMessage::OpenOrder(order), MessageInfo::SuccessopenOrder, order_validator(request_id)).await?;
+        if let WebSocketMessage::SuccessopenOrder(order) = res {
+            return Ok((order.id, order))
+        }
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+    }
+
+    pub async fn sell(&self, asset: String, amount: f64, time: u32) -> PocketResult<(Uuid, SuccessOpenOrder)> {
+        let order = OpenOrder::put(amount, asset, time, self.demo as u32)?;
+        let request_id = order.request_id;
+        let res = self.send_message(WebSocketMessage::OpenOrder(order), MessageInfo::SuccessopenOrder, order_validator(request_id)).await?;
+        if let WebSocketMessage::SuccessopenOrder(order) = res {
+            return Ok((order.id, order))
+        }
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+    }
+
+
 
     pub async fn connect(ssid: Ssid, demo: bool) -> PocketResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
         let tls_connector = native_tls::TlsConnector::builder()
@@ -176,7 +199,9 @@ impl<T: EventListener> WebSocketClient<T> {
                 WebSocketMessage::UpdateOpenedDeals(deals) => data.update_opened_deals(deals).await,
                 WebSocketMessage::UserRequest(request) => {
                     data.add_user_request(request.response_type, request.validator, request.sender).await;
-                    sender.send(request.message.into());
+                    if let Err(e) = sender.send(request.message.into()).await {
+                        warn!("Error sending message: {}", PocketOptionError::from(e));
+                    }
                 }
                 _ => {}
             }
@@ -307,10 +332,18 @@ mod tests {
         let demo = true;
         let client = WebSocketClient::<Handler>::new(ssid, demo).await?;
         let mut test = 0;
+        // let mut threads = Vec::new();
         while test < 1000 {
             test += 1;
+            if test % 100 == 0 {
+                let res = client.sell("EURUSD_otc".into(), 1.0, 60).await?;
+                dbg!(res);
+            } else if test % 100 == 50 {
+                let res = client.buy("#AAPL_otc".into(), 1.0, 60).await?;
+                dbg!(res);
+
+            }
             sleep(Duration::from_millis(100)).await;
-            println!("{test}");
         }
         Ok(())
     }

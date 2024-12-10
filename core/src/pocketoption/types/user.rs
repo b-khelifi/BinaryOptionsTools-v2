@@ -1,4 +1,5 @@
 use core::fmt;
+use std::sync::mpsc::Receiver;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -41,4 +42,17 @@ impl<'de> Deserialize<'de> for UserRequest {
 
 pub fn default_validator(_validator: &WebSocketMessage) -> bool {
     false
+}
+
+impl UserRequest {
+    pub fn new(message: WebSocketMessage, response_type: MessageInfo, validator: impl Fn(&WebSocketMessage) -> bool + Send + Sync + 'static) -> (Self, tokio::sync::oneshot::Receiver<WebSocketMessage>) {
+        let (sender, reciever) = tokio::sync::oneshot::channel::<WebSocketMessage>();
+        let request = Self {
+            message: Box::new(message),
+            response_type,
+            validator: Box::new(validator),
+            sender
+        };
+        (request, reciever)
+    }
 }

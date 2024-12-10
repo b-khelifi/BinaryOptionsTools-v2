@@ -105,7 +105,7 @@ impl<'de> Deserialize<'de> for Ssid {
         where
             D: serde::Deserializer<'de> {
         let data: Value = Value::deserialize(deserializer)?;
-        Ssid::parse(data).map_err(|e| serde::de::Error::custom(e))
+        Ssid::parse(data).map_err(serde::de::Error::custom)
     }
 }
 

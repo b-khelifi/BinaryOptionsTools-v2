@@ -89,10 +89,10 @@ impl EventListener for Handler {
                 println!("{:?}", res);
                 return Ok((res, false))
             },
-            Message::Frame(frame) => {},
-            Message::Ping(binary) => {},
-            Message::Pong(binary) => {},
-            Message::Close(close) => return Ok((None, true)),
+            Message::Frame(_) => {}, // TODO:
+            Message::Ping(_) => {}, // TODO:
+            Message::Pong(_) => {}, // TODO:
+            Message::Close(_) => return Ok((None, true)),
         } 
         Ok((None, false))
     }   

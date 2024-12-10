@@ -182,9 +182,15 @@ impl fmt::Display for WebSocketMessage {
             WebSocketMessage::ChangeSymbol(change_symbol) => {
                 write!(f, "42[{},{}]", serde_json::to_string(&MessageInfo::ChangeSymbol).map_err(|_| fmt::Error)?, serde_json::to_string(&change_symbol).map_err(|_| fmt::Error)?)
             },
-            WebSocketMessage::Auth(auth) => write!(f, "{:?}", auth),
-            WebSocketMessage::GetCandles(candles) => write!(f, "GetCandles"),
-            WebSocketMessage::OpenOrder(open_order) => write!(f, "{:?}", open_order),
+            WebSocketMessage::Auth(auth) => {
+                auth.fmt(f)
+            },
+            WebSocketMessage::GetCandles(candles) => {
+                write!(f, "42[{},{}]", serde_json::to_string(&MessageInfo::LoadHistoryPeriod).map_err(|_| fmt::Error)?, serde_json::to_string(candles).map_err(|_| fmt::Error)?)
+            },
+            WebSocketMessage::OpenOrder(open_order) => {
+                write!(f, "42[{},{}]", serde_json::to_string(&MessageInfo::OpenOrder).map_err(|_| fmt::Error)?, serde_json::to_string(open_order).map_err(|_| fmt::Error)?)
+            },
             WebSocketMessage::SubscribeSymbol(subscribe_symbol) => write!(f, "{:?}", subscribe_symbol),
             
             WebSocketMessage::UpdateStream(update_stream) => write!(f, "{:?}", update_stream),

@@ -4,7 +4,7 @@ use std::error::Error;
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::{http, Message};
 
-use super::parser::message::WebSocketMessage;
+use super::{parser::message::WebSocketMessage, types::info::MessageInfo};
 
 #[derive(Error, Debug)]
 pub enum PocketOptionError {
@@ -27,9 +27,15 @@ pub enum PocketOptionError {
     #[error("Failed to send message to websocket sender, {0}")]
     MessageSendingError(#[from] tokio::sync::mpsc::error::SendError<Message>),
     #[error("Failed to send message to websocket sender, {0}")]
+    ThreadMessageSendingErrorMPCS(#[from] tokio::sync::mpsc::error::SendError<WebSocketMessage>),
+    #[error("Failed to recieve message from separate thread, {0}")]
+    OneShotRecieverError(#[from] tokio::sync::oneshot::error::RecvError),
+    #[error("Failed to send message to websocket sender, {0}")]
     ThreadMessageSendingError(#[from] WebSocketMessage),
     #[error("Failed to make request, {0}")]
     RequestError(#[from] reqwest::Error),
+    #[error("Unexpected error, recieved incorrect WebSocketMessage type, recieved {0}")]
+    UnexpectedIncorrectWebSocketMessage(#[from] MessageInfo),
     #[error("If you are having this error please contact the developpers, {0}")]
     UnreachableError(String),
     #[error("Unallowed operation, {0}")]
@@ -39,3 +45,4 @@ pub enum PocketOptionError {
 pub type PocketResult<T> = Result<T, PocketOptionError>;
 
 impl Error for WebSocketMessage {}
+impl Error for MessageInfo {}

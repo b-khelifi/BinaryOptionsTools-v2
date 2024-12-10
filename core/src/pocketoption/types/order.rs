@@ -22,7 +22,7 @@ pub struct OpenOrder {
     amount: f64,
     is_demo: u32,
     option_type: u32,
-    request_id: u64,
+    pub request_id: u64,
     time: u32
 }
 
@@ -75,7 +75,7 @@ pub struct Deal {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SuccessOpenOrder {
-    id: Uuid,
+    pub id: Uuid,
     open_time: String,
     close_time: String,
     #[serde(with = "float_time")]
