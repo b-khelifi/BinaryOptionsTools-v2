@@ -3,14 +3,15 @@ use std::time::Duration;
 use futures_util::{future::try_join3, stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
 use tokio::{net::TcpStream, sync::mpsc::{Receiver, Sender}, task::JoinHandle, time::sleep};
 use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::{handshake::client::generate_key, http::Request, Message}, Connector, MaybeTlsStream, WebSocketStream};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 use url::Url;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo, user::UserRequest}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo}};
 
 use super::{listener::{EventListener, Handler}, ssid::Ssid};
 
 const MAX_ALLOWED_LOOPS: u32 = 8;
+const SLEEP_INTERVAL: u32 = 2;
 
 pub struct WebSocketClient<T: EventListener> {
     pub ssid: Ssid,
@@ -92,9 +93,11 @@ impl<T: EventListener> WebSocketClient<T> {
                     Ok(_) => {
                         if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
                             (write, read) = websocket.split();
-                            println!("Error disconeted, trying to reconnect to server!")
+                            info!("Reconnected successfully!");
+                            loops = 0;
                         } else {
                             loops += 1;
+                            warn!("Error reconnecting... trying again in {SLEEP_INTERVAL} seconds (try {loops} of {MAX_ALLOWED_LOOPS}");
                             if loops >= MAX_ALLOWED_LOOPS {
                                 panic!("Too many failed connections");
                             }
@@ -105,9 +108,11 @@ impl<T: EventListener> WebSocketClient<T> {
                         warn!("Error in event loop, {e}, reconnecting...");
                         if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
                             (write, read) = websocket.split();
-                            println!("Error disconeted, trying to reconnect to server!")
+                            info!("Reconnected successfully!");
+                            loops = 0;
                         } else {
                             loops += 1;
+                            warn!("Error reconnecting... trying again in {SLEEP_INTERVAL} seconds (try {loops} of {MAX_ALLOWED_LOOPS}");
                             if loops >= MAX_ALLOWED_LOOPS {
                                 error!("Too many failed connections");
                                 break
@@ -123,25 +128,19 @@ impl<T: EventListener> WebSocketClient<T> {
 
     async fn listener_loop(data: Data, handler: T, mut previous: MessageInfo, ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, sender: &Sender<Message>, msg_sender: &Sender<WebSocketMessage>) -> PocketResult<()> {        
         while let Some(msg) = &ws.next().await {
-            println!("Recieved message");
-            match msg {
-                Ok(msg) => {
-                    match handler.process_message(msg, &previous, sender, &data).await {
-                        Ok((msg, close)) => {
-                            if close {
-                                return Ok(())
-                            }
-                            if let Some(msg) = msg {
-                                previous = msg;
-                            }
-                        },
-                        Err(e) => {
-                            debug!("Error processing message, {e}");
-                        }
+            let msg = msg.as_ref().inspect_err(|e| {warn!("Error recieving websocket message, {e}");}).map_err(|e| PocketOptionError::WebsocketRecievingConnectionError(e.to_string()))?;
+            match handler.process_message(msg, &previous, sender, &data).await {
+                Ok((msg, close)) => {
+                    if close {
+                        info!("Recieved closing frame.");
+                        return Err(PocketOptionError::WebsocketConnectionClosed("Recieved closing frame".into()))
+                    }
+                    if let Some(msg) = msg {
+                        previous = msg;
                     }
                 },
                 Err(e) => {
-                    warn!("Error recieving websocket message, {e}");
+                    debug!("Error processing message, {e}");
                 }
             }
         }
@@ -153,10 +152,10 @@ impl<T: EventListener> WebSocketClient<T> {
             match ws.send(msg).await {
                 Ok(_) => {
                     debug!("Sent message");
-                    println!("Sent message");
                 },
                 Err(e) => {
                     warn!("Error sending message: {}", e);
+                    return Err(e.into())
                 } 
             }
             ws.flush().await?;
@@ -173,6 +172,9 @@ impl<T: EventListener> WebSocketClient<T> {
                 WebSocketMessage::UpdateOpenedDeals(deals) => data.update_opened_deals(deals).await,
                 WebSocketMessage::UserRequest(request) => {
                     data.add_user_request(request.response_type, request.validator, request.sender).await;
+                    if request.message.info() == WebSocketMessage::None.info() {
+                        continue;
+                    }
                     if let Err(e) = sender.send(request.message.into()).await {
                         warn!("Error sending message: {}", PocketOptionError::from(e));
                     }

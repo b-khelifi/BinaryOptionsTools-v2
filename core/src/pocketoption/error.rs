@@ -1,9 +1,9 @@
-use std::{error, string::FromUtf8Error};
+use std::string::FromUtf8Error;
 use std::error::Error;
 
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::{http, Message};
-
+use tokio_tungstenite::tungstenite::Error as TungsteniteError;
 use super::types::order::FailOpenOrder;
 use super::{parser::message::WebSocketMessage, types::info::MessageInfo};
 
@@ -18,7 +18,11 @@ pub enum PocketOptionError {
     #[error("TLS Certificate error, {0}")]
     TLSError(#[from] native_tls::Error),
     #[error("Failed to connect to websocket server: {0}")]
-    WebsocketConnectionError(#[from] tokio_tungstenite::tungstenite::Error),
+    WebsocketConnectionError(#[from] TungsteniteError),
+    #[error("Failed to connect to websocket server: {0}")]
+    WebsocketRecievingConnectionError(String),
+    #[error("Websocket connection was closed by the server, {0}")]
+    WebsocketConnectionClosed(String),
     #[error("Failed to parse recieved data to Message: {0}")]
     WebSocketMessageParsingError(#[from] serde_json::Error),
     #[error("Failed to process recieved Message: {0}")]
