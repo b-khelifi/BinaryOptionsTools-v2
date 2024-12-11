@@ -60,30 +60,30 @@ pub struct UpdateAssets(pub Vec<Asset>);
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Asset {
-    id: i32,
+    pub id: i32,
     pub symbol: String,
-    name: String,
-    asset_type: AssetType,
-    in1: i32,
+    pub name: String,
+    pub asset_type: AssetType,
+    pub in1: i32,
     pub payout: i32,
-    in3: i32,
-    in4: i32,
-    in5: i32,
-    in6: i32,
-    in7: i32,
-    in8: i32,
-    arr: Vec<String>,
-    in9: i64,
-    val: bool,
-    times: Vec<TimeCandle>,
-    in10: i32,
-    in11: i32,
-    in12: i64
+    pub in3: i32,
+    pub in4: i32,
+    pub in5: i32,
+    pub in6: i32,
+    pub in7: i32,
+    pub in8: i32,
+    pub arr: Vec<String>,
+    pub in9: i64,
+    pub val: bool,
+    pub times: Vec<TimeCandle>,
+    pub in10: i32,
+    pub in11: i32,
+    pub in12: i64
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-enum AssetType {
+pub enum AssetType {
     Stock,
     Currency,
     Commodity,

@@ -24,6 +24,7 @@ pub enum MessageInfo {
     UpdateCharts,
     SubscribeSymbol,
     LoadHistoryPeriod,
+    FailopenOrder,
     GetCandles,
     None
 }

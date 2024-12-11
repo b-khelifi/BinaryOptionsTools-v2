@@ -1,13 +1,12 @@
-use std::sync::Arc;
+use std::time::Duration;
 
-use futures_util::{future::{try_join, try_join3}, stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
-use tokio::{net::TcpStream, sync::{mpsc::{Receiver, Sender}, Mutex}, task::JoinHandle};
+use futures_util::{future::try_join3, stream::{SplitSink, SplitStream}, SinkExt, StreamExt};
+use tokio::{net::TcpStream, sync::mpsc::{Receiver, Sender}, task::JoinHandle, time::sleep};
 use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::{handshake::client::generate_key, http::Request, Message}, Connector, MaybeTlsStream, WebSocketStream};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 use url::Url;
-use uuid::Uuid;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo, order::{OpenOrder, SuccessOpenOrder}, update::UpdateBalance, user::UserRequest}, validators::order_validator};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo, user::UserRequest}};
 
 use super::{listener::{EventListener, Handler}, ssid::Ssid};
 
@@ -36,6 +35,7 @@ impl<T: EventListener> WebSocketClient<T> {
         let data = Data::default();
         let (_event_loop, sender) = Self::start_loops(handler.clone(), ssid.clone(), demo, data.clone()).await?;
         println!("Initialized");
+        sleep(Duration::from_millis(500)).await;
         Ok(Self {
             ssid,
             demo,
@@ -45,34 +45,6 @@ impl<T: EventListener> WebSocketClient<T> {
             _event_loop
         })
     }   
-
-    pub async fn send_message(&self, msg: WebSocketMessage, response_type: MessageInfo, validator: impl Fn(&WebSocketMessage) -> bool + Send + Sync + 'static) -> PocketResult<WebSocketMessage> {
-        let (request, reciever) = UserRequest::new(msg, response_type, validator);
-        self.sender.send(WebSocketMessage::UserRequest(Box::new(request))).await?;
-        Ok(reciever.await?)
-    }
-
-    pub async fn buy(&self, asset: String, amount: f64, time: u32) -> PocketResult<(Uuid, SuccessOpenOrder)> {
-        let order = OpenOrder::call(amount, asset, time, self.demo as u32)?;
-        let request_id = order.request_id;
-        let res = self.send_message(WebSocketMessage::OpenOrder(order), MessageInfo::SuccessopenOrder, order_validator(request_id)).await?;
-        if let WebSocketMessage::SuccessopenOrder(order) = res {
-            return Ok((order.id, order))
-        }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
-    }
-
-    pub async fn sell(&self, asset: String, amount: f64, time: u32) -> PocketResult<(Uuid, SuccessOpenOrder)> {
-        let order = OpenOrder::put(amount, asset, time, self.demo as u32)?;
-        let request_id = order.request_id;
-        let res = self.send_message(WebSocketMessage::OpenOrder(order), MessageInfo::SuccessopenOrder, order_validator(request_id)).await?;
-        if let WebSocketMessage::SuccessopenOrder(order) = res {
-            return Ok((order.id, order))
-        }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
-    }
-
-
 
     pub async fn connect(ssid: Ssid, demo: bool) -> PocketResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
         let tls_connector = native_tls::TlsConnector::builder()
@@ -120,6 +92,7 @@ impl<T: EventListener> WebSocketClient<T> {
                     Ok(_) => {
                         if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
                             (write, read) = websocket.split();
+                            println!("Error disconeted, trying to reconnect to server!")
                         } else {
                             loops += 1;
                             if loops >= MAX_ALLOWED_LOOPS {
@@ -132,6 +105,7 @@ impl<T: EventListener> WebSocketClient<T> {
                         warn!("Error in event loop, {e}, reconnecting...");
                         if let Ok(websocket) = WebSocketClient::<T>::connect(ssid.clone(), demo).await {
                             (write, read) = websocket.split();
+                            println!("Error disconeted, trying to reconnect to server!")
                         } else {
                             loops += 1;
                             if loops >= MAX_ALLOWED_LOOPS {
@@ -325,28 +299,6 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_websocket_client() -> anyhow::Result<()> {
-        tracing_subscriber::fmt::init();
-        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
-        let demo = true;
-        let client = WebSocketClient::<Handler>::new(ssid, demo).await?;
-        let mut test = 0;
-        // let mut threads = Vec::new();
-        while test < 1000 {
-            test += 1;
-            if test % 100 == 0 {
-                let res = client.sell("EURUSD_otc".into(), 1.0, 60).await?;
-                dbg!(res);
-            } else if test % 100 == 50 {
-                let res = client.buy("#AAPL_otc".into(), 1.0, 60).await?;
-                dbg!(res);
-
-            }
-            sleep(Duration::from_millis(100)).await;
-        }
-        Ok(())
-    }
 
     #[test]
     fn test_bytes() -> Result<(), Box<dyn Error>> {

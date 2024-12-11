@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::pocketoption::parser::message::WebSocketMessage;
+use crate::pocketoption::{error::PocketResult, parser::message::WebSocketMessage};
 
 use super::{info::MessageInfo, order::{Deal, UpdateClosedDeals, UpdateOpenedDeals}, update::{UpdateAssets, UpdateBalance}};
 
@@ -73,7 +73,7 @@ impl Data {
         requests.insert(info, vec![(Box::new(validator), sender)]);
     }
 
-    pub async fn get_request(&self, message: &WebSocketMessage) -> Option<tokio::sync::oneshot::Sender<WebSocketMessage>> {
+    pub async fn get_request(&self, message: &WebSocketMessage) -> PocketResult<Option<tokio::sync::oneshot::Sender<WebSocketMessage>>> {
         let mut requests = self.pending_requests.lock().await;
         let info = message.info();
         
@@ -84,10 +84,17 @@ impl Data {
             if let Some(idx) = element {
                 // Remove the validator and return the sender
                 let (_, s) = reqs.remove(idx);
-                return Some(s);
+                return Ok(Some(s));
             }
         }
-        
-        None
+        if let WebSocketMessage::FailOpenOrder(fail) = message {
+            if let Some(reqs) = requests.remove(&MessageInfo::SuccessopenOrder) {
+                for (_, sender) in reqs.into_iter() {
+                    sender.send(WebSocketMessage::FailOpenOrder(fail.clone()))?;
+                }
+
+            }
+        }
+        Ok(None)
     }
     }

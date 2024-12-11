@@ -1,5 +1,4 @@
 use core::fmt;
-use std::sync::mpsc::Receiver;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -14,7 +13,6 @@ pub struct UserRequest {
     pub validator: Box<dyn Fn(&WebSocketMessage) -> bool + Send + Sync>,
     pub sender: tokio::sync::oneshot::Sender<WebSocketMessage>
 }
-
 
 impl fmt::Debug for UserRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -56,3 +54,4 @@ impl UserRequest {
         (request, reciever)
     }
 }
+

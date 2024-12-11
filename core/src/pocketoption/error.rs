@@ -1,9 +1,10 @@
-use std::string::FromUtf8Error;
+use std::{error, string::FromUtf8Error};
 use std::error::Error;
 
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::{http, Message};
 
+use super::types::order::FailOpenOrder;
 use super::{parser::message::WebSocketMessage, types::info::MessageInfo};
 
 #[derive(Error, Debug)]
@@ -39,10 +40,13 @@ pub enum PocketOptionError {
     #[error("If you are having this error please contact the developpers, {0}")]
     UnreachableError(String),
     #[error("Unallowed operation, {0}")]
-    Unallowed(String)
+    Unallowed(String),
+    #[error("Too many requests, {0}")]
+    TooManyRequests(#[from] FailOpenOrder)
 }
 
 pub type PocketResult<T> = Result<T, PocketOptionError>;
 
 impl Error for WebSocketMessage {}
 impl Error for MessageInfo {}
+impl Error for FailOpenOrder {}

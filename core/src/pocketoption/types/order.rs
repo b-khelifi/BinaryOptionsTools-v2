@@ -1,3 +1,5 @@
+use core::fmt;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -12,6 +14,13 @@ use super::update::float_time;
 pub enum Action {
     Call, // Buy
     Put // Sell
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailOpenOrder {
+    error: String,
+    amount: f64,
+    asset: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -31,8 +40,8 @@ pub struct UpdateClosedDeals(pub Vec<Deal>);
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SuccessCloseOrder {
-    profit: f64,
-    deals: Vec<Deal>,
+    pub profit: f64,
+    pub deals: Vec<Deal>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -41,35 +50,35 @@ pub struct UpdateOpenedDeals(pub Vec<Deal>);
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Deal {
-    id: Uuid,
-    open_time: String,
-    close_time: String,
+    pub id: Uuid,
+    pub open_time: String,
+    pub close_time: String,
     #[serde(with = "float_time")]
-    open_timestamp: DateTime<Utc>,
+    pub open_timestamp: DateTime<Utc>,
     #[serde(with = "float_time")]
-    close_timestamp: DateTime<Utc>,
-    refund_time: Option<Value>,
-    refund_timestamp: Option<Value>,
-    uid: u64,
-    amount: u64,
-    profit: f64,
-    percent_profit: i32,
-    percent_loss: i32,
-    open_price: f64,
-    close_price: f64,
-    command: i32,
-    asset: String,
-    is_demo: u32,
-    copy_ticket: String,
-    open_ms: i32,
-    close_ms: Option<i32>,
-    option_type: i32,
-    is_rollover: Option<bool>,
-    is_copy_signal: Option<bool>,
-    is_AI: Option<bool>,
-    currency: String,
-    amount_usd: Option<f64>,
-    amount_USD: f64,
+    pub close_timestamp: DateTime<Utc>,
+    pub refund_time: Option<Value>,
+    pub refund_timestamp: Option<Value>,
+    pub uid: u64,
+    pub amount: u64,
+    pub profit: f64,
+    pub percent_profit: i32,
+    pub percent_loss: i32,
+    pub open_price: f64,
+    pub close_price: f64,
+    pub command: i32,
+    pub asset: String,
+    pub is_demo: u32,
+    pub copy_ticket: String,
+    pub open_ms: i32,
+    pub close_ms: Option<i32>,
+    pub option_type: i32,
+    pub is_rollover: Option<bool>,
+    pub is_copy_signal: Option<bool>,
+    pub is_AI: Option<bool>,
+    pub currency: String,
+    pub amount_usd: Option<f64>,
+    pub amount_USD: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -119,6 +128,14 @@ impl OpenOrder {
 
     pub fn call(amount: f64, asset: String, duration: u32, demo: u32) -> PocketResult<Self> {
         Self::new(amount, asset, Action::Call, duration, demo)
+    }
+}
+
+impl fmt::Display for FailOpenOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Error: {}", self.error);
+        writeln!(f, "Max Allowed requests: {}", self.amount);
+        writeln!(f, "Error for asset: {}", self.asset)
     }
 }
 

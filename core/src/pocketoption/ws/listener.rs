@@ -80,7 +80,7 @@ impl EventListener for Handler {
         match message {
             Message::Binary(binary) => {
                 let msg = self.handle_binary_msg(binary, previous)?;
-                if let Some(sender) = data.get_request(&msg).await {
+                if let Some(sender) = data.get_request(&msg).await? {
                     sender.send(msg)?;
                 }
             },

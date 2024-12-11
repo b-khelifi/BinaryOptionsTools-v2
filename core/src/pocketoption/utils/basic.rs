@@ -16,3 +16,7 @@ pub fn get_index() -> PocketResult<u64> {
     format!("{}{}", time, rand).parse::<u64>().map_err(|e| PocketOptionError::GeneralParsingError(e.to_string()))
 }
 
+pub fn is_otc(symbol: &str) -> bool {
+    symbol.ends_with("otc")
+}
+

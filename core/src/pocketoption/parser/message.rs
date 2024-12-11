@@ -6,7 +6,7 @@ use serde_json::from_str;
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{Auth, ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}, user::UserRequest}, ws::ssid::Ssid};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{Auth, ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{FailOpenOrder, OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}, user::UserRequest}, ws::ssid::Ssid};
 
 use super::basic::LoadHistoryPeriod;
 
@@ -30,6 +30,7 @@ pub enum WebSocketMessage {
     SuccessopenOrder(SuccessOpenOrder),
     SuccessupdateBalance(UpdateBalance),
     UpdateOpenedDeals(UpdateOpenedDeals),
+    FailOpenOrder(FailOpenOrder),
 
     UserRequest(Box<UserRequest>),
     None
@@ -146,6 +147,11 @@ impl WebSocketMessage {
                 if let Ok(candles) = from_str::<LoadHistoryPeriod>(&data) {
                     return Ok(Self::GetCandles(candles));
                 }
+            },
+            MessageInfo::FailopenOrder => {
+                if let Ok(fail) = from_str::<FailOpenOrder>(&data) {
+                    return Ok(Self::FailOpenOrder(fail))
+                }
             }
             MessageInfo::None => return WebSocketMessage::parse(data.clone()),
         }
@@ -171,6 +177,7 @@ impl WebSocketMessage {
             Self::LoadHistoryPeriod(_) => MessageInfo::LoadHistoryPeriod,
             Self::GetCandles(_) => MessageInfo::GetCandles,
             Self::UserRequest(_) => MessageInfo::None,
+            Self::FailOpenOrder(_) => MessageInfo::FailopenOrder,
             Self::None => MessageInfo::None,
         }
     }
@@ -208,7 +215,8 @@ impl fmt::Display for WebSocketMessage {
             WebSocketMessage::LoadHistoryPeriod(period) => {
                 write!(f, "42[{}, {}]", serde_json::to_string(&MessageInfo::LoadHistoryPeriod).map_err(|_| fmt::Error)?,  serde_json::to_string(&period).map_err(|_| fmt::Error)?)
             },
-            WebSocketMessage::UserRequest(user) => write!(f, "Request of type {:?}", user.response_type)
+            WebSocketMessage::UserRequest(user) => write!(f, "Request of type {:?}", user.response_type),
+            WebSocketMessage::FailOpenOrder(order) => write!(f, "{:?}", order)
         }
     }
 }
@@ -228,7 +236,7 @@ impl From<Box<WebSocketMessage>> for Message {
 mod tests {
     use super::*;
 
-    use std::{error::Error, fs::File, io::{BufReader, Read}};
+    use std::{error::Error, fs::File, io::{BufReader, Read, Write}};
 
     use std::fs;
     use std::path::Path;
@@ -267,14 +275,13 @@ mod tests {
         let mut content = String::new();
         history_raw.read_to_string(&mut content)?;
         let history_new: WebSocketMessage = from_str(&content)?;
-        dbg!(history_new);
+        dbg!(&history_new);
         
         let mut assets_raw = File::open("tests/data.json")?;
         let mut content = String::new();
         assets_raw.read_to_string(&mut content)?;
         let assets_raw: WebSocketMessage = from_str(&content)?;
-        dbg!(assets_raw);
-
+        dbg!(&assets_raw);
         Ok(())
     }
 
@@ -292,6 +299,18 @@ mod tests {
             let _: WebSocketMessage = serde_json::from_reader(reader)?;
         }
         
+        Ok(())
+    }
+
+    #[test]
+    fn test_write_assets() -> anyhow::Result<()> {
+        let raw: UpdateAssets = serde_json::from_str(include_str!("../../../tests/data.json"))?;
+        let mut file = File::create("tests/assets.txt")?;
+        let data = raw.0.iter().fold(String::new(), |mut s, a| {
+            s.push_str(&format!("{}\n", a.symbol));
+            s
+        });
+        file.write_all(data.as_bytes())?;
         Ok(())
     }
 }
