@@ -1,12 +1,11 @@
 use core::fmt;
-use std::fmt::write;
 
-use serde::{Deserialize, Serialize};
-use serde_json::from_str;
+use serde::Deserialize;
+use serde_json::{from_str, Value};
 use tokio_tungstenite::tungstenite::Message;
-use uuid::Uuid;
+use tracing::warn;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{Auth, ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{FailOpenOrder, OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}, user::UserRequest}, ws::ssid::Ssid};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base::{ChangeSymbol, SubscribeSymbol}, info::MessageInfo, order::{FailOpenOrder, OpenOrder, SuccessCloseOrder, SuccessOpenOrder, UpdateClosedDeals, UpdateOpenedDeals}, success::SuccessAuth, update::{LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream}, user::UserRequest}, ws::ssid::Ssid};
 
 use super::basic::LoadHistoryPeriod;
 
@@ -31,6 +30,7 @@ pub enum WebSocketMessage {
     SuccessupdateBalance(UpdateBalance),
     UpdateOpenedDeals(UpdateOpenedDeals),
     FailOpenOrder(FailOpenOrder),
+    SuccessupdatePending(Value),
 
     UserRequest(Box<UserRequest>),
     None
@@ -109,7 +109,11 @@ impl WebSocketMessage {
                     return Ok(Self::SuccessupdateBalance(balance));
                 }
             },
-            MessageInfo::SuccessupdatePending => {},
+            MessageInfo::SuccessupdatePending => {
+                if let Ok(pending) = from_str::<Value>(&data) {
+                    return Ok(Self::SuccessupdatePending(pending));
+                }
+            },
             MessageInfo::SubscribeSymbol => {
                 if let Ok(symbol) = from_str::<SubscribeSymbol>(&data) {
                     return Ok(Self::SubscribeSymbol(symbol));
@@ -141,6 +145,7 @@ impl WebSocketMessage {
                 }
             }
             MessageInfo::UpdateCharts => {
+                return Err(PocketOptionError::GeneralParsingError("This is expected, there is no parser for the 'updateCharts' message".to_string()))
                 // TODO: Add this 
             },
             MessageInfo::GetCandles => {
@@ -155,7 +160,8 @@ impl WebSocketMessage {
             }
             MessageInfo::None => return WebSocketMessage::parse(data.clone()),
         }
-        Err(PocketOptionError::GeneralParsingError("Error ".to_string()))
+        warn!("Failed to parse message of type '{previous}':\n {data}");
+        Err(PocketOptionError::GeneralParsingError(format!("Error parsing message for message type '{}'", previous)))
     }
 
     pub fn info(&self) -> MessageInfo {
@@ -178,6 +184,7 @@ impl WebSocketMessage {
             Self::GetCandles(_) => MessageInfo::GetCandles,
             Self::UserRequest(_) => MessageInfo::None,
             Self::FailOpenOrder(_) => MessageInfo::FailopenOrder,
+            Self::SuccessupdatePending(_) => MessageInfo::SuccessupdatePending,
             Self::None => MessageInfo::None,
         }
     }
@@ -216,7 +223,8 @@ impl fmt::Display for WebSocketMessage {
                 write!(f, "42[{}, {}]", serde_json::to_string(&MessageInfo::LoadHistoryPeriod).map_err(|_| fmt::Error)?,  serde_json::to_string(&period).map_err(|_| fmt::Error)?)
             },
             WebSocketMessage::UserRequest(user) => write!(f, "Request of type {:?}", user.response_type),
-            WebSocketMessage::FailOpenOrder(order) => write!(f, "{:?}", order)
+            WebSocketMessage::FailOpenOrder(order) => order.fmt(f),
+            WebSocketMessage::SuccessupdatePending(pending) => pending.fmt(f)
         }
     }
 }

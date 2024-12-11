@@ -1,7 +1,7 @@
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{info::MessageInfo, order::{Deal, OpenOrder, SuccessOpenOrder}, user::UserRequest}, validators::{order_result_validator, order_validator}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::{basic::LoadHistoryPeriod, message::WebSocketMessage}, types::{info::MessageInfo, order::{Deal, OpenOrder, SuccessOpenOrder}, update::Candle, user::UserRequest}, validators::{candle_validator, order_result_validator, order_validator}};
 
 use super::{basic::WebSocketClient, listener::EventListener};
 
@@ -51,19 +51,51 @@ impl<T: EventListener> WebSocketClient<T> {
         }
         Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
     }
+
+    pub async fn get_candles(&self, asset: impl ToString, period: i64, offset: i64) -> PocketResult<Vec<Candle>> {
+        let time = self.data.get_server_time().await.div_euclid(period) * period;
+        if time == 0 {
+            return Err(PocketOptionError::GeneralParsingError("Server time is invalid.".to_string()));
+        }
+        let request = LoadHistoryPeriod::new(asset.to_string(), time, period, offset)?;
+        let index = request.index;
+        debug!("Sent get candles message, message: {:?}", WebSocketMessage::GetCandles(request).to_string());
+        let request = LoadHistoryPeriod::new(asset.to_string(), time, period, offset)?;
+        let res = self.send_message(WebSocketMessage::GetCandles(request), MessageInfo::LoadHistoryPeriod, candle_validator(index)).await?;
+        if let WebSocketMessage::LoadHistoryPeriod(history) = res {
+            return Ok(history.data)
+        }
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::{fs::OpenOptions, sync::Arc, time::Duration};
 
     use futures_util::future::try_join_all;
     use tokio::{task::JoinHandle, time::sleep};
-    use tracing::Level;
+    use tracing::level_filters::LevelFilter;
+    use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
     use crate::pocketoption::{error::{PocketOptionError, PocketResult}, ws::listener::Handler, WebSocketClient};
-    fn start_tracing() {
-        tracing_subscriber::fmt().with_max_level(Level::DEBUG).pretty().init();
+    fn start_tracing() -> anyhow::Result<()> {
+        let error_logs = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open("../logs/errors.log")?;
+
+        tracing_subscriber::registry()
+        // .with(filtered_layer)
+        .with(
+            // log-error file, to log the errors that arise
+            fmt::layer()
+                .with_ansi(false)
+                .with_writer(error_logs)
+                .with_filter(LevelFilter::WARN),
+        )
+        .with(fmt::Layer::default().pretty().with_filter(LevelFilter::DEBUG)).try_init()?;
+        Ok(())
     }
     #[tokio::test]
     async fn test_websocket_client() -> anyhow::Result<()> {
@@ -89,7 +121,7 @@ mod tests {
     }
     #[tokio::test]
     async fn test_all_trades() -> anyhow::Result<()> {
-        start_tracing();
+        start_tracing()?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let demo = true;
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
@@ -117,7 +149,7 @@ mod tests {
     #[tokio::test]
     #[should_panic]
     async fn test_force_error() {
-        start_tracing();
+        start_tracing().unwrap();
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let demo = true;
         let client = WebSocketClient::<Handler>::new(ssid, demo).await.unwrap();
@@ -127,10 +159,22 @@ mod tests {
             client.sell("EURUSD_otc", 20000.0, 60).await.unwrap();
         }
     }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_incorrect_asset_name() {
+        start_tracing().unwrap();
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let demo = true;
+        let client = WebSocketClient::<Handler>::new(ssid, demo).await.unwrap();
+        
+        client.sell("EUReUSD_otc", 1.0, 60).await.unwrap();
+    }
+
     
     #[tokio::test]
     async fn test_check_win() -> anyhow::Result<()> {
-        start_tracing();
+        start_tracing()?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let demo = true;
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await.unwrap());
@@ -156,6 +200,19 @@ mod tests {
             sleep(Duration::from_millis(100)).await;
         }
         try_join_all(checks).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_candles() -> anyhow::Result<()> {
+        start_tracing()?;
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let demo = true;
+        // time: 1733040000, offset: 540000, period: 3600
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await.unwrap());
+        sleep(Duration::from_secs(5)).await;
+        let candles = client.get_candles("EURUSD", 60, 6000).await?;
+        dbg!(candles);
         Ok(())
     }
 }

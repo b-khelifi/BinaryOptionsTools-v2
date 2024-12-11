@@ -2,16 +2,16 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct UpdateStream(Vec<UpdateStreamItem>);
+pub struct UpdateStream(pub Vec<UpdateStreamItem>);
 
 
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UpdateStreamItem {
-    active: String,
+    pub active: String,
     #[serde(with = "float_time")]
-    time: DateTime<Utc>,
-    price: f64
+    pub time: DateTime<Utc>,
+    pub price: f64
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -23,10 +23,10 @@ pub struct UpdateHistoryNew {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LoadHistoryPeriodResult {
-    pub asset: String,
+    pub asset: Option<String>,
     pub index: u64,
     pub data: Vec<Candle>,
-    period: u32
+    pub period: u32
 }
 
 #[derive(Debug, Deserialize, Serialize)]

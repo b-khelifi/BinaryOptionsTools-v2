@@ -1,11 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 use crate::pocketoption::{error::PocketResult, parser::message::WebSocketMessage};
 
 use super::{info::MessageInfo, order::{Deal, UpdateClosedDeals, UpdateOpenedDeals}, update::{UpdateAssets, UpdateBalance}};
+
+type HashMapData = HashMap<MessageInfo, Vec<(Box<dyn Fn(&WebSocketMessage) -> bool + Send + Sync>, tokio::sync::oneshot::Sender<WebSocketMessage>)>>;
 
 #[derive(Default, Clone)]
 pub struct Data {
@@ -13,7 +14,8 @@ pub struct Data {
     opened_deals: Arc<Mutex<UpdateOpenedDeals>>,
     closed_deals: Arc<Mutex<UpdateClosedDeals>>,
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
-    pending_requests: Arc<Mutex<HashMap<MessageInfo, Vec<(Box<dyn Fn(&WebSocketMessage) -> bool + Send + Sync>, tokio::sync::oneshot::Sender<WebSocketMessage>)>>>>
+    pending_requests: Arc<Mutex<HashMapData>>,
+    server_tyme: Arc<Mutex<i64>>
 }
 
 impl From<UpdateAssets> for HashMap<String, i32> {
@@ -97,4 +99,13 @@ impl Data {
         }
         Ok(None)
     }
+
+    pub async fn update_server_time(&self, time: i64) {
+        let mut s_time = self.server_tyme.lock().await;
+        *s_time = time;
     }
+
+    pub async fn get_server_time(&self) -> i64 {
+        *self.server_tyme.lock().await
+    }
+}

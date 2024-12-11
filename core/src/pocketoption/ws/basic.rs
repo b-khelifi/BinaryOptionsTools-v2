@@ -6,7 +6,7 @@ use tokio_tungstenite::{connect_async_tls_with_config, tungstenite::{handshake::
 use tracing::{debug, error, info, warn};
 use url::Url;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{data::Data, info::MessageInfo}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::WebSocketMessage, types::{base::ChangeSymbol, data::Data, info::MessageInfo}};
 
 use super::{listener::{EventListener, Handler}, ssid::Ssid};
 
@@ -70,8 +70,6 @@ impl<T: EventListener> WebSocketClient<T> {
             .body(())?;
 
         let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await?;
-        println!("Connected!");
-
         Ok(ws)
     }
 
@@ -81,6 +79,7 @@ impl<T: EventListener> WebSocketClient<T> {
         let (sender, mut reciever) = tokio::sync::mpsc::channel(128);
         let (msg_sender, mut msg_reciever) = tokio::sync::mpsc::channel(128);
         let sender_msg = msg_sender.clone();
+
         let task = tokio::task::spawn(async move {
             let previous = MessageInfo::None;
             let mut loops = 0;
@@ -206,7 +205,7 @@ mod tests {
         let period = 60;
         let offset = 900;
         let history_period = LoadHistoryPeriod {
-            active: "AUDNZD_otc".into(),
+            asset: "AUDNZD_otc".into(),
             period,
             time,
             index: get_index()?,
@@ -264,7 +263,7 @@ mod tests {
                     let msg = String::from_utf8(bin).unwrap();
                     let parsed = WebSocketMessage::parse(&msg);
                     // dbg!(parsed);
-                    format!("Bin: {}", &msg)
+                    dbg!(format!("Bin: {}", &msg))
                 },
                 Message::Text(text) => {
                     let base = text.clone();

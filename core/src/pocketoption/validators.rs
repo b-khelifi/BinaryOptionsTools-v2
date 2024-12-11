@@ -15,10 +15,10 @@ pub fn order_validator(order_index: u64) -> impl Fn(&WebSocketMessage) -> bool +
     }
 }
 
-pub fn candle_validator(asset: String, index: u64) -> impl Fn(&WebSocketMessage) -> bool + Send + Sync {
+pub fn candle_validator(index: u64) -> impl Fn(&WebSocketMessage) -> bool + Send + Sync {
     move |message| {
         if let WebSocketMessage::LoadHistoryPeriod(history) = message {
-            if history.asset == asset && history.index == index {
+            if history.index.div_euclid(100).abs_diff(index.div_euclid(100)) <= 1 {
                 return true;
             }
         }

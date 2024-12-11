@@ -3,8 +3,9 @@ use tokio::sync::mpsc::Sender;
 use async_trait::async_trait;
 use serde_json::Value;
 use tokio_tungstenite::tungstenite::Message;
+use tracing::warn;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::{self, WebSocketMessage}, types::{data::Data, info::MessageInfo}};
+use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::message::{self, WebSocketMessage}, types::{base::ChangeSymbol, data::Data, info::MessageInfo}};
 
 use super::ssid::Ssid;
 
@@ -65,6 +66,9 @@ impl Handler {
             _ if text.starts_with("451-") => {
                 let msg = text.strip_prefix("451-").unwrap();
                 let (info, _): (MessageInfo, Value) = serde_json::from_str(msg)?;
+                if info == MessageInfo::UpdateClosedDeals {
+                    sender.send(Message::Text(WebSocketMessage::ChangeSymbol(ChangeSymbol { asset: "AUDNZD_otc".into(), period: 60 }).to_string())).await?;
+                }
                 return Ok(Some(info));
             }
             _ => {}
@@ -80,6 +84,12 @@ impl EventListener for Handler {
         match message {
             Message::Binary(binary) => {
                 let msg = self.handle_binary_msg(binary, previous)?;
+                if let WebSocketMessage::UpdateStream(stream) = &msg {
+                    match stream.0.first() {
+                        Some(item) => data.update_server_time(item.time.timestamp()).await,
+                        None => warn!("Missing data in 'updateStream' message")
+                    }
+                }
                 if let Some(sender) = data.get_request(&msg).await? {
                     sender.send(msg)?;
                 }

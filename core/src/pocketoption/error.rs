@@ -45,8 +45,8 @@ pub enum PocketOptionError {
     UnreachableError(String),
     #[error("Unallowed operation, {0}")]
     Unallowed(String),
-    #[error("Too many requests, {0}")]
-    TooManyRequests(#[from] FailOpenOrder)
+    #[error("Error sending request, {0}")]
+    WebsocketMessageSendingError(#[from] FailOpenOrder)
 }
 
 pub type PocketResult<T> = Result<T, PocketOptionError>;
