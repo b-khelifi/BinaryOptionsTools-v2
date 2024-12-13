@@ -19,7 +19,7 @@ pub trait EventListener: Clone + Send + Sync + 'static {
         Ok(message)
     }
 
-    async fn process_message(&self, message: &Message, previous: &MessageInfo, sender: &Sender<Message>, data: &Data) -> PocketResult<(Option<MessageInfo>, bool)> {
+    async fn process_message(&self, message: &Message, previous: &MessageInfo, sender: &Sender<Message>, local_sender: &Sender<WebSocketMessage>, data: &Data) -> PocketResult<(Option<MessageInfo>, bool)> {
         Ok((None,false))
     }
 
@@ -80,7 +80,7 @@ impl Handler {
 
 #[async_trait::async_trait]
 impl EventListener for Handler {
-    async fn process_message(&self, message: &Message, previous: &MessageInfo, sender: &Sender<Message>, data: &Data) -> PocketResult<(Option<MessageInfo> ,bool)> {
+    async fn process_message(&self, message: &Message, previous: &MessageInfo, sender: &Sender<Message>, local_sender: &Sender<WebSocketMessage>, data: &Data) -> PocketResult<(Option<MessageInfo> ,bool)> {
         match message {
             Message::Binary(binary) => {
                 let msg = self.handle_binary_msg(binary, previous)?;
@@ -95,10 +95,10 @@ impl EventListener for Handler {
                         s.send(msg.clone())?;
                     }
                 }
+                local_sender.send(msg).await?;
             },
             Message::Text(text) => {
                 let res = self.handle_text_msg(text, sender).await?;
-                println!("{:?}", res);
                 return Ok((res, false))
             },
             Message::Frame(_) => {}, // TODO:

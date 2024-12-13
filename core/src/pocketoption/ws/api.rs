@@ -79,7 +79,7 @@ impl<T: EventListener> WebSocketClient<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::{File, OpenOptions}, sync::Arc, time::Duration};
+    use std::{fs::OpenOptions, sync::Arc, time::Duration};
 
     use futures_util::future::try_join_all;
     use tokio::{task::JoinHandle, time::sleep};
@@ -250,9 +250,9 @@ mod tests {
         println!("Number of closed deals: {}", original_orders.len());
         println!("Number of closed deals: {}", orders.len());
 
-        // for id in ids {
-        //     orders.iter().find(|o| o.id == id).ok_or(PocketOptionError::GeneralParsingError("Expected at least one id to match".into()))?;
-        // }
+        for id in ids {
+            orders.iter().find(|o| o.id == id).ok_or(PocketOptionError::GeneralParsingError("Expected at least one id to match".into()))?;
+        }
         Ok(())
     }
 
@@ -267,7 +267,7 @@ mod tests {
         let mut ids = Vec::new();
         let mut tasks: Vec<JoinHandle<PocketResult<()>>> = Vec::new();
         for i in 0..20 {
-            let (id, _) = client.sell("EURUSD_otc", 1.0, 5).await?;
+            let (id, _) = client.sell("EURUSD_otc", 1.0, 30).await?;
             ids.push(id);
             let m_client = client.clone();
             tasks.push(tokio::spawn(async move {

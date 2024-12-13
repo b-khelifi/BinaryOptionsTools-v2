@@ -48,7 +48,6 @@ impl Data {
         let mut closed = self.closed_deals.lock().await;
         let new = HashSet::<Deal, RandomState>::from_iter(deals.into());
         closed.extend(new);
-        warn!("Closed deals: {:?}", closed);
     }
 
     pub async fn get_closed_deals(&self) -> Vec<Deal> {

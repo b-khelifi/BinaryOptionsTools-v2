@@ -128,7 +128,7 @@ impl<T: EventListener> WebSocketClient<T> {
     async fn listener_loop(data: Data, handler: T, mut previous: MessageInfo, ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, sender: &Sender<Message>, msg_sender: &Sender<WebSocketMessage>) -> PocketResult<()> {        
         while let Some(msg) = &ws.next().await {
             let msg = msg.as_ref().inspect_err(|e| {warn!("Error recieving websocket message, {e}");}).map_err(|e| PocketOptionError::WebsocketRecievingConnectionError(e.to_string()))?;
-            match handler.process_message(msg, &previous, sender, &data).await {
+            match handler.process_message(msg, &previous, sender, msg_sender, &data).await {
                 Ok((msg, close)) => {
                     if close {
                         info!("Recieved closing frame.");
