@@ -1,12 +1,12 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateStream(pub Vec<UpdateStreamItem>);
 
 
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateStreamItem {
     pub active: String,
     #[serde(with = "float_time")]
@@ -14,14 +14,14 @@ pub struct UpdateStreamItem {
     pub price: f64
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateHistoryNew {
     asset: String,
     period: u32, 
     history: Vec<UpdateCandle>
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct LoadHistoryPeriodResult {
     pub asset: Option<String>,
     pub index: u64,
@@ -29,7 +29,7 @@ pub struct LoadHistoryPeriodResult {
     pub period: u32
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Candle {
     symbol_id: i32,
     #[serde(with = "float_time")]
@@ -41,7 +41,7 @@ pub struct Candle {
     asset: String
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateCandle {
     #[serde(with = "float_time")]
     time: DateTime<Utc>,
@@ -55,10 +55,10 @@ pub struct UpdateBalance {
     balance: f64
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateAssets(pub Vec<Asset>);
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Asset {
     pub id: i32,
     pub symbol: String,
@@ -81,7 +81,7 @@ pub struct Asset {
     pub in12: i64
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum AssetType {
     Stock,
@@ -91,7 +91,7 @@ pub enum AssetType {
     Index
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TimeCandle {
     #[serde(with = "duration")]
     time: Duration

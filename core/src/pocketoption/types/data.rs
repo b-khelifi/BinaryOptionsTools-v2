@@ -1,18 +1,19 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{HashMap, HashSet}, hash::RandomState, sync::Arc};
 
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot::Sender, Mutex};
+use tracing::warn;
 
 use crate::pocketoption::{error::PocketResult, parser::message::WebSocketMessage};
 
-use super::{info::MessageInfo, order::{Deal, UpdateClosedDeals, UpdateOpenedDeals}, update::{UpdateAssets, UpdateBalance}};
-
-type HashMapData = HashMap<MessageInfo, Vec<(Box<dyn Fn(&WebSocketMessage) -> bool + Send + Sync>, tokio::sync::oneshot::Sender<WebSocketMessage>)>>;
+use super::{info::MessageInfo, order::{Deal, UpdateOpenedDeals}, update::{UpdateAssets, UpdateBalance}};
+type Element = (Box<dyn Fn(&WebSocketMessage) -> bool + Send + Sync>, tokio::sync::oneshot::Sender<WebSocketMessage>);
+type HashMapData = HashMap<MessageInfo, Vec<Element>>;
 
 #[derive(Default, Clone)]
 pub struct Data {
     balance: Arc<Mutex<UpdateBalance>>,
     opened_deals: Arc<Mutex<UpdateOpenedDeals>>,
-    closed_deals: Arc<Mutex<UpdateClosedDeals>>,
+    closed_deals: Arc<Mutex<HashSet<Deal>>>,
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
     pending_requests: Arc<Mutex<HashMapData>>,
     server_tyme: Arc<Mutex<i64>>
@@ -43,13 +44,15 @@ impl Data {
         self.opened_deals.lock().await.clone().0
     }
 
-    pub async fn update_closed_deals(&self, deals: UpdateClosedDeals) {
+    pub async fn update_closed_deals(&self, deals: impl Into<Vec<Deal>>) {
         let mut closed = self.closed_deals.lock().await;
-        *closed = deals;
+        let new = HashSet::<Deal, RandomState>::from_iter(deals.into());
+        closed.extend(new);
+        warn!("Closed deals: {:?}", closed);
     }
 
     pub async fn get_closed_deals(&self) -> Vec<Deal> {
-        self.closed_deals.lock().await.clone().0
+        self.closed_deals.lock().await.clone().into_iter().collect()
     }
 
     pub async fn update_payout_data(&self, payout: UpdateAssets) {
@@ -75,18 +78,27 @@ impl Data {
         requests.insert(info, vec![(Box::new(validator), sender)]);
     }
 
-    pub async fn get_request(&self, message: &WebSocketMessage) -> PocketResult<Option<tokio::sync::oneshot::Sender<WebSocketMessage>>> {
+    pub async fn get_request(&self, message: &WebSocketMessage) -> PocketResult<Option<Vec<tokio::sync::oneshot::Sender<WebSocketMessage>>>> {
         let mut requests = self.pending_requests.lock().await;
         let info = message.info();
-        
+
         if let Some(reqs) = requests.get_mut(&info) {
             // Find the index of the matching validator
-            let element = reqs.iter().enumerate().position(|(_, (v, _))| v(message));
-            
-            if let Some(idx) = element {
-                // Remove the validator and return the sender
-                let (_, s) = reqs.remove(idx);
-                return Ok(Some(s));
+            let mut senders = Vec::new();
+            let mut keepers = Vec::new();
+            let drain = reqs.drain(std::ops::RangeFull);
+            drain.for_each(|req| {
+                if req.0(message) {
+                    senders.push(req);
+                } else {
+                    keepers.push(req);
+                }
+            });
+            *reqs = keepers;
+            if !senders.is_empty() {
+                return Ok(Some(senders.into_iter().map(|(_, s)| s).collect::<Vec<Sender<WebSocketMessage>>>()))
+            } else {
+                return Ok(None)
             }
         }
         if let WebSocketMessage::FailOpenOrder(fail) = message {

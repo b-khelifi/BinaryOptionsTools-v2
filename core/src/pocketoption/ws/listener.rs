@@ -90,8 +90,10 @@ impl EventListener for Handler {
                         None => warn!("Missing data in 'updateStream' message")
                     }
                 }
-                if let Some(sender) = data.get_request(&msg).await? {
-                    sender.send(msg)?;
+                if let Some(senders) = data.get_request(&msg).await? {
+                    for s in senders {
+                        s.send(msg.clone())?;
+                    }
                 }
             },
             Message::Text(text) => {

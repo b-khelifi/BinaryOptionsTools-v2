@@ -14,6 +14,18 @@ pub struct UserRequest {
     pub sender: tokio::sync::oneshot::Sender<WebSocketMessage>
 }
 
+impl Clone for UserRequest {
+    fn clone(&self) -> Self {
+        let (sender, _) = tokio::sync::oneshot::channel();
+        Self {
+            message: Box::new(WebSocketMessage::None),
+            response_type: MessageInfo::None,
+            validator: Box::new(default_validator),
+            sender
+        }
+    }
+}
+
 impl fmt::Debug for UserRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Message: {:?}", self.message)?;

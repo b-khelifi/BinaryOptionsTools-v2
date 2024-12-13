@@ -9,7 +9,7 @@ use crate::pocketoption::{error::{PocketOptionError, PocketResult}, types::{base
 
 use super::basic::LoadHistoryPeriod;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum WebSocketMessage {
     OpenOrder(OpenOrder),

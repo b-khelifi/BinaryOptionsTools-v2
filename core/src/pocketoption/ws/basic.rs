@@ -167,8 +167,9 @@ impl<T: EventListener> WebSocketClient<T> {
             match msg {
                 WebSocketMessage::SuccessupdateBalance(balance) => data.update_balance(balance).await,
                 WebSocketMessage::UpdateAssets(assets) => data.update_payout_data(assets).await,
-                WebSocketMessage::UpdateClosedDeals(deals) => data.update_closed_deals(deals).await,
+                WebSocketMessage::UpdateClosedDeals(deals) => data.update_closed_deals(deals.0).await,
                 WebSocketMessage::UpdateOpenedDeals(deals) => data.update_opened_deals(deals).await,
+                WebSocketMessage::SuccesscloseOrder(order) => data.update_closed_deals(order.deals).await,
                 WebSocketMessage::UserRequest(request) => {
                     data.add_user_request(request.response_type, request.validator, request.sender).await;
                     if request.message.info() == WebSocketMessage::None.info() {

@@ -1,6 +1,6 @@
 use core::fmt;
 
-use serde::{de::Error, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::pocketoption::error::{PocketOptionError, PocketResult};

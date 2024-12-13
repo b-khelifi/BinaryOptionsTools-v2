@@ -72,7 +72,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_closest_server() -> anyhow::Result<()> {
-        let ip = get_public_ip().await?;
+        // let ip = get_public_ip().await?;
         let server = Regions.get_server().await?;
         dbg!(server);
         Ok(())

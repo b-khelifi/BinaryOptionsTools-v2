@@ -22,7 +22,7 @@ enum AssetType {
     Index
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LoadHistoryPeriod {
     pub asset: String,
     pub period: i64,

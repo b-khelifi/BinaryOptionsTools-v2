@@ -67,11 +67,19 @@ impl<T: EventListener> WebSocketClient<T> {
         }
         Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
     }
+
+    pub async fn get_closed_deals(&self) -> Vec<Deal> {
+        self.data.get_closed_deals().await
+    }
+
+    pub async fn get_opened_deals(&self) -> Vec<Deal> {
+        self.data.get_opened_deals().await
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::OpenOptions, sync::Arc, time::Duration};
+    use std::{fs::{File, OpenOptions}, sync::Arc, time::Duration};
 
     use futures_util::future::try_join_all;
     use tokio::{task::JoinHandle, time::sleep};
@@ -215,4 +223,70 @@ mod tests {
         dbg!(candles);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_get_closed_orders() -> anyhow::Result<()> {
+        start_tracing()?;
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let demo = true;
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
+        let original_orders = client.get_closed_deals().await;
+        // let file = File::options().append(true).open("tes")
+        let mut ids = Vec::new();
+        let mut tasks: Vec<JoinHandle<PocketResult<()>>> = Vec::new();
+        for i in 0..20 {
+            let (id, _) = client.sell("EURUSD_otc", 1.0, 5).await?;
+            ids.push(id);
+            let m_client = client.clone();
+            tasks.push(tokio::spawn(async move {
+                let result = m_client.check_results(id).await?;
+                dbg!("Trade result: {}", result.profit);    
+                dbg!("Trade number {}", i);
+                Ok(())
+            }));
+        }
+        try_join_all(tasks).await?;
+        let orders = client.get_closed_deals().await;
+        println!("Number of closed deals: {}", original_orders.len());
+        println!("Number of closed deals: {}", orders.len());
+
+        // for id in ids {
+        //     orders.iter().find(|o| o.id == id).ok_or(PocketOptionError::GeneralParsingError("Expected at least one id to match".into()))?;
+        // }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_open_orders() -> anyhow::Result<()> {
+        start_tracing()?;
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let demo = true;
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
+        let original_orders = client.get_opened_deals().await;
+        // let file = File::options().append(true).open("tes")
+        let mut ids = Vec::new();
+        let mut tasks: Vec<JoinHandle<PocketResult<()>>> = Vec::new();
+        for i in 0..20 {
+            let (id, _) = client.sell("EURUSD_otc", 1.0, 5).await?;
+            ids.push(id);
+            let m_client = client.clone();
+            tasks.push(tokio::spawn(async move {
+                let result = m_client.check_results(id).await?;
+                dbg!("Trade result: {}", result.profit);    
+                dbg!("Trade number {}", i);
+                Ok(())
+            }));
+        }
+
+        let orders = client.get_opened_deals().await;
+        try_join_all(tasks).await?;
+        println!("Number of closed deals: {}", original_orders.len());
+        println!("Number of closed deals: {}", orders.len());
+
+        // for id in ids {
+        //     orders.iter().find(|o| o.id == id).ok_or(PocketOptionError::GeneralParsingError("Expected at least one id to match".into()))?;
+        // }
+        Ok(())
+    }
+
 }

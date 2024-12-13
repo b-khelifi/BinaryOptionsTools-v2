@@ -1,4 +1,5 @@
 use core::fmt;
+use std::hash::Hash;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -9,7 +10,7 @@ use crate::pocketoption::{error::PocketResult, utils::basic::get_index};
 
 use super::update::float_time;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum Action {
     Call, // Buy
@@ -23,7 +24,7 @@ pub struct FailOpenOrder {
     asset: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenOrder {
     asset: String,
@@ -38,7 +39,7 @@ pub struct OpenOrder {
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UpdateClosedDeals(pub Vec<Deal>);
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct SuccessCloseOrder {
     pub profit: f64,
     pub deals: Vec<Deal>,
@@ -81,7 +82,7 @@ pub struct Deal {
     pub amount_USD: f64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SuccessOpenOrder {
     pub id: Uuid,
@@ -109,6 +110,17 @@ pub struct SuccessOpenOrder {
     currency: String,
 }
 
+impl Hash for Deal {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+        self.uid.hash(state);
+    }
+}
+
+impl Eq for Deal {
+
+}
+
 impl OpenOrder {
     pub fn new(amount: f64, asset: String, action: Action, duration: u32, demo: u32) -> PocketResult<Self> {
         Ok(Self {
@@ -133,8 +145,8 @@ impl OpenOrder {
 
 impl fmt::Display for FailOpenOrder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Error: {}", self.error);
-        writeln!(f, "Max Allowed requests: {}", self.amount);
+        writeln!(f, "Error: {}", self.error)?;
+        writeln!(f, "Max Allowed requests: {}", self.amount)?;
         writeln!(f, "Error for asset: {}", self.asset)
     }
 }
