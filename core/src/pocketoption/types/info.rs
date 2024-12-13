@@ -3,7 +3,6 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum MessageInfo {
@@ -26,7 +25,7 @@ pub enum MessageInfo {
     LoadHistoryPeriod,
     FailopenOrder,
     GetCandles,
-    None
+    None,
 }
 
 impl Display for MessageInfo {
@@ -42,7 +41,7 @@ mod tests {
 
     use super::*;
 
-    #[test] 
+    #[test]
     fn test_parse_message_info() -> Result<(), Box<dyn Error>> {
         dbg!(serde_json::to_string(&MessageInfo::OpenOrder)?);
         Ok(())

@@ -1,5 +1,3 @@
-pub mod pocketoption;
-pub mod general;
 pub mod error;
-
-
+pub mod general;
+pub mod pocketoption;

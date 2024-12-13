@@ -2,12 +2,10 @@ use uuid::Uuid;
 
 use super::parser::message::WebSocketMessage;
 
-
-
 pub fn order_validator(order_index: u64) -> impl Fn(&WebSocketMessage) -> bool + Send + Sync {
     move |message| {
         if let WebSocketMessage::SuccessopenOrder(order) = message {
-            if order.request_id == order_index {
+            if order.request_id.is_some_and(|id| id == order_index) {
                 return true;
             }
         }
@@ -18,7 +16,12 @@ pub fn order_validator(order_index: u64) -> impl Fn(&WebSocketMessage) -> bool +
 pub fn candle_validator(index: u64) -> impl Fn(&WebSocketMessage) -> bool + Send + Sync {
     move |message| {
         if let WebSocketMessage::LoadHistoryPeriod(history) = message {
-            if history.index.div_euclid(100).abs_diff(index.div_euclid(100)) <= 1 {
+            if history
+                .index
+                .div_euclid(100)
+                .abs_diff(index.div_euclid(100))
+                <= 1
+            {
                 return true;
             }
         }
@@ -26,7 +29,7 @@ pub fn candle_validator(index: u64) -> impl Fn(&WebSocketMessage) -> bool + Send
     }
 }
 
-pub fn order_result_validator(order_id: Uuid) -> impl Fn(&WebSocketMessage) ->  bool + Send + Sync {
+pub fn order_result_validator(order_id: Uuid) -> impl Fn(&WebSocketMessage) -> bool + Send + Sync {
     move |message| {
         if let WebSocketMessage::SuccesscloseOrder(orders) = message {
             if orders.deals.iter().any(|o| o.id == order_id) {

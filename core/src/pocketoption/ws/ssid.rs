@@ -12,7 +12,7 @@ pub struct SessionData {
     session_id: String,
     ip_address: String,
     user_agent: String,
-    last_activity: u64
+    last_activity: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -21,7 +21,7 @@ pub struct Demo {
     session: String,
     is_demo: u32,
     uid: u32,
-    platform: u32
+    platform: u32,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -31,43 +31,54 @@ pub struct Real {
     is_demo: u32,
     uid: u32,
     platform: u32,
-    raw: String
+    raw: String,
 }
-
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(untagged)]
 pub enum Ssid {
     Demo(Demo),
-    Real(Real)
+    Real(Real),
 }
-
 
 impl Ssid {
     pub fn parse(data: impl ToString) -> PocketResult<Self> {
         let data = data.to_string();
-        let parsed = data.trim().strip_prefix(r#"42["auth","#).ok_or(PocketOptionError::SsidParsingError("Error parsing ssid string into object".into()))?.strip_suffix("]").ok_or(PocketOptionError::SsidParsingError("Error parsing ssid string into object".into()))?;
-        let ssid: Demo = serde_json::from_str(parsed).map_err(|e| PocketOptionError::SsidParsingError(e.to_string()))?;
+        let parsed = data
+            .trim()
+            .strip_prefix(r#"42["auth","#)
+            .ok_or(PocketOptionError::SsidParsingError(
+                "Error parsing ssid string into object".into(),
+            ))?
+            .strip_suffix("]")
+            .ok_or(PocketOptionError::SsidParsingError(
+                "Error parsing ssid string into object".into(),
+            ))?;
+        let ssid: Demo = serde_json::from_str(parsed)
+            .map_err(|e| PocketOptionError::SsidParsingError(e.to_string()))?;
         if ssid.is_demo == 1 {
             Ok(Self::Demo(ssid))
         } else {
             let real = Real {
                 raw: data,
                 is_demo: ssid.is_demo,
-                session: php_serde::from_bytes(ssid.session.as_bytes()).map_err(|e| PocketOptionError::SsidParsingError(format!("Error parsing session data, {e}")))?,
+                session: php_serde::from_bytes(ssid.session.as_bytes()).map_err(|e| {
+                    PocketOptionError::SsidParsingError(format!("Error parsing session data, {e}"))
+                })?,
                 uid: ssid.uid,
-                platform: ssid.platform
+                platform: ssid.platform,
             };
             Ok(Self::Real(real))
         }
     }
 
     pub async fn server(&self, demo: bool) -> PocketResult<String> {
-        
         match (self, demo) {
             (Self::Demo(_), true) => Ok(Regions::DEMO.to_string()),
-            (Self::Demo(_), false) => Err(PocketOptionError::Unallowed("Could not connect to real server while using a demo SSID".into())),
-            _ => Regions.get_server().await.map(|s| s.to_string())
+            (Self::Demo(_), false) => Err(PocketOptionError::Unallowed(
+                "Could not connect to real server while using a demo SSID".into(),
+            )),
+            _ => Regions.get_server().await.map(|s| s.to_string()),
         }
     }
 
@@ -102,8 +113,9 @@ impl fmt::Display for Ssid {
 
 impl<'de> Deserialize<'de> for Ssid {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where
-            D: serde::Deserializer<'de> {
+    where
+        D: serde::Deserializer<'de>,
+    {
         let data: Value = Value::deserialize(deserializer)?;
         Ssid::parse(data).map_err(serde::de::Error::custom)
     }

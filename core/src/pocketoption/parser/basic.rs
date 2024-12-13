@@ -1,7 +1,9 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::pocketoption::{error::PocketResult, types::update::float_time, utils::basic::get_index};
+use crate::pocketoption::{
+    error::PocketResult, types::update::float_time, utils::basic::get_index,
+};
 
 #[derive(Debug, Deserialize)]
 #[allow(unused)]
@@ -9,7 +11,7 @@ pub struct UpdateStream {
     active: String,
     #[serde(with = "float_time")]
     time: DateTime<Utc>,
-    value: f64
+    value: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -19,7 +21,7 @@ enum AssetType {
     Currency,
     Commodity,
     Cryptocurrency,
-    Index
+    Index,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -28,7 +30,7 @@ pub struct LoadHistoryPeriod {
     pub period: i64,
     pub time: i64,
     pub index: u64,
-    pub offset: i64
+    pub offset: i64,
 }
 
 impl LoadHistoryPeriod {
@@ -38,7 +40,7 @@ impl LoadHistoryPeriod {
             period,
             time,
             index: get_index()?,
-            offset
+            offset,
         })
     }
 }

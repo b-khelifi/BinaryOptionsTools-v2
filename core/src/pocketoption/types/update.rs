@@ -4,21 +4,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateStream(pub Vec<UpdateStreamItem>);
 
-
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateStreamItem {
     pub active: String,
     #[serde(with = "float_time")]
     pub time: DateTime<Utc>,
-    pub price: f64
+    pub price: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateHistoryNew {
     asset: String,
-    period: u32, 
-    history: Vec<UpdateCandle>
+    period: u32,
+    history: Vec<UpdateCandle>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -26,7 +24,7 @@ pub struct LoadHistoryPeriodResult {
     pub asset: Option<String>,
     pub index: u64,
     pub data: Vec<Candle>,
-    pub period: u32
+    pub period: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -38,7 +36,7 @@ pub struct Candle {
     close: f64,
     high: f64,
     low: f64,
-    asset: String
+    asset: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -52,7 +50,7 @@ pub struct UpdateCandle {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateBalance {
     is_demo: u32,
-    balance: f64
+    balance: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -78,7 +76,7 @@ pub struct Asset {
     pub times: Vec<TimeCandle>,
     pub in10: i32,
     pub in11: i32,
-    pub in12: i64
+    pub in12: i64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -88,20 +86,20 @@ pub enum AssetType {
     Currency,
     Commodity,
     Cryptocurrency,
-    Index
+    Index,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TimeCandle {
     #[serde(with = "duration")]
-    time: Duration
+    time: Duration,
 }
 
 impl Default for UpdateBalance {
     fn default() -> Self {
         Self {
             is_demo: 1,
-            balance: 0.
+            balance: 0.,
         }
     }
 }
@@ -110,10 +108,7 @@ pub mod float_time {
     use chrono::{DateTime, Utc};
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub fn serialize<S>(
-        date: &DateTime<Utc>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -121,60 +116,58 @@ pub mod float_time {
         serializer.serialize_f64(s)
     }
 
-    pub fn deserialize<'de, D>(
-        deserializer: D,
-    ) -> Result<DateTime<Utc>, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = f64::deserialize(deserializer)?.to_string();
         let (secs, milis) = match s.split_once(".") {
             Some((seconds, miliseconds)) => {
-                let secs: i64 = seconds.parse::<i64>().map_err(|e| serde::de::Error::custom(e.to_string()))?;
+                let secs: i64 = seconds
+                    .parse::<i64>()
+                    .map_err(|e| serde::de::Error::custom(e.to_string()))?;
                 let mut pow = 0;
                 if miliseconds.len() <= 9 {
                     pow = 9u32.saturating_sub(miliseconds.len() as u32);
-                } 
-                let milis = miliseconds.parse::<u32>().map_err(|e| serde::de::Error::custom(e.to_string()))? * 10i32.pow(pow) as u32;
+                }
+                let milis = miliseconds
+                    .parse::<u32>()
+                    .map_err(|e| serde::de::Error::custom(e.to_string()))?
+                    * 10i32.pow(pow) as u32;
                 (secs, milis)
-            },
+            }
             None => {
-                let secs: i64 = s.parse::<i64>().map_err(|e| serde::de::Error::custom(e.to_string()))?;
+                let secs: i64 = s
+                    .parse::<i64>()
+                    .map_err(|e| serde::de::Error::custom(e.to_string()))?;
 
                 (secs, 0)
             }
         };
-        DateTime::from_timestamp(secs, milis).ok_or(serde::de::Error::custom("Error parsing ints to time"))
+        DateTime::from_timestamp(secs, milis)
+            .ok_or(serde::de::Error::custom("Error parsing ints to time"))
     }
-
 }
 
 pub mod duration {
     use chrono::Duration;
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub fn serialize<S>(
-        duration: &Duration,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         serializer.serialize_i64(duration.num_seconds())
     }
 
-    pub fn deserialize<'de, D>(
-        deserializer: D,
-    ) -> Result<Duration, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Duration, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = i64::deserialize(deserializer)?;
         Ok(Duration::seconds(s))
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -205,7 +198,7 @@ mod tests {
             //     dbg!(time_reparsed);
             //     dbg!(res);
             // }
-        }        
+        }
         Ok(())
     }
 
@@ -228,5 +221,4 @@ mod tests {
 
         Ok(())
     }
-
 }

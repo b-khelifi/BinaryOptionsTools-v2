@@ -1,15 +1,35 @@
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::pocketoption::{error::{PocketOptionError, PocketResult}, parser::{basic::LoadHistoryPeriod, message::WebSocketMessage}, types::{info::MessageInfo, order::{Deal, OpenOrder, SuccessOpenOrder}, update::Candle, user::UserRequest}, validators::{candle_validator, order_result_validator, order_validator}};
+use crate::pocketoption::{
+    error::{PocketOptionError, PocketResult},
+    parser::{basic::LoadHistoryPeriod, message::WebSocketMessage},
+    types::{
+        info::MessageInfo,
+        order::{Deal, OpenOrder},
+        update::Candle,
+        user::UserRequest,
+    },
+    validators::{candle_validator, order_result_validator, order_validator},
+};
 
 use super::{basic::WebSocketClient, listener::EventListener};
 
 impl<T: EventListener> WebSocketClient<T> {
-    pub async fn send_message(&self, msg: WebSocketMessage, response_type: MessageInfo, validator: impl Fn(&WebSocketMessage) -> bool + Send + Sync + 'static) -> PocketResult<WebSocketMessage> {
+    pub async fn send_message(
+        &self,
+        msg: WebSocketMessage,
+        response_type: MessageInfo,
+        validator: impl Fn(&WebSocketMessage) -> bool + Send + Sync + 'static,
+    ) -> PocketResult<WebSocketMessage> {
         let (request, reciever) = UserRequest::new(msg, response_type, validator);
-        debug!("Sending request from user, expecting response: {}", request.response_type);
-        self.sender.send(WebSocketMessage::UserRequest(Box::new(request))).await?;
+        debug!(
+            "Sending request from user, expecting response: {}",
+            request.response_type
+        );
+        self.sender
+            .send(WebSocketMessage::UserRequest(Box::new(request)))
+            .await?;
         let resp = reciever.await?;
         if let WebSocketMessage::FailOpenOrder(fail) = resp {
             Err(PocketOptionError::from(fail))
@@ -18,54 +38,120 @@ impl<T: EventListener> WebSocketClient<T> {
         }
     }
 
-    pub async fn buy(&self, asset: impl ToString, amount: f64, time: u32) -> PocketResult<(Uuid, SuccessOpenOrder)> {
+    pub async fn buy(
+        &self,
+        asset: impl ToString,
+        amount: f64,
+        time: u32,
+    ) -> PocketResult<(Uuid, Deal)> {
         let order = OpenOrder::call(amount, asset.to_string(), time, self.demo as u32)?;
         let request_id = order.request_id;
-        let res = self.send_message(WebSocketMessage::OpenOrder(order), MessageInfo::SuccessopenOrder, order_validator(request_id)).await?;
+        let res = self
+            .send_message(
+                WebSocketMessage::OpenOrder(order),
+                MessageInfo::SuccessopenOrder,
+                order_validator(request_id),
+            )
+            .await?;
         if let WebSocketMessage::SuccessopenOrder(order) = res {
             debug!("Successfully opened buy trade!");
-            return Ok((order.id, order))
+            return Ok((order.id, order));
         }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+            res.info(),
+        ))
     }
 
-    pub async fn sell(&self, asset: impl ToString, amount: f64, time: u32) -> PocketResult<(Uuid, SuccessOpenOrder)> {
+    pub async fn sell(
+        &self,
+        asset: impl ToString,
+        amount: f64,
+        time: u32,
+    ) -> PocketResult<(Uuid, Deal)> {
         let order = OpenOrder::put(amount, asset.to_string(), time, self.demo as u32)?;
         let request_id = order.request_id;
-        let res = self.send_message(WebSocketMessage::OpenOrder(order), MessageInfo::SuccessopenOrder, order_validator(request_id)).await?;
+        let res = self
+            .send_message(
+                WebSocketMessage::OpenOrder(order),
+                MessageInfo::SuccessopenOrder,
+                order_validator(request_id),
+            )
+            .await?;
         if let WebSocketMessage::SuccessopenOrder(order) = res {
             debug!("Successfully opened sell trade!");
-            return Ok((order.id, order))
+            return Ok((order.id, order));
         }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+            res.info(),
+        ))
     }
 
-    pub async fn check_results(&self, trade_id: Uuid) -> PocketResult<Deal> { // TODO: Add verification so it doesn't try to wait if no trade has been made with that id
-        if let Some(trade) = self.data.get_closed_deals().await.iter().find(|d| d.id == trade_id) {
-            return Ok(trade.clone())
+    pub async fn check_results(&self, trade_id: Uuid) -> PocketResult<Deal> {
+        // TODO: Add verification so it doesn't try to wait if no trade has been made with that id
+        if let Some(trade) = self
+            .data
+            .get_closed_deals()
+            .await
+            .iter()
+            .find(|d| d.id == trade_id)
+        {
+            return Ok(trade.clone());
         }
         debug!("Trade result not found in closed deals list, waiting for closing order to check.");
-        let res = self.send_message(WebSocketMessage::None, MessageInfo::SuccesscloseOrder, order_result_validator(trade_id)).await?;
+        let res = self
+            .send_message(
+                WebSocketMessage::None,
+                MessageInfo::SuccesscloseOrder,
+                order_result_validator(trade_id),
+            )
+            .await?;
         if let WebSocketMessage::SuccesscloseOrder(order) = res {
-            return order.deals.iter().find(|d| d.id == trade_id).cloned().ok_or(PocketOptionError::UnreachableError("Error finding correct trade".into()))
+            return order
+                .deals
+                .iter()
+                .find(|d| d.id == trade_id)
+                .cloned()
+                .ok_or(PocketOptionError::UnreachableError(
+                    "Error finding correct trade".into(),
+                ));
         }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+            res.info(),
+        ))
     }
 
-    pub async fn get_candles(&self, asset: impl ToString, period: i64, offset: i64) -> PocketResult<Vec<Candle>> {
+    pub async fn get_candles(
+        &self,
+        asset: impl ToString,
+        period: i64,
+        offset: i64,
+    ) -> PocketResult<Vec<Candle>> {
         let time = self.data.get_server_time().await.div_euclid(period) * period;
         if time == 0 {
-            return Err(PocketOptionError::GeneralParsingError("Server time is invalid.".to_string()));
+            return Err(PocketOptionError::GeneralParsingError(
+                "Server time is invalid.".to_string(),
+            ));
         }
         let request = LoadHistoryPeriod::new(asset.to_string(), time, period, offset)?;
         let index = request.index;
-        debug!("Sent get candles message, message: {:?}", WebSocketMessage::GetCandles(request).to_string());
+        debug!(
+            "Sent get candles message, message: {:?}",
+            WebSocketMessage::GetCandles(request).to_string()
+        );
         let request = LoadHistoryPeriod::new(asset.to_string(), time, period, offset)?;
-        let res = self.send_message(WebSocketMessage::GetCandles(request), MessageInfo::LoadHistoryPeriod, candle_validator(index)).await?;
+        let res = self
+            .send_message(
+                WebSocketMessage::GetCandles(request),
+                MessageInfo::LoadHistoryPeriod,
+                candle_validator(index),
+            )
+            .await?;
         if let WebSocketMessage::LoadHistoryPeriod(history) = res {
-            return Ok(history.data)
+            return Ok(history.data);
         }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+            res.info(),
+        ))
     }
 
     pub async fn get_closed_deals(&self) -> Vec<Deal> {
@@ -86,7 +172,11 @@ mod tests {
     use tracing::level_filters::LevelFilter;
     use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
-    use crate::pocketoption::{error::{PocketOptionError, PocketResult}, ws::listener::Handler, WebSocketClient};
+    use crate::pocketoption::{
+        error::{PocketOptionError, PocketResult},
+        ws::listener::Handler,
+        WebSocketClient,
+    };
     fn start_tracing() -> anyhow::Result<()> {
         let error_logs = OpenOptions::new()
             .append(true)
@@ -94,21 +184,26 @@ mod tests {
             .open("../logs/errors.log")?;
 
         tracing_subscriber::registry()
-        // .with(filtered_layer)
-        .with(
-            // log-error file, to log the errors that arise
-            fmt::layer()
-                .with_ansi(false)
-                .with_writer(error_logs)
-                .with_filter(LevelFilter::WARN),
-        )
-        .with(fmt::Layer::default().pretty().with_filter(LevelFilter::DEBUG)).try_init()?;
+            // .with(filtered_layer)
+            .with(
+                // log-error file, to log the errors that arise
+                fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(error_logs)
+                    .with_filter(LevelFilter::WARN),
+            )
+            .with(
+                fmt::Layer::default()
+                    .pretty()
+                    .with_filter(LevelFilter::DEBUG),
+            )
+            .try_init()?;
         Ok(())
     }
     #[tokio::test]
     async fn test_websocket_client() -> anyhow::Result<()> {
         tracing_subscriber::fmt::init();
-        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         let demo = true;
         let client = WebSocketClient::<Handler>::new(ssid, demo).await?;
         let mut test = 0;
@@ -121,7 +216,6 @@ mod tests {
             } else if test % 100 == 50 {
                 let res = client.buy("#AAPL_otc", 1.0, 60).await?;
                 dbg!(res);
-
             }
             sleep(Duration::from_millis(100)).await;
         }
@@ -130,25 +224,31 @@ mod tests {
     #[tokio::test]
     async fn test_all_trades() -> anyhow::Result<()> {
         start_tracing()?;
-        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         let demo = true;
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
         // let mut threads = Vec::new();
-        let symbols = include_str!("../../../tests/assets.txt").lines().collect::<Vec<&str>>();
+        let symbols = include_str!("../../../tests/assets.txt")
+            .lines()
+            .collect::<Vec<&str>>();
         for chunk in symbols.chunks(20) {
+            let futures = chunk
+                .iter()
+                .map(|x| {
+                    let cl = client.clone();
+                    let x = *x;
+                    tokio::spawn(async move {
+                        let res = cl.buy(x, 1.0, 60).await.inspect_err(|e| {
+                            dbg!(e);
+                        })?;
+                        dbg!(&res);
+                        let result = cl.check_results(res.0).await?;
+                        dbg!("Trade result: {}", result.profit);
 
-            let futures = chunk.iter().map(|x| {
-                let cl = client.clone();
-                let x = *x;
-                tokio::spawn(async move {
-                    let res = cl.buy(x, 1.0, 60).await.inspect_err(|e| {dbg!(e);})?;
-                    dbg!(&res);
-                    let result = cl.check_results(res.0).await?;
-                    dbg!("Trade result: {}", result.profit);    
-
-                    Ok(())
+                        Ok(())
+                    })
                 })
-            }).collect::<Vec<JoinHandle<PocketResult<()>>>>();
+                .collect::<Vec<JoinHandle<PocketResult<()>>>>();
             try_join_all(futures).await?;
         }
         Ok(())
@@ -158,7 +258,7 @@ mod tests {
     #[should_panic]
     async fn test_force_error() {
         start_tracing().unwrap();
-        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         let demo = true;
         let client = WebSocketClient::<Handler>::new(ssid, demo).await.unwrap();
         let mut loops = 0;
@@ -172,18 +272,17 @@ mod tests {
     #[should_panic]
     async fn test_incorrect_asset_name() {
         start_tracing().unwrap();
-        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         let demo = true;
         let client = WebSocketClient::<Handler>::new(ssid, demo).await.unwrap();
-        
+
         client.sell("EUReUSD_otc", 1.0, 60).await.unwrap();
     }
 
-    
     #[tokio::test]
     async fn test_check_win() -> anyhow::Result<()> {
         start_tracing()?;
-        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         let demo = true;
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await.unwrap());
         let mut test = 0;
@@ -191,19 +290,19 @@ mod tests {
         while test < 1000 {
             test += 1;
             if test % 100 == 0 {
-                let res = client.sell("EURUSD_otc", 1.0, 120).await?;
+                let res = client.sell("EURUSD_otc", 1.0, 300).await?;
                 dbg!("Trade id: {}", res.0);
                 let m_client = client.clone();
-                let res: tokio::task::JoinHandle<Result<(), PocketOptionError>> = tokio::spawn(async move {
-                    let result = m_client.check_results(res.0).await?;
-                    dbg!("Trade result: {}", result.profit);    
-                    Ok(())
-                });
+                let res: tokio::task::JoinHandle<Result<(), PocketOptionError>> =
+                    tokio::spawn(async move {
+                        let result = m_client.check_results(res.0).await?;
+                        dbg!("Trade result: {}", result.profit);
+                        Ok(())
+                    });
                 checks.push(res);
             } else if test % 100 == 50 {
                 let res = &client.buy("#AAPL_otc", 1.0, 5).await?;
                 dbg!(res);
-
             }
             sleep(Duration::from_millis(100)).await;
         }
@@ -214,7 +313,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_candles() -> anyhow::Result<()> {
         start_tracing()?;
-        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         let demo = true;
         // time: 1733040000, offset: 540000, period: 3600
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await.unwrap());
@@ -227,10 +326,9 @@ mod tests {
     #[tokio::test]
     async fn test_get_closed_orders() -> anyhow::Result<()> {
         start_tracing()?;
-        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         let demo = true;
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
-        let original_orders = client.get_closed_deals().await;
         // let file = File::options().append(true).open("tes")
         let mut ids = Vec::new();
         let mut tasks: Vec<JoinHandle<PocketResult<()>>> = Vec::new();
@@ -240,18 +338,24 @@ mod tests {
             let m_client = client.clone();
             tasks.push(tokio::spawn(async move {
                 let result = m_client.check_results(id).await?;
-                dbg!("Trade result: {}", result.profit);    
+                dbg!("Trade result: {}", result.profit);
                 dbg!("Trade number {}", i);
                 Ok(())
             }));
         }
+        let original_orders = client.get_closed_deals().await;
         try_join_all(tasks).await?;
         let orders = client.get_closed_deals().await;
         println!("Number of closed deals: {}", original_orders.len());
         println!("Number of closed deals: {}", orders.len());
 
         for id in ids {
-            orders.iter().find(|o| o.id == id).ok_or(PocketOptionError::GeneralParsingError("Expected at least one id to match".into()))?;
+            orders
+                .iter()
+                .find(|o| o.id == id)
+                .ok_or(PocketOptionError::GeneralParsingError(
+                    "Expected at least one id to match".into(),
+                ))?;
         }
         Ok(())
     }
@@ -272,7 +376,7 @@ mod tests {
             let m_client = client.clone();
             tasks.push(tokio::spawn(async move {
                 let result = m_client.check_results(id).await?;
-                dbg!("Trade result: {}", result.profit);    
+                dbg!("Trade result: {}", result.profit);
                 dbg!("Trade number {}", i);
                 Ok(())
             }));
@@ -280,13 +384,13 @@ mod tests {
 
         let orders = client.get_opened_deals().await;
         try_join_all(tasks).await?;
-        println!("Number of closed deals: {}", original_orders.len());
-        println!("Number of closed deals: {}", orders.len());
-
+        let end_orders = client.get_opened_deals().await;
+        println!("Number of open deals before: {}", original_orders.len());
+        println!("Number of open deals during: {}", orders.len());
+        println!("Number of open deals after: {}", end_orders.len());
         // for id in ids {
         //     orders.iter().find(|o| o.id == id).ok_or(PocketOptionError::GeneralParsingError("Expected at least one id to match".into()))?;
         // }
         Ok(())
     }
-
 }

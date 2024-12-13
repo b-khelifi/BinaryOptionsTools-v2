@@ -1,5 +1,7 @@
-use crate::pocketoption::{error::PocketResult, utils::location::{calculate_distance, get_public_ip, get_user_location}};
-
+use crate::pocketoption::{
+    error::PocketResult,
+    utils::location::{calculate_distance, get_public_ip, get_user_location},
+};
 
 pub struct Regions;
 
@@ -14,7 +16,7 @@ impl Regions {
     pub const US_WEST_4: &str = "wss://api-us4.po.market/socket.io/?EIO=4&transport=websocket";
     pub const US_WEST_3: &str = "wss://api-us3.po.market/socket.io/?EIO=4&transport=websocket";
     pub const US_WEST_2: &str = "wss://api-us2.po.market/socket.io/?EIO=4&transport=websocket";
-     
+
     pub const US_NORTH: &str = "wss://api-us-north.po.market/socket.io/?EIO=4&transport=websocket";
     pub const RUSSIA_MOSCOW: &str = "wss://api-msk.po.market/socket.io/?EIO=4&transport=websocket";
     pub const LATIN_AMERICA: &str = "wss://api-l.po.market/socket.io/?EIO=4&transport=websocket";
@@ -24,10 +26,9 @@ impl Regions {
     pub const CHINA: &str = "wss://api-c.po.market/socket.io/?EIO=4&transport=websocket";
     pub const ASIA: &str = "wss://api-asia.po.market/socket.io/?EIO=4&transport=websocket";
 
-
     async fn get_closest_server(&self, ip_address: &str) -> PocketResult<(&str, f64)> {
         let user_location = get_user_location(ip_address).await?;
-        
+
         let server_locations = [
             ("Self::EUROPE", 50.0, 10.0),
             ("Self::SEYCHELLES", -4.0, 55.0),
@@ -52,7 +53,6 @@ impl Regions {
             if distance < closest.1 {
                 closest = (*server, distance)
             }
-
         });
         Ok(closest)
     }
@@ -63,8 +63,6 @@ impl Regions {
         Ok(server.0)
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
