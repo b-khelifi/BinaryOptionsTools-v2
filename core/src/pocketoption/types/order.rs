@@ -130,7 +130,6 @@ impl fmt::Display for FailOpenOrder {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::{

@@ -275,17 +275,12 @@ mod tests {
     use tokio_tungstenite::{
         connect_async_tls_with_config,
         tungstenite::protocol::Message,
-        tungstenite::{
-            handshake::client::generate_key,
-            http::Request,
-        },
+        tungstenite::{handshake::client::generate_key, http::Request},
         Connector,
     };
 
     use crate::pocketoption::{
-        parser::message::WebSocketMessage,
-        types::info::MessageInfo,
-        utils::basic::get_index,
+        parser::message::WebSocketMessage, types::info::MessageInfo, utils::basic::get_index,
         ws::ssid::Ssid,
     };
 

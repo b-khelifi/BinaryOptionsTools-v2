@@ -11,7 +11,7 @@ use crate::pocketoption::{
         base::{ChangeSymbol, SubscribeSymbol},
         info::MessageInfo,
         order::{
-            Deal, FailOpenOrder, OpenOrder, SuccessCloseOrder, UpdateClosedDeals, UpdateOpenedDeals
+            Deal, FailOpenOrder, OpenOrder, SuccessCloseOrder, UpdateClosedDeals, UpdateOpenedDeals,
         },
         success::SuccessAuth,
         update::{

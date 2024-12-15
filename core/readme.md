@@ -8,6 +8,8 @@
 * Dart
 
 ## Todo
+* Clean the code and add more logging info
+
 ### General
 * Make `WebSocketClient` struct more general and create some traits like:
 * * `Connect` --> How to connect to websocket
