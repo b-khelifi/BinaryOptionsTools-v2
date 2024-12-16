@@ -13,53 +13,54 @@ pub trait Credentials: Clone + Send + Sync {}
 
 #[async_trait]
 pub trait DataHandler: Clone + Send + Sync {
-    async fn update<Transfer>(&self, message: &Transfer)
-    where
-        Transfer: MessageTransfer;
+    type Transfer: MessageTransfer;
+
+    async fn update(&self, message: &Self::Transfer);
 }
 
-pub trait MessageTransfer: DeserializeOwned + Clone + Into<Message> + Send + Sync + error::Error + fmt::Debug + fmt::Display {
+pub trait MessageTransfer:
+    DeserializeOwned + Clone + Into<Message> + Send + Sync + error::Error + fmt::Debug + fmt::Display
+{
     type Error: Into<Self> + Clone + error::Error;
     type TransferError: error::Error;
-    type None: Into<Self>;
+    type Info: MessageInformation;
 
-    fn info<Info: MessageInformation>(&self) -> Info;
+    fn info(&self) -> Self::Info;
 
     fn error(&self) -> Option<Self::Error>;
 
     fn into_error(&self) -> Self::TransferError;
 
-    fn user_request<Transfer: MessageTransfer, Info: MessageInformation>(&self) -> Option<UserRequest<Transfer, Info>>;
+    fn user_request(&self) -> Option<UserRequest<Self>>;
 
-    fn new_user<Transfer: MessageTransfer, Info: MessageInformation>(request: UserRequest<Transfer, Info>) -> Self;
+    fn new_user(request: UserRequest<Self>) -> Self;
 }
 
 pub trait MessageInformation:
-    Serialize + DeserializeOwned + Clone + Send + Sync +hash::Hash + Eq + PartialEq + fmt::Debug + fmt::Display
+    Serialize + DeserializeOwned + Clone + Send + Sync + Eq + hash::Hash + fmt::Debug + fmt::Display
 {
     fn none(&self) -> Self;
 }
 
-
 #[async_trait]
 /// Every struct that implements MessageHandler will recieve a message and should return
-pub trait MessageHandler: Clone + Send + Sync{
-    async fn process_message<'i, Transfer, Info>(
+pub trait MessageHandler: Clone + Send + Sync {
+    type Transfer: MessageTransfer;
+
+    async fn process_message(
         &self,
         message: &Message,
-        previous: &Option<Info>,
+        previous: &Option<<<Self as MessageHandler>::Transfer as MessageTransfer>::Info>,
         sender: &Sender<Message>,
-        local_sender: &Sender<Transfer>,
-    ) -> BinaryOptionsResult<(Option<MessageType<Transfer, Info>>, bool)>
-    where
-        Transfer: MessageTransfer,
-        Info: MessageInformation;
+    ) -> BinaryOptionsResult<(Option<MessageType<Self::Transfer>>, bool)>;
 }
 
 #[async_trait]
 pub trait Connect: Clone + Send + Sync {
-    async fn connect<Creds: Credentials>(
+    type Creds: Credentials;
+
+    async fn connect(
         &self,
-        creds: Creds,
+        creds: Self::Creds,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 }

@@ -5,10 +5,14 @@ use serde_json::Value;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::warn;
 
-use crate::pocketoption::{
-    error::PocketResult,
-    parser::message::WebSocketMessage,
-    types::{base::ChangeSymbol, data::Data, info::MessageInfo},
+use crate::{
+    error::BinaryOptionsResult,
+    general::{traits::MessageHandler, types::MessageType},
+    pocketoption::{
+        error::PocketResult,
+        parser::message::WebSocketMessage,
+        types::{base::ChangeSymbol, data::Data, info::MessageInfo},
+    },
 };
 
 use super::ssid::Ssid;
@@ -56,12 +60,26 @@ impl Handler {
     pub fn handle_binary_msg(
         &self,
         bytes: &Vec<u8>,
+        previous: &Option<MessageInfo>,
+    ) -> PocketResult<WebSocketMessage> {
+        let msg = String::from_utf8(bytes.to_owned())?;
+        let message = match previous {
+            Some(previous) => WebSocketMessage::parse_with_context(msg, previous)?,
+            None => {
+                let message: WebSocketMessage = serde_json::from_str(&msg)?;
+                message
+            }
+        };
+
+        Ok(message)
+    }
+    pub fn temp_bin(
+        &self,
+        bytes: &Vec<u8>,
         previous: &MessageInfo,
     ) -> PocketResult<WebSocketMessage> {
         let msg = String::from_utf8(bytes.to_owned())?;
-        let message = WebSocketMessage::parse_with_context(msg, previous)?;
-
-        Ok(message)
+        Ok(WebSocketMessage::parse_with_context(msg, previous)?)
     }
 
     pub async fn handle_text_msg(
@@ -116,7 +134,7 @@ impl EventListener for Handler {
     ) -> PocketResult<(Option<MessageInfo>, bool)> {
         match message {
             Message::Binary(binary) => {
-                let msg = self.handle_binary_msg(binary, previous)?;
+                let msg = self.temp_bin(binary, previous)?;
                 if let WebSocketMessage::UpdateStream(stream) = &msg {
                     match stream.0.first() {
                         Some(item) => data.update_server_time(item.time.timestamp()).await,
@@ -133,6 +151,34 @@ impl EventListener for Handler {
             Message::Text(text) => {
                 let res = self.handle_text_msg(text, sender).await?;
                 return Ok((res, false));
+            }
+            Message::Frame(_) => {} // TODO:
+            Message::Ping(_) => {}  // TODO:
+            Message::Pong(_) => {}  // TODO:
+            Message::Close(_) => return Ok((None, true)),
+        }
+        Ok((None, false))
+    }
+}
+
+#[async_trait]
+impl MessageHandler for Handler {
+    type Transfer = WebSocketMessage;
+
+    async fn process_message(
+        &self,
+        message: &Message,
+        previous: &Option<MessageInfo>,
+        sender: &Sender<Message>,
+    ) -> BinaryOptionsResult<(Option<MessageType<WebSocketMessage>>, bool)> {
+        match message {
+            Message::Binary(binary) => {
+                let msg = self.handle_binary_msg(binary, previous)?;
+                return Ok((Some(MessageType::Transfer(msg)), false));
+            }
+            Message::Text(text) => {
+                let res = self.handle_text_msg(text, sender).await?;
+                return Ok((res.map(|msg| MessageType::Info(msg)), false));
             }
             Message::Frame(_) => {} // TODO:
             Message::Ping(_) => {}  // TODO:

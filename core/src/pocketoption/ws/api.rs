@@ -8,7 +8,7 @@ use crate::pocketoption::{
         info::MessageInfo,
         order::{Deal, OpenOrder},
         update::Candle,
-        user::UserRequest,
+        user::PocketUser,
     },
     validators::{candle_validator, order_result_validator, order_validator},
 };
@@ -22,10 +22,10 @@ impl<T: EventListener> WebSocketClient<T> {
         response_type: MessageInfo,
         validator: impl Fn(&WebSocketMessage) -> bool + Send + Sync + 'static,
     ) -> PocketResult<WebSocketMessage> {
-        let (request, reciever) = UserRequest::new(msg, response_type, validator);
+        let (request, reciever) = PocketUser::new(msg, response_type, validator);
         debug!(
             "Sending request from user, expecting response: {}",
-            request.response_type
+            request.info
         );
         self.sender
             .send(WebSocketMessage::UserRequest(Box::new(request)))

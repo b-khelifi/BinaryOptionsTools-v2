@@ -249,7 +249,7 @@ impl<T: EventListener> WebSocketClient<T> {
                     data.update_opened_deals(vec![order.into()]).await
                 }
                 WebSocketMessage::UserRequest(request) => {
-                    data.add_user_request(request.response_type, request.validator, request.sender)
+                    data.add_user_request(request.info, request.validator, request.sender)
                         .await;
                     if request.message.info() == WebSocketMessage::None.info() {
                         continue;

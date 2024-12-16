@@ -1,7 +1,7 @@
 use thiserror::Error;
 
-use tokio_tungstenite::tungstenite::{Error as TungsteniteError, Message};
 use tokio::sync::mpsc::error::SendError;
+use tokio_tungstenite::tungstenite::{http, Error as TungsteniteError, Message};
 
 use crate::{general::traits::MessageTransfer, pocketoption::error::PocketOptionError};
 
@@ -23,8 +23,16 @@ pub enum BinaryOptionsToolsError {
     OneShotRecieverError(#[from] tokio::sync::oneshot::error::RecvError),
     #[error("Failed to send message to websocket sender, {0}")]
     ThreadMessageSendingErrorMPCS(String),
-    #[error("Error recieving response from server, {0} ,maybe you used invalid data in the request?")]
-    WebSocketMessageError(String)
+    #[error(
+        "Error recieving response from server, {0} ,maybe you used invalid data in the request?"
+    )]
+    WebSocketMessageError(String),
+    #[error("Failed to parse data: {0}")]
+    GeneralParsingError(String),
+    #[error("TLS Certificate error, {0}")]
+    TLSError(#[from] native_tls::Error),
+    #[error("Error making http request: {0}")]
+    HTTPError(#[from] http::Error),
 }
 
 pub type BinaryOptionsResult<T> = Result<T, BinaryOptionsToolsError>;

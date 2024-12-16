@@ -3,6 +3,8 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
+use crate::general::traits::MessageInformation;
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum MessageInfo {
@@ -32,6 +34,12 @@ impl Display for MessageInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let msg = serde_json::to_string(&self).map_err(|_| fmt::Error)?;
         write!(f, "{msg}")
+    }
+}
+
+impl MessageInformation for MessageInfo {
+    fn none(&self) -> Self {
+        Self::None
     }
 }
 

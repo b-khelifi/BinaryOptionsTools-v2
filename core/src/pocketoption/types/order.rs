@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::pocketoption::{error::PocketResult, utils::basic::get_index};
+use crate::pocketoption::{
+    error::PocketResult, parser::message::WebSocketMessage, utils::basic::get_index,
+};
 
 use super::update::float_time;
 
@@ -127,6 +129,22 @@ impl fmt::Display for FailOpenOrder {
         writeln!(f, "Error: {}", self.error)?;
         writeln!(f, "Max Allowed requests: {}", self.amount)?;
         writeln!(f, "Error for asset: {}", self.asset)
+    }
+}
+
+impl From<FailOpenOrder> for WebSocketMessage {
+    fn from(value: FailOpenOrder) -> Self {
+        Self::FailOpenOrder(value)
+    }
+}
+
+impl FailOpenOrder {
+    pub fn new(error: impl ToString, amount: f64, asset: impl ToString) -> Self {
+        Self {
+            error: error.to_string(),
+            amount,
+            asset: asset.to_string(),
+        }
     }
 }
 

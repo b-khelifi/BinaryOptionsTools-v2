@@ -5,21 +5,26 @@ use serde_json::{from_str, Value};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::warn;
 
-use crate::pocketoption::{
-    error::{PocketOptionError, PocketResult},
-    types::{
-        base::{ChangeSymbol, SubscribeSymbol},
-        info::MessageInfo,
-        order::{
-            Deal, FailOpenOrder, OpenOrder, SuccessCloseOrder, UpdateClosedDeals, UpdateOpenedDeals,
+use crate::{
+    general::traits::MessageTransfer,
+    pocketoption::{
+        error::{PocketOptionError, PocketResult},
+        types::{
+            base::{ChangeSymbol, SubscribeSymbol},
+            info::MessageInfo,
+            order::{
+                Deal, FailOpenOrder, OpenOrder, SuccessCloseOrder, UpdateClosedDeals,
+                UpdateOpenedDeals,
+            },
+            success::SuccessAuth,
+            update::{
+                LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew,
+                UpdateStream,
+            },
+            user::PocketUser,
         },
-        success::SuccessAuth,
-        update::{
-            LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream,
-        },
-        user::UserRequest,
+        ws::ssid::Ssid,
     },
-    ws::ssid::Ssid,
 };
 
 use super::basic::LoadHistoryPeriod;
@@ -47,7 +52,7 @@ pub enum WebSocketMessage {
     FailOpenOrder(FailOpenOrder),
     SuccessupdatePending(Value),
 
-    UserRequest(Box<UserRequest>),
+    UserRequest(Box<PocketUser>),
     None,
 }
 
@@ -277,7 +282,7 @@ impl fmt::Display for WebSocketMessage {
                 )
             }
             WebSocketMessage::UserRequest(user) => {
-                write!(f, "Request of type {:?}", user.response_type)
+                write!(f, "Request of type {:?}", user.info)
             }
             WebSocketMessage::FailOpenOrder(order) => order.fmt(f),
             WebSocketMessage::SuccessupdatePending(pending) => pending.fmt(f),
@@ -296,6 +301,46 @@ impl From<Box<WebSocketMessage>> for Message {
         Message::Text(value.to_string())
     }
 }
+
+impl MessageTransfer for WebSocketMessage {
+    type Error = FailOpenOrder;
+
+    type TransferError = FailOpenOrder;
+
+    type Info = MessageInfo;
+
+    fn info(&self) -> MessageInfo {
+        self.info()
+    }
+
+    fn error(&self) -> Option<Self::Error> {
+        if let Self::FailOpenOrder(fail) = self {
+            return Some(fail.clone());
+        }
+        None
+    }
+
+    fn into_error(&self) -> Self::TransferError {
+        if let Self::FailOpenOrder(fail) = self {
+            fail.clone()
+        } else {
+            FailOpenOrder::new("This is unexpected and should never happend", 1.0, "None")
+        }
+    }
+
+    fn user_request(&self) -> Option<PocketUser> {
+        if let Self::UserRequest(user) = self {
+            let user = *user.to_owned();
+            return Some(user);
+        }
+        None
+    }
+
+    fn new_user(request: PocketUser) -> Self {
+        Self::UserRequest(Box::new(request))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

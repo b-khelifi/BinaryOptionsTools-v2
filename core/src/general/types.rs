@@ -2,49 +2,72 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::sync::{mpsc::Sender, oneshot::Sender as OneShotSender};
 use tokio::sync::Mutex;
+use tokio::sync::{mpsc::Sender, oneshot::Sender as OneShotSender};
 use tokio_tungstenite::tungstenite::Message;
-use tracing::warn;
+use tracing::{debug, info, warn};
 
-use crate::error::BinaryOptionsToolsError;
 use crate::error::BinaryOptionsResult;
+use crate::error::BinaryOptionsToolsError;
 
-use super::traits::{DataHandler, MessageInformation, MessageTransfer};
+use super::traits::{DataHandler, MessageTransfer};
 
 #[derive(Clone)]
-pub enum MessageType<Transfer, Info>
-where 
-    Info: MessageInformation,
-    Transfer: MessageTransfer,
-{
-    Info(Info),
-    Transfer(Transfer)
-}
-
-pub struct UserRequest<Transfer, Info>
-where 
-    Transfer: MessageTransfer,
-    Info: MessageInformation
-{
-    pub info: Info,
-    pub message: Box<Transfer>,
-    pub validator: Box<dyn Fn(&Transfer) -> bool + Send + Sync>,
-    pub sender: OneShotSender<Transfer>
-}
-
-#[derive(Default, Clone)]
-pub struct Data<T, Transfer, Info>
+pub enum MessageType<Transfer>
 where
     Transfer: MessageTransfer,
-    Info: MessageInformation,
-    T: DataHandler
+{
+    Info(Transfer::Info),
+    Transfer(Transfer),
+}
+
+pub struct UserRequest<Transfer>
+where
+    Transfer: MessageTransfer,
+{
+    pub info: Transfer::Info,
+    pub message: Box<Transfer>,
+    pub validator: Box<dyn Fn(&Transfer) -> bool + Send + Sync>,
+    pub sender: OneShotSender<Transfer>,
+}
+
+pub struct OneShotWrapper<Transfer>
+where
+    Transfer: MessageTransfer,
+{
+    inner: OneShotSender<Transfer>,
+}
+
+impl<Transfer> Deref for OneShotWrapper<Transfer>
+where
+    Transfer: MessageTransfer,
+{
+    type Target = OneShotSender<Transfer>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+// TODO: Test why the thing doesn't work
+
+impl<Transfer> Drop for OneShotWrapper<Transfer>
+where
+    Transfer: MessageTransfer,
+{
+    fn drop(&mut self) {
+        warn!("Value dropped")
+    }
+}
+#[derive(Default, Clone)]
+pub struct Data<T, Transfer>
+where
+    Transfer: MessageTransfer,
+    T: DataHandler,
 {
     inner: Arc<T>,
     pending_requests: Arc<
         Mutex<
             HashMap<
-                Info,
+                Transfer::Info,
                 Vec<(
                     Box<dyn Fn(&Transfer) -> bool + Send + Sync>,
                     OneShotSender<Transfer>,
@@ -54,11 +77,10 @@ where
     >,
 }
 
-impl<T, Transfer, Info> Deref for Data<T, Transfer, Info>
+impl<T, Transfer> Deref for Data<T, Transfer>
 where
     Transfer: MessageTransfer,
-    Info: MessageInformation,
-    T: DataHandler
+    T: DataHandler,
 {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -66,15 +88,21 @@ where
     }
 }
 
-impl<T, Transfer, Info> Data<T, Transfer, Info>
+impl<T, Transfer> Data<T, Transfer>
 where
     Transfer: MessageTransfer,
-    Info:  MessageInformation,
-    T: DataHandler
+    T: DataHandler,
 {
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner: Arc::new(inner),
+            pending_requests: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
     pub async fn add_user_request(
         &self,
-        info: Info,
+        info: Transfer::Info,
         validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
         sender: OneShotSender<Transfer>,
     ) {
@@ -83,8 +111,9 @@ where
             reqs.push((Box::new(validator), sender));
             return;
         }
-
+        info!("Added successfully user request!");
         requests.insert(info, vec![(Box::new(validator), sender)]);
+        info!("Inserted value to requests");
     }
 
     pub async fn get_request(
@@ -96,9 +125,10 @@ where
 
         if let Some(reqs) = requests.get_mut(&info) {
             // Find the index of the matching validator
+            info!("Foun request with correct info type");
             let mut senders = Vec::new();
             let mut keepers = Vec::new();
-            let drain = reqs.drain(std::ops::RangeFull);
+            let drain = reqs.drain(..);
             drain.for_each(|req| {
                 if req.0(message) {
                     senders.push(req);
@@ -129,7 +159,7 @@ where
         Ok(None)
     }
 }
-/* 
+/*
 
 #[async_trait]
 impl<T, Transfer, Info> DataHandler for Data<T, Transfer, Info>
@@ -148,24 +178,37 @@ where
     }
 }
 */
-impl<T, Transfer, Info>  Data<T, Transfer, Info>
-    where
-        Transfer: MessageTransfer + 'static,
-        Info: MessageInformation,
-        T: DataHandler
+impl<T, Transfer> Data<T, Transfer>
+where
+    Transfer: MessageTransfer + 'static,
+    T: DataHandler<Transfer = Transfer>,
 {
-    pub async fn update_data(&self, message: Transfer, sender: &Sender<Message>) -> BinaryOptionsResult<()>
-    {
-        if let Some(request) = message.user_request::<Transfer, Info>() {
-            self.add_user_request(request.info, request.validator, request.sender).await;
+    pub async fn update_data(
+        &self,
+        message: Transfer,
+        sender: &Sender<Message>,
+    ) -> BinaryOptionsResult<()> {
+        if let Some(request) = message.user_request() {
+            debug!(
+                "Recieved user request, the message type is '{}'",
+                request.info
+            );
+            self.add_user_request(request.info, request.validator, request.sender)
+                .await;
+            warn!("Added user to request");
             let message = *request.message;
             if let Err(e) = sender.send(message.into()).await {
-                warn!("Error sending message: {}", BinaryOptionsToolsError::from(e));
+                warn!(
+                    "Error sending message: {}",
+                    BinaryOptionsToolsError::from(e)
+                );
             }
-
+            warn!("Added user to request p2");
         } else {
             self.update(&message).await;
+            debug!("Updated data!");
             if let Some(senders) = self.get_request(&message).await? {
+                info!("'get_request' function returned some senders, sending message");
                 for s in senders {
                     s.send(message.clone())?;
                 }
@@ -173,17 +216,15 @@ impl<T, Transfer, Info>  Data<T, Transfer, Info>
         }
         Ok(())
     }
-
 }
 
-impl<Transfer, Info> UserRequest<Transfer, Info>
-where 
+impl<Transfer> UserRequest<Transfer>
+where
     Transfer: MessageTransfer,
-    Info: MessageInformation
 {
     pub fn new(
         message: Transfer,
-        info: Info,
+        info: Transfer::Info,
         validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
     ) -> (Self, tokio::sync::oneshot::Receiver<Transfer>) {
         let (sender, reciever) = tokio::sync::oneshot::channel::<Transfer>();
@@ -197,10 +238,9 @@ where
     }
 }
 
-impl<Transfer, Info> Clone for UserRequest<Transfer, Info>
-where 
+impl<Transfer> Clone for UserRequest<Transfer>
+where
     Transfer: MessageTransfer + 'static,
-    Info: MessageInformation
 {
     fn clone(&self) -> Self {
         let (sender, _) = tokio::sync::oneshot::channel();
@@ -208,21 +248,18 @@ where
             message: self.message.clone(),
             info: self.info.clone(),
             validator: Box::new(default_validator),
-            sender
+            sender,
         }
     }
 }
 
-pub fn default_validator<Transfer: MessageTransfer>(_val: &Transfer) -> bool  
-{
+pub fn default_validator<Transfer: MessageTransfer>(_val: &Transfer) -> bool {
     false
 }
 
-impl<'de, Transfer, Info> Deserialize<'de> for UserRequest<Transfer, Info>
-where 
+impl<'de, Transfer> Deserialize<'de> for UserRequest<Transfer>
+where
     Transfer: MessageTransfer + 'static,
-    Info: MessageInformation
-
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -236,13 +273,10 @@ where
                 .clone(),
         )
         .map_err(|e| serde::de::Error::custom(e.to_string()))?;
-        let info: Info = serde_json::from_value(
+        let info: Transfer::Info = serde_json::from_value(
             value
                 .get("info")
-                .ok_or(serde::de::Error::missing_field(
-                    "Missing field 'info'",
-                ))?
-
+                .ok_or(serde::de::Error::missing_field("Missing field 'info'"))?
                 .clone(),
         )
         .map_err(|e| serde::de::Error::custom(e.to_string()))?;

@@ -29,16 +29,6 @@ pub struct Data {
     server_tyme: Arc<Mutex<i64>>,
 }
 
-impl From<UpdateAssets> for HashMap<String, i32> {
-    fn from(value: UpdateAssets) -> Self {
-        value
-            .0
-            .iter()
-            .map(|a| (a.symbol.clone(), a.payout))
-            .collect()
-    }
-}
-
 impl Data {
     pub async fn update_balance(&self, balance: UpdateBalance) {
         let mut blnc = self.balance.lock().await;

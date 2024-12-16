@@ -1,11 +1,21 @@
 use core::fmt;
+use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::pocketoption::error::{PocketOptionError, PocketResult};
+use crate::{
+    general::traits::Credentials,
+    pocketoption::error::{PocketOptionError, PocketResult},
+};
 
 use super::regions::Regions;
+
+#[derive(Clone)]
+pub struct PocketCreds {
+    pub ssid: Ssid,
+    pub demo: bool,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionData {
@@ -118,6 +128,16 @@ impl<'de> Deserialize<'de> for Ssid {
     {
         let data: Value = Value::deserialize(deserializer)?;
         Ssid::parse(data).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Credentials for PocketCreds {}
+
+impl Deref for PocketCreds {
+    type Target = Ssid;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ssid
     }
 }
 
