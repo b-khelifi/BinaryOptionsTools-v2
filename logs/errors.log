@@ -6,3 +6,22 @@
 2024-12-14T20:21:03.258042Z  WARN binary_option_tools_core::pocketoption::ws::listener: Missing data in 'updateStream' message
 2024-12-14T20:23:01.132631Z  WARN binary_option_tools_core::pocketoption::ws::basic: Error in event loop, Websocket connection was closed by the server, Recieved closing frame, reconnecting...
 2024-12-14T20:26:01.116221Z  WARN binary_option_tools_core::pocketoption::ws::basic: Error in event loop, Websocket connection was closed by the server, Recieved closing frame, reconnecting...
+2024-12-16T18:56:09.487702Z  WARN binary_option_tools_core::general::types: Added user to request
+2024-12-16T18:56:09.488147Z  WARN binary_option_tools_core::general::types: Added user to request p2
+2024-12-16T18:56:09.488438Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-16T19:04:12.358528Z  WARN binary_option_tools_core::general::types: Added user to request
+2024-12-16T19:04:12.358963Z  WARN binary_option_tools_core::general::types: Added user to request p2
+2024-12-16T19:04:12.359290Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-16T19:11:51.507607Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-16T19:20:00.850240Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-16T19:20:00.851223Z  WARN binary_option_tools_core::general::types: Value dropped
+2024-12-16T19:24:48.683889Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-16T19:24:48.684995Z  WARN binary_option_tools_core::general::types: Value dropped
+2024-12-16T20:02:49.947071Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-16T20:02:49.948138Z  WARN binary_option_tools_core::general::types: Value dropped
+2024-12-16T20:17:27.931426Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-16T20:17:27.932734Z  WARN binary_option_tools_core::general::types: Value dropped
+2024-12-16T20:20:19.965699Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-16T20:20:19.967021Z  WARN binary_option_tools_core::general::types: Value dropped
+2024-12-17T20:43:00.299651Z  WARN binary_option_tools_core::general::client: Add new data
+2024-12-17T20:43:00.301103Z  WARN binary_option_tools_core::general::types: Value dropped

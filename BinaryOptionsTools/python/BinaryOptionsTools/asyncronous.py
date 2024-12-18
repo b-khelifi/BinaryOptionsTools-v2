@@ -1,0 +1,71 @@
+from BinaryOptionsToolsV2 import connect, RawPocketOption
+import json
+
+class PocketOptionAsync:
+    def __init__(self, client: RawPocketOption):
+        self.client = client
+    
+    async def buy(self, asset: str, amount: float, time: int, check_win: bool = False):
+        # Takes the asset, and amount to place a buy trade that will expire in time (in seconds).
+        # If check_win is True then the function will return a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict
+        # If check_win is False then the function will return a tuple with the id of the trade and the trade as a dict
+        (trade_id, trade) = await self.client.buy(asset, amount, time)
+        if check_win:
+            return await self.check_win(trade_id)   
+        else:
+            trade = json.loads(trade)
+            return trade_id, trade 
+       
+    async def sell(self, asset: str, amount: float, time: int, check_win: bool = False):
+        # Takes the asset, and amount to place a sell trade that will expire in time (in seconds).
+        # If check_win is True then the function will return a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict
+        # If check_win is False then the function will return a tuple with the id of the trade and the trade as a dict
+        (trade_id, trade) = await self.client.sell(asset, amount, time)
+        if check_win:
+            return await self.check_win(trade_id)   
+        else:
+            trade = json.loads(trade)
+            return trade_id, trade 
+ 
+    async def check_win(self, id: str):
+        # Returns a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict
+        trade = await self.client.check_win(id)
+        trade = json.loads(trade)
+        profit = trade["profit"]
+        if profit > 0:
+            return "win", trade
+        elif profit == 0:
+            return "draw", trade
+        else:
+            return "loss", trade
+        
+    async def get_candles(self, asset: str, period: int, offset: int):  
+        # Takes the asset you want to get the candles and return a list of raw candles
+        candles = await self.client.get_candles(asset, period, offset)
+        return json.loads(candles)
+    
+    async def balance(self):
+        # Returns the balance of the account
+        return json.loads(await self.client.balance())["balance"]
+    
+    async def opened_deals(self):
+        # Returns a list of all the opened deals as dictionaries
+        return json.loads(await self.client.opened_deals())
+    
+    async def closed_deals(self):
+        # Returns a list of all the closed deals as dictionaries
+        return json.loads(await self.client.closed_deals())
+    
+    async def payout(self, asset: None | str | list[str] = None):
+        # Returns a dict of asset | payout for each asset, if 'asset' is not None then it will return the payout of the asset or a list of the payouts for each asset it was passed
+        payout = json.loads(await self.client.get_payout())
+        if isinstance(asset, str):
+            return payout.get(asset)
+        elif isinstance(asset, list):
+            return [payout.get(ast) for ast in asset]
+        return payout
+    
+async def async_connect(ssid: str, demo: bool) -> PocketOptionAsync:
+    # Returns an instance of an async PocketOption object
+    client = await connect(ssid, demo)
+    return PocketOptionAsync(client)

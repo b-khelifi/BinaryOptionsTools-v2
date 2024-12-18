@@ -148,6 +148,7 @@ where
                     );
                 let sender_future =
                     WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::sender_loop(
+                        &data,
                         &mut write,
                         &mut reciever,
                     );
@@ -236,6 +237,7 @@ where
     }
 
     async fn sender_loop(
+        data: &Data<T, Transfer>,
         ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
         reciever: &mut Receiver<Message>,
     ) -> BinaryOptionsResult<()> {
@@ -248,8 +250,9 @@ where
                 }
             }
             ws.flush().await?;
+            data.list_pending_requests().await;
         }
-        todo!()
+        Ok(())
     }
 
     async fn api_loop(
@@ -258,8 +261,16 @@ where
         sender: &Sender<Message>,
     ) -> BinaryOptionsResult<()> {
         while let Some(msg) = reciever.recv().await {
-            data.update_data(msg, sender).await?;
-            warn!("Add new data");
+            if let Some(request) = msg.user_request() {
+                data.add_user_request(request.info, request.validator, request.sender).await;
+                let message = *request.message;
+                if let Err(e) = sender.send(message.into()).await {
+                    warn!("Error sending message: {}", BinaryOptionsToolsError::from(e));
+                }
+                warn!("Add new data");
+                data.list_pending_requests().await;
+            }
+            // data.update_data(msg, sender).await?;
         }
         Ok(())
     }

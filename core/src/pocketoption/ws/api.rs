@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tracing::debug;
 use uuid::Uuid;
 
@@ -7,7 +9,7 @@ use crate::pocketoption::{
     types::{
         info::MessageInfo,
         order::{Deal, OpenOrder},
-        update::Candle,
+        update::{Candle, UpdateBalance},
         user::PocketUser,
     },
     validators::{candle_validator, order_result_validator, order_validator},
@@ -160,6 +162,14 @@ impl<T: EventListener> WebSocketClient<T> {
 
     pub async fn get_opened_deals(&self) -> Vec<Deal> {
         self.data.get_opened_deals().await
+    }
+
+    pub async fn get_balande(&self) -> UpdateBalance {
+        self.data.get_balance().await
+    }
+
+    pub async fn get_payout(&self) -> HashMap<String, i32> {
+        self.data.get_full_payout().await
     }
 }
 

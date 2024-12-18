@@ -10,7 +10,7 @@ use crate::{
 };
 
 use super::{
-    error::{PocketOptionError, PocketResult},
+    error::PocketOptionError,
     parser::message::WebSocketMessage,
     types::{
         data_v2::PocketData,

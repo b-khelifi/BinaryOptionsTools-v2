@@ -31,11 +31,14 @@ where
     pub sender: OneShotSender<Transfer>,
 }
 
+pub struct DropLogger;
+
 pub struct OneShotWrapper<Transfer>
 where
     Transfer: MessageTransfer,
 {
     inner: OneShotSender<Transfer>,
+    _dropper: DropLogger
 }
 
 impl<Transfer> Deref for OneShotWrapper<Transfer>
@@ -49,14 +52,22 @@ where
 }
 // TODO: Test why the thing doesn't work
 
-impl<Transfer> Drop for OneShotWrapper<Transfer>
-where
-    Transfer: MessageTransfer,
+impl Drop for DropLogger
 {
     fn drop(&mut self) {
         warn!("Value dropped")
     }
 }
+
+impl<Transfer> From<OneShotWrapper<Transfer>> for OneShotSender<Transfer>
+where
+    Transfer: MessageTransfer,
+{
+    fn from(val: OneShotWrapper<Transfer>) -> Self {
+        val.inner
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct Data<T, Transfer>
 where
@@ -64,13 +75,14 @@ where
     T: DataHandler,
 {
     inner: Arc<T>,
-    pending_requests: Arc<
+    #[allow(clippy::type_complexity)]
+    pub pending_requests: Arc<
         Mutex<
             HashMap<
                 Transfer::Info,
                 Vec<(
                     Box<dyn Fn(&Transfer) -> bool + Send + Sync>,
-                    OneShotSender<Transfer>,
+                    OneShotWrapper<Transfer>,
                 )>,
             >,
         >,
@@ -106,14 +118,21 @@ where
         validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
         sender: OneShotSender<Transfer>,
     ) {
-        let mut requests = self.pending_requests.lock().await;
-        if let Some(reqs) = requests.get_mut(&info) {
-            reqs.push((Box::new(validator), sender));
-            return;
+        async fn user<T: DataHandler, Transfer: MessageTransfer>(data: &Data<T, Transfer>, info: Transfer::Info, validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static, sender: OneShotSender<Transfer>) {
+            
+            let mut requests = data.pending_requests.lock().await;
+            requests.entry(info).or_default().push((Box::new(validator), OneShotWrapper { inner: sender, _dropper: DropLogger }));
         }
-        info!("Added successfully user request!");
-        requests.insert(info, vec![(Box::new(validator), sender)]);
-        info!("Inserted value to requests");
+        user(self, info, validator, sender).await;
+        info!("Test");
+        // if let Some(reqs) = requests.get_mut(&info) {
+        //     reqs.push((Box::new(validator), sender));
+        //     return;
+        // }
+        // info!("Added successfully user request!");
+        // requests.insert(info, vec![(Box::new(validator), sender)]);
+        // info!("Inserted value to requests");
+
     }
 
     pub async fn get_request(
@@ -141,7 +160,7 @@ where
                 return Ok(Some(
                     senders
                         .into_iter()
-                        .map(|(_, s)| s)
+                        .map(|(_, s)| s.into())
                         .collect::<Vec<OneShotSender<Transfer>>>(),
                 ));
             } else {
@@ -152,11 +171,19 @@ where
             let error = error.into();
             if let Some(reqs) = requests.remove(&info) {
                 for (_, sender) in reqs.into_iter() {
+                    let sender: OneShotSender<Transfer> = sender.into();
                     sender.send(error.clone())?;
                 }
             }
         }
         Ok(None)
+    }
+
+    pub async fn list_pending_requests(&self) {
+        let requests = self.pending_requests.lock().await;
+        requests.iter().for_each(|(k,v)| {
+            println!("Request type: {}, amount: {}", k, v.len());
+        });
     }
 }
 /*

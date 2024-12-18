@@ -42,7 +42,7 @@ where
     Transfer: MessageTransfer,
 {
     fn from(value: Transfer) -> Self {
-        let error = value.into_error();
+        let error = value.to_error();
         Self::WebsocketMessageSendingError(error.to_string())
     }
 }

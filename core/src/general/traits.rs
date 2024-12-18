@@ -29,7 +29,7 @@ pub trait MessageTransfer:
 
     fn error(&self) -> Option<Self::Error>;
 
-    fn into_error(&self) -> Self::TransferError;
+    fn to_error(&self) -> Self::TransferError;
 
     fn user_request(&self) -> Option<UserRequest<Self>>;
 

@@ -79,7 +79,7 @@ impl Handler {
         previous: &MessageInfo,
     ) -> PocketResult<WebSocketMessage> {
         let msg = String::from_utf8(bytes.to_owned())?;
-        Ok(WebSocketMessage::parse_with_context(msg, previous)?)
+        WebSocketMessage::parse_with_context(msg, previous)
     }
 
     pub async fn handle_text_msg(
@@ -178,7 +178,7 @@ impl MessageHandler for Handler {
             }
             Message::Text(text) => {
                 let res = self.handle_text_msg(text, sender).await?;
-                return Ok((res.map(|msg| MessageType::Info(msg)), false));
+                return Ok((res.map(MessageType::Info), false));
             }
             Message::Frame(_) => {} // TODO:
             Message::Ping(_) => {}  // TODO:

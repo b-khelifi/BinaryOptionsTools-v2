@@ -246,7 +246,7 @@ impl<T: EventListener> WebSocketClient<T> {
                     data.update_closed_deals(order.deals).await
                 }
                 WebSocketMessage::SuccessopenOrder(order) => {
-                    data.update_opened_deals(vec![order.into()]).await
+                    data.update_opened_deals(vec![order]).await
                 }
                 WebSocketMessage::UserRequest(request) => {
                     data.add_user_request(request.info, request.validator, request.sender)

@@ -320,7 +320,7 @@ impl MessageTransfer for WebSocketMessage {
         None
     }
 
-    fn into_error(&self) -> Self::TransferError {
+    fn to_error(&self) -> Self::TransferError {
         if let Self::FailOpenOrder(fail) = self {
             fail.clone()
         } else {
