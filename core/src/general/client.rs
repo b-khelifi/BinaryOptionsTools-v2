@@ -262,10 +262,14 @@ where
     ) -> BinaryOptionsResult<()> {
         while let Some(msg) = reciever.recv().await {
             if let Some(request) = msg.user_request() {
-                data.add_user_request(request.info, request.validator, request.sender).await;
+                data.add_user_request(request.info, request.validator, request.sender)
+                    .await;
                 let message = *request.message;
                 if let Err(e) = sender.send(message.into()).await {
-                    warn!("Error sending message: {}", BinaryOptionsToolsError::from(e));
+                    warn!(
+                        "Error sending message: {}",
+                        BinaryOptionsToolsError::from(e)
+                    );
                 }
                 warn!("Add new data");
                 data.list_pending_requests().await;

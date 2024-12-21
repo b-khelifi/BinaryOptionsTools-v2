@@ -15,7 +15,7 @@ use crate::{
 use super::ssid::PocketCreds;
 
 #[derive(Clone)]
-pub struct PocketConnect {}
+pub struct PocketConnect;
 
 #[async_trait]
 impl Connect for PocketConnect {
@@ -53,5 +53,12 @@ impl Connect for PocketConnect {
 
         let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await?;
         Ok(ws)
+    }
+
+    async fn try_connect(
+        &self,
+        _creds: PocketCreds,
+    ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
+        todo!()
     }
 }

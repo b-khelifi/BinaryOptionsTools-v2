@@ -84,11 +84,26 @@ impl Ssid {
 
     pub async fn server(&self, demo: bool) -> PocketResult<String> {
         match (self, demo) {
-            (Self::Demo(_), true) => Ok(Regions::DEMO.to_string()),
+            (_, true) => Ok(Regions::DEMO.to_string()),
             (Self::Demo(_), false) => Err(PocketOptionError::Unallowed(
                 "Could not connect to real server while using a demo SSID".into(),
             )),
             _ => Regions.get_server().await.map(|s| s.to_string()),
+        }
+    }
+
+    pub async fn servers(&self, demo: bool) -> PocketResult<Vec<String>> {
+        match (self, demo) {
+            (_, true) => Ok(vec![Regions::DEMO.to_string()]),
+            (Self::Demo(_), false) => Err(PocketOptionError::Unallowed(
+                "Could not connect to real server while using a demo SSID".into(),
+            )),
+            _ => Ok(Regions
+                .get_servers()
+                .await?
+                .iter()
+                .map(|s| s.to_string())
+                .collect()),
         }
     }
 

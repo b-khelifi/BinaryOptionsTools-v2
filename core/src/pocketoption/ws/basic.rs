@@ -11,18 +11,14 @@ use tokio::{
     task::JoinHandle,
     time::sleep,
 };
-use tokio_tungstenite::{
-    connect_async_tls_with_config,
-    tungstenite::{handshake::client::generate_key, http::Request, Message},
-    Connector, MaybeTlsStream, WebSocketStream,
-};
+use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
-use url::Url;
 
 use crate::pocketoption::{
     error::{PocketOptionError, PocketResult},
     parser::message::WebSocketMessage,
     types::{data::Data, info::MessageInfo},
+    utils::connect::try_connect,
 };
 
 use super::{
@@ -71,34 +67,24 @@ impl<T: EventListener> WebSocketClient<T> {
         ssid: Ssid,
         demo: bool,
     ) -> PocketResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
-        let tls_connector = native_tls::TlsConnector::builder().build()?;
-
-        let connector = Connector::NativeTls(tls_connector);
-
-        let url = ssid.server(demo).await?;
-        let user_agent = ssid.user_agent();
-        let t_url = Url::parse(&url).map_err(|e| {
-            PocketOptionError::GeneralParsingError(format!("Error getting host, {e}"))
-        })?;
-        let host = t_url
-            .host_str()
-            .ok_or(PocketOptionError::GeneralParsingError(
-                "Host not found".into(),
-            ))?;
-        let request = Request::builder()
-            .uri(url)
-            .header("Origin", "https://pocketoption.com")
-            .header("Cache-Control", "no-cache")
-            .header("User-Agent", user_agent)
-            .header("Upgrade", "websocket")
-            .header("Connection", "upgrade")
-            .header("Sec-Websocket-Key", generate_key())
-            .header("Sec-Websocket-Version", "13")
-            .header("Host", host)
-            .body(())?;
-
-        let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await?;
-        Ok(ws)
+        let urls = ssid.servers(demo).await?;
+        let mut error = None;
+        for url in urls.clone() {
+            match try_connect(ssid.clone(), url).await {
+                Ok(connect) => return Ok(connect),
+                Err(e) => {
+                    warn!("Failed to connect to server, {e}");
+                    error = Some(e);
+                }
+            }
+        }
+        if let Some(error) = error {
+            Err(error)
+        } else {
+            Err(PocketOptionError::WebsocketMultipleAttemptsConnectionError(
+                format!("Couldn't connect to server after {} attempts.", urls.len()),
+            ))
+        }
     }
 
     async fn start_loops(
@@ -330,7 +316,7 @@ mod tests {
         println!("sending");
         let msg = format!("[loadHistoryPeriod, {}]", get_candles()?);
         dbg!(&msg);
-        // write.send(Message::Text(msg)).await?;
+        // write.send(Message::text(msg)).await?;
         // write.flush().await?;
         println!("sent");
         let mut lop = 0;
@@ -339,8 +325,8 @@ mod tests {
             lop += 1;
             if lop % 5 == 0 {
                 write
-                    .send(Message::Text(
-                        r#"42["changeSymbol",{"asset":"EURTRY_otc","period":3600}]"#.into(),
+                    .send(Message::text(
+                        r#"42["changeSymbol",{"asset":"EURTRY_otc","period":3600}]"#,
                     ))
                     .await
                     .unwrap();
@@ -351,7 +337,7 @@ mod tests {
             // client.process_message(message.clone(), MessageInfo::None);
             let _msg = match message {
                 Message::Binary(bin) | Message::Ping(bin) | Message::Pong(bin) => {
-                    let msg = String::from_utf8(bin).unwrap();
+                    let msg = String::from_utf8(bin.to_vec()).unwrap();
                     let _parsed = WebSocketMessage::parse(&msg);
                     // dbg!(parsed);
                     dbg!(format!("Bin: {}", &msg))
@@ -360,15 +346,15 @@ mod tests {
                     let base = text.clone();
                     match base {
                         _ if base.starts_with('0') && base.contains("sid") => {
-                            write.send(Message::Text("40".into())).await.unwrap();
+                            write.send(Message::text("40")).await.unwrap();
                             write.flush().await.unwrap();
                         }
                         _ if base.starts_with("40") && base.contains("sid") => {
-                            write.send(Message::Text(ssid.to_string())).await.unwrap();
+                            write.send(Message::text(ssid.to_string())).await.unwrap();
                             write.flush().await.unwrap();
                         }
                         _ if base == "2" => {
-                            write.send(Message::Text("3".into())).await.unwrap();
+                            write.send(Message::text("3")).await.unwrap();
                             write.flush().await.unwrap();
                         }
                         _ if base.starts_with("451-") => {
@@ -379,7 +365,7 @@ mod tests {
                         _ => {}
                     }
 
-                    text
+                    text.to_string()
                 }
                 Message::Close(_) => String::from("Closed"),
                 Message::Frame(_) => unimplemented!(),

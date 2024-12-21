@@ -27,8 +27,23 @@ pub struct LoadHistoryPeriodResult {
     pub period: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum Candle {
+    Raw(RawCandle),
+    Processed(ProcessedCandle),
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Candle {
+pub struct RawCandle {
+    asset: String,
+    #[serde(with = "float_time")]
+    time: DateTime<Utc>,
+    price: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ProcessedCandle {
     symbol_id: i32,
     #[serde(with = "float_time")]
     time: DateTime<Utc>,
@@ -37,6 +52,31 @@ pub struct Candle {
     high: f64,
     low: f64,
     asset: String,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DataCandle {
+    pub time: DateTime<Utc>,
+    pub open: f64,
+    pub close: f64,
+    pub high: f64,
+    pub low: f64,
+}
+
+impl From<&Candle> for DataCandle {
+    fn from(value: &Candle) -> Self {
+        match value {
+            Candle::Raw(candle) => Self { time: candle.time, open: candle.price, close: candle.price, high: candle.price, low: candle.price},
+            Candle::Processed(candle) => Self { time: candle.time, open: candle.open, close: candle.close, high: candle.high, low: candle.low }
+        }        
+    }
+}
+
+impl LoadHistoryPeriodResult {
+    pub fn candle_data(&self) -> Vec<DataCandle> {
+        self.data.iter().map(DataCandle::from).collect()
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -51,6 +91,8 @@ pub struct UpdateCandle {
 pub struct UpdateBalance {
     is_demo: u32,
     balance: f64,
+    uid: Option<i64>,
+    login: Option<i64>
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -99,7 +141,9 @@ impl Default for UpdateBalance {
     fn default() -> Self {
         Self {
             is_demo: 1,
-            balance: 0.,
+            balance: -1.,
+            uid: None,
+            login: None
         }
     }
 }
@@ -169,6 +213,7 @@ pub mod duration {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
@@ -178,7 +223,7 @@ mod tests {
     use std::{error::Error, fs::File, io::BufReader};
 
     #[test]
-    fn test_descerialize_update_stream() -> Result<(), Box<dyn Error>> {
+    fn test_deserialize_update_stream() -> Result<(), Box<dyn Error>> {
         let tests = [
             r#"[["AUS200_otc",1732830010,6436.06]]"#,
             r#"[["AUS200_otc",1732830108.205,6435.96]]"#,
@@ -203,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn test_descerialize_update_history() -> Result<(), Box<dyn Error>> {
+    fn test_deserialize_update_history() -> Result<(), Box<dyn Error>> {
         let history_raw = File::open("tests/update_history_new.txt")?;
         let bufreader = BufReader::new(history_raw);
         let history_new: UpdateHistoryNew = serde_json::from_reader(bufreader)?;
@@ -213,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn test_descerialize_load_history() -> Result<(), Box<dyn Error>> {
+    fn test_deserialize_load_history1() -> Result<(), Box<dyn Error>> {
         let history_raw = File::open("tests/load_history_period.json")?;
         let bufreader = BufReader::new(history_raw);
         let history_new: LoadHistoryPeriodResult = serde_json::from_reader(bufreader)?;
@@ -221,4 +266,15 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_deserialize_load_history2() -> Result<(), Box<dyn Error>> {
+        let history_raw = File::open("tests/load_history_period2.json")?;
+        let bufreader = BufReader::new(history_raw);
+        let history_new: LoadHistoryPeriodResult = serde_json::from_reader(bufreader)?;
+        dbg!(history_new);
+
+        Ok(())
+    }
+
 }

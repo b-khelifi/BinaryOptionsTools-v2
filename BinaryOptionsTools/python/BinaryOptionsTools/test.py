@@ -24,10 +24,13 @@ from asyncronous import PocketOptionAsync, async_connect
 
 async def main(ssid, demo):
     api = await async_connect(ssid, demo)
-    trade = await api.buy("EURUSD", 1.5, 60, True)
-    print(f"Trade: {trade}")
+    # trade = await api.buy("EURUSD", 1.5, 60, True)
+    # print(f"Trade: {trade}")
+    await asyncio.sleep(10)
+    candles = await api.get_candles("EURUSD_otc", 1, 60)
+    print(f"Candles: {candles}")
     
 if __name__ == "__main__":
     ssid = input("Write your ssid: ")
-    demo = True
+    demo = False
     asyncio.run(main(ssid, demo))

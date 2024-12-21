@@ -9,7 +9,7 @@ use crate::pocketoption::{
     types::{
         info::MessageInfo,
         order::{Deal, OpenOrder},
-        update::{Candle, UpdateBalance},
+        update::{DataCandle, UpdateBalance},
         user::PocketUser,
     },
     validators::{candle_validator, order_result_validator, order_validator},
@@ -127,7 +127,7 @@ impl<T: EventListener> WebSocketClient<T> {
         asset: impl ToString,
         period: i64,
         offset: i64,
-    ) -> PocketResult<Vec<Candle>> {
+    ) -> PocketResult<Vec<DataCandle>> {
         let time = self.data.get_server_time().await.div_euclid(period) * period;
         if time == 0 {
             return Err(PocketOptionError::GeneralParsingError(
@@ -149,7 +149,7 @@ impl<T: EventListener> WebSocketClient<T> {
             )
             .await?;
         if let WebSocketMessage::LoadHistoryPeriod(history) = res {
-            return Ok(history.data);
+            return Ok(history.candle_data());
         }
         Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
             res.info(),
@@ -401,6 +401,20 @@ mod tests {
         // for id in ids {
         //     orders.iter().find(|o| o.id == id).ok_or(PocketOptionError::GeneralParsingError("Expected at least one id to match".into()))?;
         // }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_real_account() -> anyhow::Result<()> {
+        start_tracing()?;
+        let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"b718d584d524ee1bac02ef2ad56bbcc1\";s:10:\"ip_address\";s:14:\"191.113.153.59\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1734375340;}a7ae2d152460e813f196b3a01636c13a","isDemo":0,"uid":87742848,"platform":2}]	"#;
+        let demo = false;
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
+        sleep(Duration::from_secs(10)).await;
+        dbg!(client.get_balande().await);
+        let candles = client.get_candles("EURUSD_otc", 60, 3600).await?;
+        dbg!(&candles);
+        dbg!("Candles length: {}", candles.len()); // 4172
         Ok(())
     }
 }

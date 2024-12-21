@@ -58,8 +58,15 @@ pub trait MessageHandler: Clone + Send + Sync {
 #[async_trait]
 pub trait Connect: Clone + Send + Sync {
     type Creds: Credentials;
+    // type Uris: Iterator<Item = String>;
 
     async fn connect(
+        &self,
+        creds: Self::Creds,
+    ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;
+
+    // This function should try to call the connect function for multiple given urls.
+    async fn try_connect(
         &self,
         creds: Self::Creds,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;

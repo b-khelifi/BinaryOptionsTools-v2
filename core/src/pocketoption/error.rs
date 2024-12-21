@@ -23,6 +23,8 @@ pub enum PocketOptionError {
     WebsocketRecievingConnectionError(String),
     #[error("Websocket connection was closed by the server, {0}")]
     WebsocketConnectionClosed(String),
+    #[error("Failed to connect to websocket server after multiple attempts, {0}")]
+    WebsocketMultipleAttemptsConnectionError(String),
     #[error("Failed to parse recieved data to Message: {0}")]
     WebSocketMessageParsingError(#[from] serde_json::Error),
     #[error("Failed to process recieved Message: {0}")]

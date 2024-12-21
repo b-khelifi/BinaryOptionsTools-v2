@@ -38,7 +38,7 @@ where
     Transfer: MessageTransfer,
 {
     inner: OneShotSender<Transfer>,
-    _dropper: DropLogger
+    _dropper: DropLogger,
 }
 
 impl<Transfer> Deref for OneShotWrapper<Transfer>
@@ -52,8 +52,7 @@ where
 }
 // TODO: Test why the thing doesn't work
 
-impl Drop for DropLogger
-{
+impl Drop for DropLogger {
     fn drop(&mut self) {
         warn!("Value dropped")
     }
@@ -118,10 +117,20 @@ where
         validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
         sender: OneShotSender<Transfer>,
     ) {
-        async fn user<T: DataHandler, Transfer: MessageTransfer>(data: &Data<T, Transfer>, info: Transfer::Info, validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static, sender: OneShotSender<Transfer>) {
-            
+        async fn user<T: DataHandler, Transfer: MessageTransfer>(
+            data: &Data<T, Transfer>,
+            info: Transfer::Info,
+            validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
+            sender: OneShotSender<Transfer>,
+        ) {
             let mut requests = data.pending_requests.lock().await;
-            requests.entry(info).or_default().push((Box::new(validator), OneShotWrapper { inner: sender, _dropper: DropLogger }));
+            requests.entry(info).or_default().push((
+                Box::new(validator),
+                OneShotWrapper {
+                    inner: sender,
+                    _dropper: DropLogger,
+                },
+            ));
         }
         user(self, info, validator, sender).await;
         info!("Test");
@@ -132,7 +141,6 @@ where
         // info!("Added successfully user request!");
         // requests.insert(info, vec![(Box::new(validator), sender)]);
         // info!("Inserted value to requests");
-
     }
 
     pub async fn get_request(
@@ -181,7 +189,7 @@ where
 
     pub async fn list_pending_requests(&self) {
         let requests = self.pending_requests.lock().await;
-        requests.iter().for_each(|(k,v)| {
+        requests.iter().for_each(|(k, v)| {
             println!("Request type: {}, amount: {}", k, v.len());
         });
     }

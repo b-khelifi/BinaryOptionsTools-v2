@@ -89,14 +89,14 @@ impl Handler {
     ) -> PocketResult<Option<MessageInfo>> {
         match text {
             _ if text.starts_with('0') && text.contains("sid") => {
-                sender.send(Message::Text("40".into())).await?;
+                sender.send(Message::text("40")).await?;
             }
             _ if text.starts_with("40") && text.contains("sid") => {
-                sender.send(Message::Text(self.ssid.to_string())).await?;
+                sender.send(Message::text(self.ssid.to_string())).await?;
             }
             _ if text == "2" => {
-                sender.send(Message::Text("3".into())).await?;
-                // write.send(Message::Text("3".into())).await.unwrap();
+                sender.send(Message::text("3")).await?;
+                // write.send(Message::text("3".into())).await.unwrap();
                 // write.flush().await.unwrap();
             }
             _ if text.starts_with("451-") => {
@@ -104,7 +104,7 @@ impl Handler {
                 let (info, _): (MessageInfo, Value) = serde_json::from_str(msg)?;
                 if info == MessageInfo::UpdateClosedDeals {
                     sender
-                        .send(Message::Text(
+                        .send(Message::text(
                             WebSocketMessage::ChangeSymbol(ChangeSymbol {
                                 asset: "AUDNZD_otc".into(),
                                 period: 60,
@@ -134,7 +134,7 @@ impl EventListener for Handler {
     ) -> PocketResult<(Option<MessageInfo>, bool)> {
         match message {
             Message::Binary(binary) => {
-                let msg = self.temp_bin(binary, previous)?;
+                let msg = self.temp_bin(&binary.to_vec(), previous)?;
                 if let WebSocketMessage::UpdateStream(stream) = &msg {
                     match stream.0.first() {
                         Some(item) => data.update_server_time(item.time.timestamp()).await,
@@ -149,7 +149,7 @@ impl EventListener for Handler {
                 local_sender.send(msg).await?;
             }
             Message::Text(text) => {
-                let res = self.handle_text_msg(text, sender).await?;
+                let res = self.handle_text_msg(&text.to_string(), sender).await?;
                 return Ok((res, false));
             }
             Message::Frame(_) => {} // TODO:
@@ -173,11 +173,11 @@ impl MessageHandler for Handler {
     ) -> BinaryOptionsResult<(Option<MessageType<WebSocketMessage>>, bool)> {
         match message {
             Message::Binary(binary) => {
-                let msg = self.handle_binary_msg(binary, previous)?;
+                let msg = self.handle_binary_msg(&binary.to_vec(), previous)?;
                 return Ok((Some(MessageType::Transfer(msg)), false));
             }
             Message::Text(text) => {
-                let res = self.handle_text_msg(text, sender).await?;
+                let res = self.handle_text_msg(&text.to_string(), sender).await?;
                 return Ok((res.map(MessageType::Info), false));
             }
             Message::Frame(_) => {} // TODO:

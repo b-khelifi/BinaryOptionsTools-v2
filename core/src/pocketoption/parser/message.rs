@@ -298,7 +298,7 @@ impl From<WebSocketMessage> for Message {
 
 impl From<Box<WebSocketMessage>> for Message {
     fn from(value: Box<WebSocketMessage>) -> Self {
-        Message::Text(value.to_string())
+        Message::text(value.to_string())
     }
 }
 

@@ -6,17 +6,17 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.94"
 async-trait = "0.1.83"
-chrono = { version = "0.4.38", features = ["serde"] }
+chrono = { version = "0.4.39", features = ["serde"] }
 futures-util = "0.3.31"
 native-tls = "0.2.12"
 php_serde = "0.6.0"
 rand = "0.8.5"
 reqwest = { version = "0.12.9", features = ["json"] }
-serde = { version = "1.0.215", features = ["derive"] }
-serde_json = { version = "1.0.133", features = ["arbitrary_precision"]}
-thiserror = "2.0.6"
+serde = { version = "1.0.216", features = ["derive"] }
+serde_json = { version = "1.0.133", features = []}
+thiserror = "2.0.8"
 tokio = { version = "1.42.0", features = ["macros", "io-util", "rt", "sync"] }
-tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.26.1", features = ["native-tls"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 url = "2.5.4"
