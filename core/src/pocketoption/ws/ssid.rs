@@ -82,23 +82,17 @@ impl Ssid {
         }
     }
 
-    pub async fn server(&self, demo: bool) -> PocketResult<String> {
-        match (self, demo) {
-            (_, true) => Ok(Regions::DEMO.to_string()),
-            (Self::Demo(_), false) => Err(PocketOptionError::Unallowed(
-                "Could not connect to real server while using a demo SSID".into(),
-            )),
-            _ => Regions.get_server().await.map(|s| s.to_string()),
+    pub async fn server(&self) -> PocketResult<String> {
+        match self {
+            Self::Demo(_) => Ok(Regions::DEMO.to_string()),
+            Self::Real(_) => Regions.get_server().await.map(|s| s.to_string()),
         }
     }
 
-    pub async fn servers(&self, demo: bool) -> PocketResult<Vec<String>> {
-        match (self, demo) {
-            (_, true) => Ok(vec![Regions::DEMO.to_string()]),
-            (Self::Demo(_), false) => Err(PocketOptionError::Unallowed(
-                "Could not connect to real server while using a demo SSID".into(),
-            )),
-            _ => Ok(Regions
+    pub async fn servers(&self) -> PocketResult<Vec<String>> {
+        match self {
+            Self::Demo(_) => Ok(vec![Regions::DEMO.to_string()]),
+            Self::Real(_) => Ok(Regions
                 .get_servers()
                 .await?
                 .iter()
@@ -111,6 +105,13 @@ impl Ssid {
         match self {
             Self::Demo(_) => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36".into(),
             Self::Real(real) => real.session.user_agent.clone()
+        }
+    }
+
+    pub fn demo(&self) -> bool {
+        match self {
+            Self::Demo(_) => true,
+            Self::Real(_) => false,
         }
     }
 }

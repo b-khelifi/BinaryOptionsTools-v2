@@ -31,7 +31,6 @@ const SLEEP_INTERVAL: u32 = 2;
 
 pub struct WebSocketClient<T: EventListener> {
     pub ssid: Ssid,
-    pub demo: bool,
     pub handler: T,
     // pub balance: UpdateBalance
     pub data: Data,
@@ -40,22 +39,21 @@ pub struct WebSocketClient<T: EventListener> {
 }
 
 impl<T: EventListener> WebSocketClient<T> {
-    pub async fn new(ssid: impl ToString, demo: bool) -> PocketResult<WebSocketClient<Handler>> {
+    pub async fn new(ssid: impl ToString) -> PocketResult<WebSocketClient<Handler>> {
         let handler = Handler::new(Ssid::parse(ssid.to_string().clone())?);
-        WebSocketClient::init(ssid, demo, handler).await
+        WebSocketClient::init(ssid, handler).await
     }
 
-    pub async fn init(ssid: impl ToString, demo: bool, handler: T) -> PocketResult<Self> {
+    pub async fn init(ssid: impl ToString, handler: T) -> PocketResult<Self> {
         let ssid = Ssid::parse(ssid)?;
-        let _connection = Self::connect(ssid.clone(), demo).await?;
+        let _connection = Self::connect(ssid.clone()).await?;
         let data = Data::default();
         let (_event_loop, sender) =
-            Self::start_loops(handler.clone(), ssid.clone(), demo, data.clone()).await?;
+            Self::start_loops(handler.clone(), ssid.clone(), data.clone()).await?;
         println!("Initialized");
         sleep(Duration::from_millis(500)).await;
         Ok(Self {
             ssid,
-            demo,
             handler,
             data,
             sender,
@@ -65,9 +63,8 @@ impl<T: EventListener> WebSocketClient<T> {
 
     pub async fn connect(
         ssid: Ssid,
-        demo: bool,
     ) -> PocketResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
-        let urls = ssid.servers(demo).await?;
+        let urls = ssid.servers().await?;
         let mut error = None;
         for url in urls.clone() {
             match try_connect(ssid.clone(), url).await {
@@ -90,10 +87,9 @@ impl<T: EventListener> WebSocketClient<T> {
     async fn start_loops(
         handler: T,
         ssid: Ssid,
-        demo: bool,
         data: Data,
     ) -> PocketResult<(JoinHandle<()>, Sender<WebSocketMessage>)> {
-        let (mut write, mut read) = WebSocketClient::<T>::connect(ssid.clone(), demo)
+        let (mut write, mut read) = WebSocketClient::<T>::connect(ssid.clone())
             .await?
             .split();
         let (sender, mut reciever) = tokio::sync::mpsc::channel(128);
@@ -118,7 +114,7 @@ impl<T: EventListener> WebSocketClient<T> {
                 match try_join3(listener_future, sender_future, update_loop).await {
                     Ok(_) => {
                         if let Ok(websocket) =
-                            WebSocketClient::<T>::connect(ssid.clone(), demo).await
+                            WebSocketClient::<T>::connect(ssid.clone()).await
                         {
                             (write, read) = websocket.split();
                             info!("Reconnected successfully!");
@@ -134,7 +130,7 @@ impl<T: EventListener> WebSocketClient<T> {
                     Err(e) => {
                         warn!("Error in event loop, {e}, reconnecting...");
                         if let Ok(websocket) =
-                            WebSocketClient::<T>::connect(ssid.clone(), demo).await
+                            WebSocketClient::<T>::connect(ssid.clone()).await
                         {
                             (write, read) = websocket.split();
                             info!("Reconnected successfully!");

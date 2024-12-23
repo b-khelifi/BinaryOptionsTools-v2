@@ -1,4 +1,4 @@
-from .BinaryOptionsToolsV2 import *
+from .BinaryOptionsToolsV2 import *  # noqa: F403
 from .BinaryOptionsToolsV2 import __all__
 
 # optional: include the documentation from the Rust module

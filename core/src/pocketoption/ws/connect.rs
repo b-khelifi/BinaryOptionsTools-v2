@@ -29,7 +29,7 @@ impl Connect for PocketConnect {
 
         let connector = Connector::NativeTls(tls_connector);
 
-        let url = creds.server(creds.demo).await?;
+        let url = creds.server().await?;
         let user_agent = creds.user_agent();
         let t_url = Url::parse(&url).map_err(|e| {
             BinaryOptionsToolsError::GeneralParsingError(format!("Error getting host, {e}"))

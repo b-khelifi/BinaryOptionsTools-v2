@@ -16,9 +16,9 @@ pub struct RawPocketOption {
 }
 
 #[pyfunction]
-pub fn connect(py: Python, ssid: String, demo: bool) -> PyResult<Bound<PyAny>> {
+pub fn connect(py: Python, ssid: String) -> PyResult<Bound<PyAny>> {
     future_into_py(py, async move {
-        let client = WebSocketClient::<Handler>::new(ssid, demo).await.map_err(BinaryErrorPy::from)?;
+        let client = WebSocketClient::<Handler>::new(ssid).await.map_err(BinaryErrorPy::from)?;
         let pocket_option = RawPocketOption { client: Arc::new(client )};
         Python::with_gil(|py: Python<'_>| Ok(pocket_option.into_py(py)))
     })

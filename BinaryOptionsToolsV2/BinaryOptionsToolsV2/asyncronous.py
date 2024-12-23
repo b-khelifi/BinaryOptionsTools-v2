@@ -9,7 +9,7 @@ class PocketOptionAsync:
     async def buy(self, asset: str, amount: float, time: int, check_win: bool = False):
         """
         Takes the asset, and amount to place a buy trade that will expire in time (in seconds).
-        If check_win is True then the function will return a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict
+        If check_win is True then the function will return a tuple containing the trade id and a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)
         If check_win is False then the function will return a tuple with the id of the trade and the trade as a dict
         """
         (trade_id, trade) = await self.client.buy(asset, amount, time)
@@ -22,12 +22,12 @@ class PocketOptionAsync:
     async def sell(self, asset: str, amount: float, time: int, check_win: bool = False):
         """
         Takes the asset, and amount to place a sell trade that will expire in time (in seconds).
-        If check_win is True then the function will return a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict
+        If check_win is True then the function will return a tuple containing the trade id and a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)
         If check_win is False then the function will return a tuple with the id of the trade and the trade as a dict
         """
         (trade_id, trade) = await self.client.sell(asset, amount, time)
         if check_win:
-            return await self.check_win(trade_id)   
+            return trade_id, await self.check_win(trade_id)   
         else:
             trade = json.loads(trade)
             return trade_id, trade 

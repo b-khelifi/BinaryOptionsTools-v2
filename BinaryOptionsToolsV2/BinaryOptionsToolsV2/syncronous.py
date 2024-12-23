@@ -2,11 +2,11 @@ from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync, async_connect
 import asyncio
 
 class PocketOption:
-    def __init__(self, ssid: str, demo: bool):
+    def __init__(self, ssid: str):
         "Creates a new instance of the PocketOption class"
         self.loop = asyncio.new_event_loop()
         self._client: PocketOptionAsync = self.loop.run_until_complete(
-            async_connect(ssid, demo)
+            async_connect(ssid)
         )
     
     def __del__(self):
@@ -15,16 +15,15 @@ class PocketOption:
     def buy(self, asset: str, amount: float, time: int, check_win: bool = False):
         """
         Takes the asset, and amount to place a buy trade that will expire in time (in seconds).
-        If check_win is True then the function will return a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict
+        If check_win is True then the function will return a tuple containing the trade id and a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)
         If check_win is False then the function will return a tuple with the id of the trade and the trade as a dict
-        future = self.loop.run_in_executor(None, self._client.buy, asset, amount, time, check_win)
         """
         return self.loop.run_until_complete(self._client.buy(asset, amount, time, check_win))
        
     def sell(self, asset: str, amount: float, time: int, check_win: bool = False):
         """
         Takes the asset, and amount to place a sell trade that will expire in time (in seconds).
-        If check_win is True then the function will return a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict
+        If check_win is True then the function will return a tuple containing the trade id and a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)
         If check_win is False then the function will return a tuple with the id of the trade and the trade as a dict
         """
         return self.loop.run_until_complete(self._client.sell(asset, amount, time, check_win))

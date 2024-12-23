@@ -1,4 +1,4 @@
-from syncronous import PocketOption
+from BinaryOptionsToolsV2.syncronous import PocketOption
 
 def main(ssid, demo):
     api = PocketOption(ssid, demo)

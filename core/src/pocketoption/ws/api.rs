@@ -46,7 +46,7 @@ impl<T: EventListener> WebSocketClient<T> {
         amount: f64,
         time: u32,
     ) -> PocketResult<(Uuid, Deal)> {
-        let order = OpenOrder::call(amount, asset.to_string(), time, self.demo as u32)?;
+        let order = OpenOrder::call(amount, asset.to_string(), time, self.ssid.demo() as u32)?;
         let request_id = order.request_id;
         let res = self
             .send_message(
@@ -70,7 +70,7 @@ impl<T: EventListener> WebSocketClient<T> {
         amount: f64,
         time: u32,
     ) -> PocketResult<(Uuid, Deal)> {
-        let order = OpenOrder::put(amount, asset.to_string(), time, self.demo as u32)?;
+        let order = OpenOrder::put(amount, asset.to_string(), time, self.ssid.demo() as u32)?;
         let request_id = order.request_id;
         let res = self
             .send_message(
@@ -214,8 +214,7 @@ mod tests {
     async fn test_websocket_client() -> anyhow::Result<()> {
         tracing_subscriber::fmt::init();
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
-        let demo = true;
-        let client = WebSocketClient::<Handler>::new(ssid, demo).await?;
+        let client = WebSocketClient::<Handler>::new(ssid).await?;
         let mut test = 0;
         // let mut threads = Vec::new();
         while test < 1000 {
@@ -235,8 +234,7 @@ mod tests {
     async fn test_all_trades() -> anyhow::Result<()> {
         start_tracing()?;
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
-        let demo = true;
-        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await?);
         // let mut threads = Vec::new();
         let symbols = include_str!("../../../tests/assets.txt")
             .lines()
@@ -269,8 +267,7 @@ mod tests {
     async fn test_force_error() {
         start_tracing().unwrap();
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
-        let demo = true;
-        let client = WebSocketClient::<Handler>::new(ssid, demo).await.unwrap();
+        let client = WebSocketClient::<Handler>::new(ssid).await.unwrap();
         let mut loops = 0;
         while loops < 1000 {
             loops += 1;
@@ -283,8 +280,7 @@ mod tests {
     async fn test_incorrect_asset_name() {
         start_tracing().unwrap();
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
-        let demo = true;
-        let client = WebSocketClient::<Handler>::new(ssid, demo).await.unwrap();
+        let client = WebSocketClient::<Handler>::new(ssid).await.unwrap();
 
         client.sell("EUReUSD_otc", 1.0, 60).await.unwrap();
     }
@@ -293,8 +289,7 @@ mod tests {
     async fn test_check_win() -> anyhow::Result<()> {
         start_tracing()?;
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
-        let demo = true;
-        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await.unwrap());
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await.unwrap());
         let mut test = 0;
         let mut checks = Vec::new();
         while test < 1000 {
@@ -324,9 +319,8 @@ mod tests {
     async fn test_get_candles() -> anyhow::Result<()> {
         start_tracing()?;
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
-        let demo = true;
         // time: 1733040000, offset: 540000, period: 3600
-        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await.unwrap());
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await.unwrap());
         sleep(Duration::from_secs(5)).await;
         let candles = client.get_candles("EURUSD", 60, 6000).await?;
         dbg!(candles);
@@ -337,8 +331,7 @@ mod tests {
     async fn test_get_closed_orders() -> anyhow::Result<()> {
         start_tracing()?;
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
-        let demo = true;
-        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await?);
         // let file = File::options().append(true).open("tes")
         let mut ids = Vec::new();
         let mut tasks: Vec<JoinHandle<PocketResult<()>>> = Vec::new();
@@ -374,8 +367,7 @@ mod tests {
     async fn test_get_open_orders() -> anyhow::Result<()> {
         start_tracing()?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
-        let demo = true;
-        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await?);
         let original_orders = client.get_opened_deals().await;
         // let file = File::options().append(true).open("tes")
         let mut ids = Vec::new();
@@ -408,8 +400,20 @@ mod tests {
     async fn test_real_account() -> anyhow::Result<()> {
         start_tracing()?;
         let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"b718d584d524ee1bac02ef2ad56bbcc1\";s:10:\"ip_address\";s:14:\"191.113.153.59\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1734375340;}a7ae2d152460e813f196b3a01636c13a","isDemo":0,"uid":87742848,"platform":2}]	"#;
-        let demo = false;
-        let client = Arc::new(WebSocketClient::<Handler>::new(ssid, demo).await?);
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await?);
+        sleep(Duration::from_secs(10)).await;
+        dbg!(client.get_balande().await);
+        let candles = client.get_candles("EURUSD_otc", 60, 3600).await?;
+        dbg!(&candles);
+        dbg!("Candles length: {}", candles.len()); // 4172
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_real_ssid_on_demo() -> anyhow::Result<()> {
+        start_tracing()?;
+        let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"b718d584d524ee1bac02ef2ad56bbcc1\";s:10:\"ip_address\";s:14:\"191.113.153.59\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1734375340;}a7ae2d152460e813f196b3a01636c13a","isDemo":0,"uid":87742848,"platform":2}]	"#;
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await?);
         sleep(Duration::from_secs(10)).await;
         dbg!(client.get_balande().await);
         let candles = client.get_candles("EURUSD_otc", 60, 3600).await?;
