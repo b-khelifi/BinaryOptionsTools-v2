@@ -79,7 +79,7 @@ class PocketOptionAsync:
             return [payout.get(ast) for ast in asset]
         return payout
     
-async def async_connect(ssid: str, demo: bool) -> PocketOptionAsync:
+async def async_connect(ssid: str) -> PocketOptionAsync:
     "Use this function to connect to the server, this works as the initialization for the `PocketOptionAsync` class"
-    client = await connect(ssid, demo)
+    client = await connect(ssid)
     return PocketOptionAsync(client)
