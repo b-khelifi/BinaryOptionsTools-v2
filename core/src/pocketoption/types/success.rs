@@ -11,7 +11,7 @@ pub enum SuccessAuth {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct DemoAuth {
-    id: String
+    id: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

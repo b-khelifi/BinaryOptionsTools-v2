@@ -10,7 +10,7 @@ use crate::pocketoption::{
     error::PocketResult, parser::message::WebSocketMessage, utils::basic::get_index,
 };
 
-use super::update::float_time;
+use super::update::{float_time, string_time};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "lowercase")]
@@ -36,6 +36,20 @@ pub struct OpenOrder {
     option_type: u32,
     pub request_id: u64,
     time: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenPendingOrder {
+    amount: f64,
+    asset: String,
+    command: i32,
+    min_payout: i64,
+    open_price: f64,
+    #[serde(with = "string_time")]
+    open_time: DateTime<Utc>,
+    open_type: i32,
+    time_frame: i64,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]

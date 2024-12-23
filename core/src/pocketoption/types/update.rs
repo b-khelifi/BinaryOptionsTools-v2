@@ -54,7 +54,6 @@ pub struct ProcessedCandle {
     asset: String,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DataCandle {
     pub time: DateTime<Utc>,
@@ -67,9 +66,21 @@ pub struct DataCandle {
 impl From<&Candle> for DataCandle {
     fn from(value: &Candle) -> Self {
         match value {
-            Candle::Raw(candle) => Self { time: candle.time, open: candle.price, close: candle.price, high: candle.price, low: candle.price},
-            Candle::Processed(candle) => Self { time: candle.time, open: candle.open, close: candle.close, high: candle.high, low: candle.low }
-        }        
+            Candle::Raw(candle) => Self {
+                time: candle.time,
+                open: candle.price,
+                close: candle.price,
+                high: candle.price,
+                low: candle.price,
+            },
+            Candle::Processed(candle) => Self {
+                time: candle.time,
+                open: candle.open,
+                close: candle.close,
+                high: candle.high,
+                low: candle.low,
+            },
+        }
     }
 }
 
@@ -92,7 +103,7 @@ pub struct UpdateBalance {
     is_demo: u32,
     balance: f64,
     uid: Option<i64>,
-    login: Option<i64>
+    login: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -143,7 +154,7 @@ impl Default for UpdateBalance {
             is_demo: 1,
             balance: -1.,
             uid: None,
-            login: None
+            login: None,
         }
     }
 }
@@ -193,6 +204,29 @@ pub mod float_time {
     }
 }
 
+pub mod string_time {
+    use chrono::{DateTime, NaiveDateTime, Utc};
+    use serde::{de, Deserialize, Deserializer, Serializer};
+    pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let date_str = date.format("%Y-%m-%d %H:%M:%S").to_string();
+        serializer.serialize_str(&date_str)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let date_str = String::deserialize(deserializer)?;
+        let date = NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%d %H:%M:%S")
+            .map_err(de::Error::custom)?
+            .and_utc();
+        Ok(date)
+    }
+}
+
 pub mod duration {
     use chrono::Duration;
     use serde::{Deserialize, Deserializer, Serializer};
@@ -212,7 +246,6 @@ pub mod duration {
         Ok(Duration::seconds(s))
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -276,5 +309,4 @@ mod tests {
 
         Ok(())
     }
-
 }

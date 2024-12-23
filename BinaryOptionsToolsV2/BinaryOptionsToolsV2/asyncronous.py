@@ -1,6 +1,7 @@
 from BinaryOptionsToolsV2 import connect, RawPocketOption
 import json
 
+# This file contains all the async code for the PocketOption Module
 class PocketOptionAsync:
     def __init__(self, client: RawPocketOption):
         self.client = client
@@ -32,16 +33,17 @@ class PocketOptionAsync:
             return trade_id, trade 
  
     async def check_win(self, id: str):
-        """Returns a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict"""
+        """Returns a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)"""
         trade = await self.client.check_win(id)
         trade = json.loads(trade)
-        profit = trade["profit"]
-        if profit > 0:
-            return "win", trade
-        elif profit == 0:
-            return "draw", trade
+        win = trade["profit"]
+        if win > 0:
+            trade["result"] = "win"
+        elif win == 0:
+            trade["result"] = "draw"
         else:
-            return "loss", trade
+            trade["result"] = "loss"
+        return trade
         
     async def get_candles(self, asset: str, period: int, offset: int):  
         """
@@ -69,8 +71,8 @@ class PocketOptionAsync:
         return json.loads(await self.client.closed_deals())
     
     async def payout(self, asset: None | str | list[str] = None):
-        "Returns a dict of asset | payout for each asset, if 'asset' is not None then it will return the payout of the asset or a list of the payouts for each asset it was passed"
-        payout = json.loads(await self.client.get_payout())
+        "Returns a dict of asset : payout for each asset, if 'asset' is not None then it will return the payout of the asset or a list of the payouts for each asset it was passed"
+        payout = json.loads(await self.client.payout())
         if isinstance(asset, str):
             return payout.get(asset)
         elif isinstance(asset, list):

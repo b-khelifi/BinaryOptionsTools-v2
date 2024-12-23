@@ -1,4 +1,4 @@
-from asyncronous import PocketOptionAsync, async_connect
+from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync, async_connect
 import asyncio
 
 class PocketOption:
@@ -30,7 +30,7 @@ class PocketOption:
         return self.loop.run_until_complete(self._client.sell(asset, amount, time, check_win))
     
     def check_win(self, id: str):
-        """Returns a tuple with the result of the trade ("win", "loss", "draw") and the trade as a dict"""
+        """Returns a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)"""
         return self.loop.run_in_executor(self._client.check_win(id))
 
     def get_candles(self, asset: str, period: int, offset: int):

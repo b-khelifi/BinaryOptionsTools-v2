@@ -1,4 +1,5 @@
 import asyncio
+import pandas as pd
 # import json
 
 # import BinaryOptionsToolsV2
@@ -6,7 +7,7 @@ import asyncio
 
 
 # print(BinaryOptionsToolsV2)
-from asyncronous import PocketOptionAsync, async_connect
+from BinaryOptionsToolsV2.asyncronous import async_connect
 
 # async def main():
 #     api = await connect(ssid, True)
@@ -24,13 +25,18 @@ from asyncronous import PocketOptionAsync, async_connect
 
 async def main(ssid, demo):
     api = await async_connect(ssid, demo)
-    # trade = await api.buy("EURUSD", 1.5, 60, True)
+    # trade = await api.buy("EURUSD_otc", 1.5, 60)
     # print(f"Trade: {trade}")
+    # payout = await api.payout("EURUSD_otc")
+    # print(f"Payout: {payout}")
     await asyncio.sleep(10)
-    candles = await api.get_candles("EURUSD_otc", 1, 60)
+    candles = await api.get_candles("EURUSD_otc", 60, 7200 * 2)
     print(f"Candles: {candles}")
+    df = pd.DataFrame.from_dict(candles)
+    print(df)
+    df.to_csv("candles_eurusd_otc.csv")
     
 if __name__ == "__main__":
     ssid = input("Write your ssid: ")
-    demo = False
+    demo = True
     asyncio.run(main(ssid, demo))

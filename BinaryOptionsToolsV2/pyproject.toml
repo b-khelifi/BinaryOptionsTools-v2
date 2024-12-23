@@ -15,5 +15,4 @@ dynamic = ["version"]
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-python-source = "python"
-module-name = "BinaryOptionsTools.BinaryOptionsToolsV2"
+module-name = "BinaryOptionsToolsV2"
