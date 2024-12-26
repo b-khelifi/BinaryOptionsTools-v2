@@ -7,15 +7,12 @@ use crate::pocketoption::{
     error::{PocketOptionError, PocketResult},
     parser::{basic::LoadHistoryPeriod, message::WebSocketMessage},
     types::{
-        info::MessageInfo,
-        order::{Deal, OpenOrder},
-        update::{DataCandle, UpdateBalance},
-        user::PocketUser,
+        base::ChangeSymbol, info::MessageInfo, order::{Deal, OpenOrder}, update::{DataCandle, UpdateBalance}, user::PocketUser
     },
-    validators::{candle_validator, order_result_validator, order_validator},
+    validators::{candle_validator, history_validator, order_result_validator, order_validator},
 };
 
-use super::{basic::WebSocketClient, listener::EventListener};
+use super::{basic::WebSocketClient, listener::EventListener, stream::StreamAsset};
 
 impl<T: EventListener> WebSocketClient<T> {
     pub async fn send_message(
@@ -156,6 +153,17 @@ impl<T: EventListener> WebSocketClient<T> {
         ))
     }
 
+    pub async fn history(&self, asset: impl ToString, period: i64) -> PocketResult<Vec<DataCandle>> {
+        let request = ChangeSymbol::new(asset.to_string(), period);
+        let res = self.send_message(WebSocketMessage::ChangeSymbol(request), MessageInfo::UpdateHistoryNew, history_validator(asset.to_string(), period)).await?;
+        if let WebSocketMessage::UpdateHistoryNew(history) = res {
+            return Ok(history.candle_data())
+        }
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+            res.info(),
+        ))
+    }
+
     pub async fn get_closed_deals(&self) -> Vec<Deal> {
         self.data.get_closed_deals().await
     }
@@ -171,20 +179,26 @@ impl<T: EventListener> WebSocketClient<T> {
     pub async fn get_payout(&self) -> HashMap<String, i32> {
         self.data.get_full_payout().await
     }
+
+    pub async fn subscribe_symbol(&self, asset: impl ToString) -> PocketResult<StreamAsset> {
+        let _ = self.history(asset.to_string(), 1).await?;
+        debug!("Created StreamAsset instance.");
+        Ok(self.data.add_stream(asset.to_string()).await)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{fs::OpenOptions, sync::Arc, time::Duration};
 
-    use futures_util::future::try_join_all;
+    use futures_util::{future::{try_join3, try_join_all}, StreamExt};
     use tokio::{task::JoinHandle, time::sleep};
     use tracing::level_filters::LevelFilter;
     use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
     use crate::pocketoption::{
         error::{PocketOptionError, PocketResult},
-        ws::listener::Handler,
+        ws::{listener::Handler, stream::StreamAsset},
         WebSocketClient,
     };
     fn start_tracing() -> anyhow::Result<()> {
@@ -322,7 +336,7 @@ mod tests {
         // time: 1733040000, offset: 540000, period: 3600
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await.unwrap());
         sleep(Duration::from_secs(5)).await;
-        let candles = client.get_candles("EURUSD", 60, 6000).await?;
+        let candles = client.get_candles("EURUSD_otc", 60, 6000).await?;
         dbg!(candles);
         Ok(())
     }
@@ -410,15 +424,38 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_real_ssid_on_demo() -> anyhow::Result<()> {
+    async fn test_history() -> anyhow::Result<()> {
         start_tracing()?;
-        let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"b718d584d524ee1bac02ef2ad56bbcc1\";s:10:\"ip_address\";s:14:\"191.113.153.59\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1734375340;}a7ae2d152460e813f196b3a01636c13a","isDemo":0,"uid":87742848,"platform":2}]	"#;
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await?);
-        sleep(Duration::from_secs(10)).await;
-        dbg!(client.get_balande().await);
-        let candles = client.get_candles("EURUSD_otc", 60, 3600).await?;
-        dbg!(&candles);
-        dbg!("Candles length: {}", candles.len()); // 4172
+        let res = client.history("EURUSD_otc", 1).await?;
+        dbg!(res);
         Ok(())
     }
+
+
+    #[tokio::test]
+    async fn test_subscribe_symbol() -> anyhow::Result<()> {
+        fn to_future(stream: StreamAsset, id: i32) -> JoinHandle<anyhow::Result<()>> {
+            tokio::spawn(async move {
+                while let Some(item) = stream.to_stream().next().await {
+                    dbg!("StreamAsset n°{} data: \n{}", id, item?);
+                }
+                Ok(())
+            })
+        }
+        // start_tracing()?;
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await?);
+        let stream_asset1 = client.subscribe_symbol("EURUSD_otc").await?;
+        let stream_asset2 = client.subscribe_symbol("#FB_otc").await?;
+        let stream_asset3 = client.subscribe_symbol("YERUSD_otc").await?;
+        
+        let f1 = to_future(stream_asset1, 1);
+        let f2 = to_future(stream_asset2, 2);
+        let f3 = to_future(stream_asset3, 3);
+        let _ = try_join3(f1, f2, f3).await?;
+        Ok(())
+    }
+
 }

@@ -6,7 +6,7 @@ use futures_util::future::try_join3;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use tokio::sync::mpsc::{Receiver, Sender};
+use async_channel::{bounded, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_tungstenite::tungstenite::Message;
@@ -132,8 +132,8 @@ where
         connector: Connector,
     ) -> BinaryOptionsResult<(JoinHandle<()>, Sender<Transfer>)> {
         let (mut write, mut read) = connector.connect(credentials.clone()).await?.split();
-        let (sender, mut reciever) = tokio::sync::mpsc::channel(128);
-        let (msg_sender, mut msg_reciever) = tokio::sync::mpsc::channel(128);
+        let (sender, mut reciever) = bounded(128);
+        let (msg_sender, mut msg_reciever) = bounded(128);
         let task = tokio::task::spawn(async move {
             let previous = None;
             let mut loops = 0;
@@ -241,7 +241,7 @@ where
         ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
         reciever: &mut Receiver<Message>,
     ) -> BinaryOptionsResult<()> {
-        while let Some(msg) = reciever.recv().await {
+        while let Ok(msg) = reciever.recv().await {
             match ws.send(msg).await {
                 Ok(_) => debug!("Sent message"),
                 Err(e) => {
@@ -260,7 +260,7 @@ where
         reciever: &mut Receiver<Transfer>,
         sender: &Sender<Message>,
     ) -> BinaryOptionsResult<()> {
-        while let Some(msg) = reciever.recv().await {
+        while let Ok(msg) = reciever.recv().await {
             if let Some(request) = msg.user_request() {
                 data.add_user_request(request.info, request.validator, request.sender)
                     .await;

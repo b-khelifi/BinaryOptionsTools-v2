@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 
-pub mod pocketoption;
 pub mod error;
+pub mod pocketoption;
 
-use pocketoption::{RawPocketOption, connect};
+use pocketoption::{connect, RawPocketOption};
 use pyo3::prelude::*;
 
 #[pymodule]

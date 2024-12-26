@@ -14,9 +14,9 @@ pub struct UpdateStreamItem {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateHistoryNew {
-    asset: String,
-    period: u32,
-    history: Vec<UpdateCandle>,
+    pub asset: String,
+    pub period: i64,
+    pub history: Vec<Candle>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -32,6 +32,7 @@ pub struct LoadHistoryPeriodResult {
 pub enum Candle {
     Raw(RawCandle),
     Processed(ProcessedCandle),
+    Update(UpdateCandle)
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -63,24 +64,29 @@ pub struct DataCandle {
     pub low: f64,
 }
 
+impl DataCandle {
+    fn new(time: DateTime<Utc>, open: f64, close: f64, high: f64, low: f64) -> Self {
+        Self { time, open, close, high, low }
+    }
+
+    fn new_price(time: DateTime<Utc>, price: f64) -> Self {
+        Self { time, open: price, close: price, high: price, low: price }
+    }
+}
+
 impl From<&Candle> for DataCandle {
     fn from(value: &Candle) -> Self {
         match value {
-            Candle::Raw(candle) => Self {
-                time: candle.time,
-                open: candle.price,
-                close: candle.price,
-                high: candle.price,
-                low: candle.price,
-            },
-            Candle::Processed(candle) => Self {
-                time: candle.time,
-                open: candle.open,
-                close: candle.close,
-                high: candle.high,
-                low: candle.low,
-            },
+            Candle::Raw(candle) => Self::new_price(candle.time, candle.price),
+            Candle::Processed(candle) => Self::new(candle.time, candle.open, candle.close, candle.high, candle.low),
+            Candle::Update(candle) => Self::new_price(candle.time, candle.price)
         }
+    }
+}
+
+impl From<&UpdateStreamItem> for DataCandle {
+    fn from(value: &UpdateStreamItem) -> Self {
+        Self::new_price(value.time, value.price)
     }
 }
 
@@ -90,6 +96,11 @@ impl LoadHistoryPeriodResult {
     }
 }
 
+impl UpdateHistoryNew {
+    pub fn candle_data(&self) -> Vec<DataCandle> {
+        self.history.iter().map(DataCandle::from).collect()
+    }
+}
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateCandle {
     #[serde(with = "float_time")]

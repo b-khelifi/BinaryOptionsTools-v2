@@ -32,9 +32,13 @@ pub enum PocketOptionError {
     #[error("Failed to convert bytes to string, {0}")]
     WebSocketMessageByteSerializationError(#[from] FromUtf8Error),
     #[error("Failed to send message to websocket sender, {0}")]
-    MessageSendingError(#[from] tokio::sync::mpsc::error::SendError<Message>),
+    MessageSendingErrorT(#[from] tokio::sync::mpsc::error::SendError<Message>),
     #[error("Failed to send message to websocket sender, {0}")]
-    ThreadMessageSendingErrorMPCS(#[from] tokio::sync::mpsc::error::SendError<WebSocketMessage>),
+    MessageSendingError(#[from] async_channel::SendError<Message>),
+    #[error("Failed to send message to websocket sender, {0}")]
+    ThreadMessageSendingErrorMPCST(#[from] tokio::sync::mpsc::error::SendError<WebSocketMessage>),
+    #[error("Failed to send message to websocket sender, {0}")]
+    ThreadMessageSendingErrorMPCS(#[from] async_channel::SendError<WebSocketMessage>),
     #[error("Failed to recieve message from separate thread, {0}")]
     OneShotRecieverError(#[from] tokio::sync::oneshot::error::RecvError),
     #[error("Failed to send message to websocket sender, {0}")]

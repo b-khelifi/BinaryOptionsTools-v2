@@ -9,3 +9,9 @@ pub struct ChangeSymbol {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SubscribeSymbol(String);
+
+impl ChangeSymbol {
+    pub fn new(asset: String, period: i64) -> Self {
+        Self { asset, period }
+    }
+}

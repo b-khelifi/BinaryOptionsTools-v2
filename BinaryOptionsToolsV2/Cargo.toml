@@ -1,6 +1,6 @@
 [package]
 name = "BinaryOptionsToolsV2"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "A library to connect to PocketOption using python with async and sync support."
 license = "BSD License (BSD)"
@@ -13,7 +13,7 @@ name = "BinaryOptionsToolsV2"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = "0.21.0"
+pyo3 = {version = "0.21.0", features = ["experimental-async"]}
 
 binary-option-tools-core = { path = "../core" }
 thiserror = "2.0.9"

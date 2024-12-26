@@ -18,7 +18,9 @@ pub enum BinaryOptionsToolsError {
     #[error("Failed to connect to websocket server: {0}")]
     WebsocketConnectionError(#[from] TungsteniteError),
     #[error("Failed to send message to websocket sender, {0}")]
-    MessageSendingError(#[from] SendError<Message>),
+    MessageSendingErrorT(#[from] SendError<Message>),
+    #[error("Failed to send message to websocket sender, {0}")]
+    MessageSendingError(#[from] async_channel::SendError<Message>),
     #[error("Failed to recieve message from separate thread, {0}")]
     OneShotRecieverError(#[from] tokio::sync::oneshot::error::RecvError),
     #[error("Failed to send message to websocket sender, {0}")]

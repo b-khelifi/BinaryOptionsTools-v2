@@ -3,7 +3,8 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::Mutex;
-use tokio::sync::{mpsc::Sender, oneshot::Sender as OneShotSender};
+use tokio::sync::oneshot::Sender as OneShotSender;
+use async_channel::Sender;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, info, warn};
 

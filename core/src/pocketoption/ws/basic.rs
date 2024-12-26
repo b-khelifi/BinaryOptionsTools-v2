@@ -7,10 +7,10 @@ use futures_util::{
 };
 use tokio::{
     net::TcpStream,
-    sync::mpsc::{Receiver, Sender},
     task::JoinHandle,
     time::sleep,
 };
+use async_channel::{Receiver, Sender, bounded};
 use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
@@ -92,8 +92,8 @@ impl<T: EventListener> WebSocketClient<T> {
         let (mut write, mut read) = WebSocketClient::<T>::connect(ssid.clone())
             .await?
             .split();
-        let (sender, mut reciever) = tokio::sync::mpsc::channel(128);
-        let (msg_sender, mut msg_reciever) = tokio::sync::mpsc::channel(128);
+        let (sender, mut reciever) = bounded(128);
+        let (msg_sender, mut msg_reciever) = bounded(128);
         let sender_msg = msg_sender.clone();
 
         let task = tokio::task::spawn(async move {
@@ -192,7 +192,7 @@ impl<T: EventListener> WebSocketClient<T> {
         ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
         reciever: &mut Receiver<Message>,
     ) -> PocketResult<()> {
-        while let Some(msg) = reciever.recv().await {
+        while let Ok(msg) = reciever.recv().await {
             match ws.send(msg).await {
                 Ok(_) => {
                     debug!("Sent message");
@@ -212,7 +212,7 @@ impl<T: EventListener> WebSocketClient<T> {
         reciever: &mut Receiver<WebSocketMessage>,
         sender: &Sender<Message>,
     ) -> PocketResult<()> {
-        while let Some(msg) = reciever.recv().await {
+        while let Ok(msg) = reciever.recv().await {
             match msg {
                 WebSocketMessage::SuccessupdateBalance(balance) => {
                     data.update_balance(balance).await
@@ -229,6 +229,14 @@ impl<T: EventListener> WebSocketClient<T> {
                 }
                 WebSocketMessage::SuccessopenOrder(order) => {
                     data.update_opened_deals(vec![order]).await
+                },
+                WebSocketMessage::UpdateStream(stream) => {
+                    debug!("Recieved update stream");
+                    if let Err(e) = data.send_stream(stream).await {
+                        warn!("Error sending message to StreamAssets, {e}");
+                    } else {
+                        debug!("Send update stream successfully");
+                    }
                 }
                 WebSocketMessage::UserRequest(request) => {
                     data.add_user_request(request.info, request.validator, request.sender)
@@ -316,17 +324,20 @@ mod tests {
         // write.flush().await?;
         println!("sent");
         let mut lop = 0;
-
+        let assets = ["EURTRY_otc", "EURUSD_otc", "#FB_otc", "CADJPY_otc", "100GBP_otc"];
+        let mut inner = 0;
         while let Some(msg) = read.next().await {
             lop += 1;
             if lop % 5 == 0 {
+                inner += 1;
                 write
                     .send(Message::text(
-                        r#"42["changeSymbol",{"asset":"EURTRY_otc","period":3600}]"#,
+                        format!("42[\"changeSymbol\",{{\"asset\":\"{}\",\"period\":3600}}]", assets[inner % 5])
                     ))
                     .await
                     .unwrap();
                 write.flush().await.unwrap();
+                println!("Send subscribeSymbol");
             }
             println!("receiving...");
             let message = msg.unwrap();
@@ -336,7 +347,11 @@ mod tests {
                     let msg = String::from_utf8(bin.to_vec()).unwrap();
                     let _parsed = WebSocketMessage::parse(&msg);
                     // dbg!(parsed);
-                    dbg!(format!("Bin: {}", &msg))
+                    if msg.len() > 64 {
+                        dbg!(format!("Bin: {}", &msg[..64]))
+                    } else {
+                        dbg!(format!("Bin: {}", &msg))
+                    }
                 }
                 Message::Text(text) => {
                     let base = text.clone();

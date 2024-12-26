@@ -3,21 +3,25 @@ use std::{
     sync::Arc,
 };
 
-use tokio::sync::{oneshot::Sender, Mutex};
+use async_channel::{bounded, Receiver, Sender};
+use tokio::sync::{oneshot::Sender as OneshotSender, Mutex};
+use tracing::debug;
 use uuid::Uuid;
 
-use crate::pocketoption::{error::PocketResult, parser::message::WebSocketMessage};
+use crate::pocketoption::{error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset};
 
 use super::{
     info::MessageInfo,
     order::Deal,
-    update::{UpdateAssets, UpdateBalance},
+    update::{UpdateAssets, UpdateBalance, UpdateStream},
 };
 type Element = (
     Box<dyn Fn(&WebSocketMessage) -> bool + Send + Sync>,
-    tokio::sync::oneshot::Sender<WebSocketMessage>,
+    OneshotSender<WebSocketMessage>,
 );
 type HashMapData = HashMap<MessageInfo, Vec<Element>>;
+
+pub struct Channels(Sender<WebSocketMessage>, Receiver<WebSocketMessage>);
 
 #[derive(Default, Clone)]
 pub struct Data {
@@ -26,7 +30,8 @@ pub struct Data {
     closed_deals: Arc<Mutex<HashSet<Deal>>>,
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
     pending_requests: Arc<Mutex<HashMapData>>,
-    server_tyme: Arc<Mutex<i64>>,
+    server_time: Arc<Mutex<i64>>,
+    stream_channels: Arc<Channels>
 }
 
 impl Data {
@@ -114,7 +119,7 @@ impl Data {
     pub async fn get_request(
         &self,
         message: &WebSocketMessage,
-    ) -> PocketResult<Option<Vec<tokio::sync::oneshot::Sender<WebSocketMessage>>>> {
+    ) -> PocketResult<Option<Vec<OneshotSender<WebSocketMessage>>>> {
         let mut requests = self.pending_requests.lock().await;
         let info = message.info();
 
@@ -136,7 +141,7 @@ impl Data {
                     senders
                         .into_iter()
                         .map(|(_, s)| s)
-                        .collect::<Vec<Sender<WebSocketMessage>>>(),
+                        .collect::<Vec<OneshotSender<WebSocketMessage>>>(),
                 ));
             } else {
                 return Ok(None);
@@ -153,11 +158,30 @@ impl Data {
     }
 
     pub async fn update_server_time(&self, time: i64) {
-        let mut s_time = self.server_tyme.lock().await;
+        let mut s_time = self.server_time.lock().await;
         *s_time = time;
     }
 
     pub async fn get_server_time(&self) -> i64 {
-        *self.server_tyme.lock().await
+        *self.server_time.lock().await
+    }
+
+    pub async fn add_stream(&self, asset: String) -> StreamAsset {
+        debug!("Created new channels and StreamAsset instance");
+        StreamAsset::new(self.stream_channels.1.clone(), asset)
+    }
+
+    pub async fn send_stream(&self, stream: UpdateStream) -> PocketResult<()> {
+        if self.stream_channels.1.receiver_count() > 1 {
+            return Ok(self.stream_channels.0.send(WebSocketMessage::UpdateStream(stream)).await?);
+        }
+        Ok(())
+    }
+}
+
+impl Default for Channels {
+    fn default() -> Self {
+        let (s, r) = bounded(128);
+        Self(s, r)
     }
 }

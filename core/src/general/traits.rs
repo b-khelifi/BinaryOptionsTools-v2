@@ -2,7 +2,8 @@ use core::{error, fmt, hash};
 
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::{net::TcpStream, sync::mpsc::Sender};
+use tokio::net::TcpStream;
+use async_channel::Sender;
 use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 use crate::error::BinaryOptionsResult;

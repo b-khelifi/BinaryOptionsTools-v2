@@ -79,6 +79,10 @@ class PocketOptionAsync:
             return [payout.get(ast) for ast in asset]
         return payout
     
+    async def history(self, asset: str, period: int):
+        "Returns a list of dictionaries containing the latest data available for the specified asset starting from 'period', the data is in the same format as the returned data of the 'get_candles' function."
+        return json.loads(await self.client.history(asset, period))
+        
 async def async_connect(ssid: str) -> PocketOptionAsync:
     "Use this function to connect to the server, this works as the initialization for the `PocketOptionAsync` class"
     client = await connect(ssid)
