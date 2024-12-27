@@ -1,4 +1,4 @@
-from BinaryOptionsToolsV2 import connect, RawPocketOption
+from BinaryOptionsToolsV2 import RawPocketOption
 import json
 
 # This file contains all the async code for the PocketOption Module
@@ -83,11 +83,19 @@ class PocketOptionAsync:
         "Returns a list of dictionaries containing the latest data available for the specified asset starting from 'period', the data is in the same format as the returned data of the 'get_candles' function."
         return json.loads(await self.client.history(asset, period))
     
+    async def _subscribe_symbol_inner(self, asset: str):
+        return await self.client.subscribe_symbol(asset)
+    
     async def subscribe_symbol(self, asset: str):
         """Returns an async iterator over the associated asset, it will return real time raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
-        return await self.client.subscribe_symbol(asset)
+        return AsyncSubscription(await self._subscribe_symbol_inner(asset))
         
-async def async_connect(ssid: str) -> PocketOptionAsync:
-    "Use this function to connect to the server, this works as the initialization for the `PocketOptionAsync` class"
-    client = await connect(ssid)
-    return PocketOptionAsync(client)
+class AsyncSubscription:
+    def __init__(self, subscription):
+        self.subscription = subscription
+        
+    def __aiter__(self):
+        return self
+        
+    async def __anext__(self):
+        return json.loads(await anext(self.subscription))

@@ -1,13 +1,12 @@
-from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync, async_connect
+import json
+from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync
 import asyncio
 
 class PocketOption:
     def __init__(self, ssid: str):
         "Creates a new instance of the PocketOption class"
         self.loop = asyncio.new_event_loop()
-        self._client: PocketOptionAsync = self.loop.run_until_complete(
-            async_connect(ssid)
-        )
+        self._client = PocketOptionAsync(ssid)
     
     def __del__(self):
         self.loop.close()
@@ -63,3 +62,17 @@ class PocketOption:
     def history(self, asset: str, period: int):
         "Returns a list of dictionaries containing the latest data available for the specified asset starting from 'period', the data is in the same format as the returned data of the 'get_candles' function."
         return self.loop.run_until_complete(self._client.history(asset, period))
+
+    def subscribe_symbol(self, asset: str):
+        """Returns an async iterator over the associated asset, it will return real time raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
+        return SyncSubscription(self.loop.run_until_complete(self._client._subscribe_symbol_inner(asset)))
+
+class SyncSubscription:
+    def __init__(self, subscription):
+        self.subscription = subscription
+        
+    def __iter__(self):
+        return self
+        
+    def __next__(self):
+        return json.loads(next(self.subscription))        

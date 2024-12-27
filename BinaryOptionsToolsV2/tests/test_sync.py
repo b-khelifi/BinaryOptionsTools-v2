@@ -1,11 +1,14 @@
 from BinaryOptionsToolsV2.syncronous import PocketOption
+import time
 
-def main(ssid, demo):
-    api = PocketOption(ssid, demo)
-    trade = api.buy("EURUSD", 1, 60, True)
-    print(f"Trade: {trade}")
+def main(ssid):
+    api = PocketOption(ssid)
+    time.sleep(5)
+    iterator = api.subscribe_symbol("EURUSD_otc")
+    for item in iterator:
+        print(item)
+
 
 if __name__ == "__main__":
     ssid = input("Write your ssid: ")
-    demo = True
-    main(ssid, demo)
+    main(ssid)

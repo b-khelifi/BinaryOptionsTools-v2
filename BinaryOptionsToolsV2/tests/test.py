@@ -1,10 +1,9 @@
 import asyncio
-import pandas as pd # type: ignore
+# import pandas as pd # type: ignore
 # import json
 
 # import BinaryOptionsToolsV2
 # from BinaryOptionsToolsV2 import connect
-
 
 # print(BinaryOptionsToolsV2)
 from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync
@@ -26,7 +25,7 @@ async def main(ssid):
     await asyncio.sleep(5)
     stream = await api.subscribe_symbol("EURUSD_otc")
     async for item in stream:
-        print(item)
+        print(item["time"], item["open"])
 
     
 if __name__ == "__main__":
