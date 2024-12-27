@@ -3,8 +3,8 @@ import json
 
 # This file contains all the async code for the PocketOption Module
 class PocketOptionAsync:
-    def __init__(self, client: RawPocketOption):
-        self.client = client
+    def __init__(self, ssid: str):
+        self.client = RawPocketOption(ssid)
     
     async def buy(self, asset: str, amount: float, time: int, check_win: bool = False):
         """
@@ -82,6 +82,10 @@ class PocketOptionAsync:
     async def history(self, asset: str, period: int):
         "Returns a list of dictionaries containing the latest data available for the specified asset starting from 'period', the data is in the same format as the returned data of the 'get_candles' function."
         return json.loads(await self.client.history(asset, period))
+    
+    async def subscribe_symbol(self, asset: str):
+        """Returns an async iterator over the associated asset, it will return real time raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
+        return await self.client.subscribe_symbol(asset)
         
 async def async_connect(ssid: str) -> PocketOptionAsync:
     "Use this function to connect to the server, this works as the initialization for the `PocketOptionAsync` class"

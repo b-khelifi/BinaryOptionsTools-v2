@@ -1,11 +1,16 @@
 
-use async_channel::Receiver;
-use futures_util::stream::{Stream, unfold};
+
+use std::sync::Arc;
+
 use tracing::debug;
 // use pin_project_lite::pin_project;
 use crate::pocketoption::{error::PocketResult, parser::message::WebSocketMessage, types::update::DataCandle};
 
+use futures_util::Stream;
+use async_channel::Receiver;
+use futures_util::stream::unfold;
 
+#[derive(Clone)]
 pub struct StreamAsset {
     reciever: Receiver<WebSocketMessage>,
     asset: String
@@ -32,6 +37,13 @@ impl StreamAsset {
     }
 
     pub fn to_stream(&self) -> impl Stream<Item = PocketResult<DataCandle>> + '_ {
+        Box::pin(unfold(self, |state| async move {
+                    let item = state.recieve().await;
+                    Some((item, state))
+                }))
+    }
+
+    pub fn to_stream_static(self: Arc<Self>) -> impl Stream<Item = PocketResult<DataCandle>> + 'static {
         Box::pin(unfold(self, |state| async move {
                     let item = state.recieve().await;
                     Some((item, state))

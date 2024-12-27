@@ -2,6 +2,7 @@
 
 pub mod error;
 pub mod pocketoption;
+pub mod runtime;
 
 use pocketoption::{connect, RawPocketOption};
 use pyo3::prelude::*;
