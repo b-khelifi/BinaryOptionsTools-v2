@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::{general::traits::DataHandler, pocketoption::parser::message::WebSocketMessage};
+use crate::{error::BinaryOptionsResult, general::traits::DataHandler, pocketoption::parser::message::WebSocketMessage};
 
 use super::{
     order::Deal,
@@ -114,7 +114,7 @@ impl PocketData {
 impl DataHandler for PocketData {
     type Transfer = WebSocketMessage;
 
-    async fn update(&self, message: &WebSocketMessage) {
+    async fn update(&self, message: &WebSocketMessage) -> BinaryOptionsResult<()> {
         match message {
             WebSocketMessage::SuccessupdateBalance(balance) => {
                 self.update_balance(balance.clone()).await
@@ -134,6 +134,7 @@ impl DataHandler for PocketData {
             }
             _ => {}
         }
+        Ok(())
     }
 }
 

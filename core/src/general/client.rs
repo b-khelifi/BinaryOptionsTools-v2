@@ -17,7 +17,7 @@ use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
 use crate::general::types::{MessageType, UserRequest};
 
 use super::traits::{Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
-use super::types::Data;
+use super::types::{Data, DataV2};
 
 const MAX_ALLOWED_LOOPS: u32 = 8;
 const SLEEP_INTERVAL: u32 = 2;
@@ -46,6 +46,7 @@ where
     pub connector: Connector,
     pub handler: Handler,
     pub data: Data<T, Transfer>,
+    pub data_v2: DataV2<T, Transfer>,
     pub sender: Sender<Transfer>,
     _event_loop: JoinHandle<()>,
 }
@@ -78,11 +79,12 @@ where
         credentials: Creds,
         connector: Connector,
         data: Data<T, Transfer>,
+        data_v2: DataV2<T, Transfer>,
         handler: Handler,
         timeout: Duration,
     ) -> BinaryOptionsResult<Self> {
         let inner =
-            WebSocketInnerClient::init(credentials, connector, data, handler, timeout).await?;
+            WebSocketInnerClient::init(credentials, connector, data, data_v2, handler, timeout).await?;
         Ok(Self {
             inner: Arc::new(inner),
         })
@@ -102,6 +104,7 @@ where
         credentials: Creds,
         connector: Connector,
         data: Data<T, Transfer>,
+        data_v2: DataV2<T, Transfer>,
         handler: Handler,
         timeout: Duration,
     ) -> BinaryOptionsResult<Self> {
@@ -120,6 +123,7 @@ where
             connector,
             handler,
             data,
+            data_v2,
             sender,
             _event_loop,
         })
@@ -271,8 +275,6 @@ where
                         BinaryOptionsToolsError::from(e)
                     );
                 }
-                warn!("Add new data");
-                data.list_pending_requests().await;
             }
             // data.update_data(msg, sender).await?;
         }
@@ -303,4 +305,6 @@ where
             Ok(resp)
         }
     }
+
+    
 }

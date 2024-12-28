@@ -16,7 +16,7 @@ pub trait Credentials: Clone + Send + Sync {}
 pub trait DataHandler: Clone + Send + Sync {
     type Transfer: MessageTransfer;
 
-    async fn update(&self, message: &Self::Transfer);
+    async fn update(&self, message: &Self::Transfer) -> BinaryOptionsResult<()>;
 }
 
 pub trait MessageTransfer:

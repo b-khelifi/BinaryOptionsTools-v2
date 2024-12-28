@@ -1,5 +1,7 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
+use async_channel::bounded;
+use async_channel::Receiver;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -32,41 +34,13 @@ where
     pub sender: OneShotSender<Transfer>,
 }
 
-pub struct DropLogger;
-
-pub struct OneShotWrapper<Transfer>
-where
+pub struct UserRequestV2<Transfer>
+where 
     Transfer: MessageTransfer,
 {
-    inner: OneShotSender<Transfer>,
-    _dropper: DropLogger,
+    pub info: Transfer::Info,
 }
 
-impl<Transfer> Deref for OneShotWrapper<Transfer>
-where
-    Transfer: MessageTransfer,
-{
-    type Target = OneShotSender<Transfer>;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-// TODO: Test why the thing doesn't work
-
-impl Drop for DropLogger {
-    fn drop(&mut self) {
-        warn!("Value dropped")
-    }
-}
-
-impl<Transfer> From<OneShotWrapper<Transfer>> for OneShotSender<Transfer>
-where
-    Transfer: MessageTransfer,
-{
-    fn from(val: OneShotWrapper<Transfer>) -> Self {
-        val.inner
-    }
-}
 
 #[derive(Default, Clone)]
 pub struct Data<T, Transfer>
@@ -82,7 +56,7 @@ where
                 Transfer::Info,
                 Vec<(
                     Box<dyn Fn(&Transfer) -> bool + Send + Sync>,
-                    OneShotWrapper<Transfer>,
+                    OneShotSender<Transfer>,
                 )>,
             >,
         >,
@@ -112,36 +86,18 @@ where
         }
     }
 
+
     pub async fn add_user_request(
         &self,
         info: Transfer::Info,
         validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
         sender: OneShotSender<Transfer>,
     ) {
-        async fn user<T: DataHandler, Transfer: MessageTransfer>(
-            data: &Data<T, Transfer>,
-            info: Transfer::Info,
-            validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
-            sender: OneShotSender<Transfer>,
-        ) {
-            let mut requests = data.pending_requests.lock().await;
-            requests.entry(info).or_default().push((
-                Box::new(validator),
-                OneShotWrapper {
-                    inner: sender,
-                    _dropper: DropLogger,
-                },
-            ));
-        }
-        user(self, info, validator, sender).await;
-        info!("Test");
-        // if let Some(reqs) = requests.get_mut(&info) {
-        //     reqs.push((Box::new(validator), sender));
-        //     return;
-        // }
-        // info!("Added successfully user request!");
-        // requests.insert(info, vec![(Box::new(validator), sender)]);
-        // info!("Inserted value to requests");
+        let mut requests = self.pending_requests.lock().await;
+        requests.entry(info).or_default().push((
+            Box::new(validator),
+            sender
+        ));
     }
 
     pub async fn get_request(
@@ -169,7 +125,7 @@ where
                 return Ok(Some(
                     senders
                         .into_iter()
-                        .map(|(_, s)| s.into())
+                        .map(|(_, s)| s)
                         .collect::<Vec<OneShotSender<Transfer>>>(),
                 ));
             } else {
@@ -180,7 +136,6 @@ where
             let error = error.into();
             if let Some(reqs) = requests.remove(&info) {
                 for (_, sender) in reqs.into_iter() {
-                    let sender: OneShotSender<Transfer> = sender.into();
                     sender.send(error.clone())?;
                 }
             }
@@ -241,7 +196,7 @@ where
             }
             warn!("Added user to request p2");
         } else {
-            self.update(&message).await;
+            self.update(&message).await?;
             debug!("Updated data!");
             if let Some(senders) = self.get_request(&message).await? {
                 info!("'get_request' function returned some senders, sending message");
@@ -324,4 +279,47 @@ where
             sender,
         })
     }
+}
+
+
+#[derive(Default, Clone)]
+pub struct DataV2<T, Transfer>
+where
+    Transfer: MessageTransfer,
+    T: DataHandler,
+{
+    inner: Arc<T>,
+    #[allow(clippy::type_complexity)]
+    pub pending_requests: Arc<
+        Mutex<
+            HashMap<
+                Transfer::Info,
+                (Sender<Transfer>, Receiver<Transfer>),
+            >,
+        >,
+    >,
+}
+
+
+impl<T, Transfer> DataV2<T, Transfer>
+where
+    Transfer: MessageTransfer,
+    T: DataHandler<Transfer = Transfer>
+{
+    pub async fn add_request(&self, info: Transfer::Info) -> Receiver<Transfer> {
+        let mut requests = self.pending_requests.lock().await;
+        let (_, r) = requests.entry(info).or_insert(bounded(128));
+        r.clone()
+    }
+
+    pub async fn get_sender(&self, message: &Transfer) -> Option<Sender<Transfer>> {
+        let requests = self.pending_requests.lock().await;
+        requests.get(&message.info()).map(|(s, _)| s.to_owned())
+    } 
+
+    pub async fn update_data(&self, message: &Transfer) -> BinaryOptionsResult<Option<Sender<Transfer>>> {
+        self.inner.update(message).await?;
+        Ok(self.get_sender(message).await)
+    }   
+    
 }

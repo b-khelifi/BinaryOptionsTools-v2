@@ -5,6 +5,7 @@ import json
 class PocketOptionAsync:
     def __init__(self, ssid: str):
         self.client = RawPocketOption(ssid)
+        
     
     async def buy(self, asset: str, amount: float, time: int, check_win: bool = False):
         """

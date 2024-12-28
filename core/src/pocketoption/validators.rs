@@ -51,3 +51,4 @@ pub fn history_validator(asset: String, period: i64) -> impl Fn(&WebSocketMessag
         false
     }
 }
+
