@@ -12,18 +12,18 @@ use crate::{
     general::traits::Connect,
 };
 
-use super::ssid::PocketCreds;
+use super::ssid::Ssid;
 
 #[derive(Clone)]
 pub struct PocketConnect;
 
 #[async_trait]
 impl Connect for PocketConnect {
-    type Creds = PocketCreds;
+    type Creds = Ssid;
 
     async fn connect(
         &self,
-        creds: PocketCreds,
+        creds: Ssid,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
         let tls_connector = native_tls::TlsConnector::builder().build()?;
 
@@ -57,7 +57,7 @@ impl Connect for PocketConnect {
 
     async fn try_connect(
         &self,
-        _creds: PocketCreds,
+        _creds: Ssid,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
         todo!()
     }

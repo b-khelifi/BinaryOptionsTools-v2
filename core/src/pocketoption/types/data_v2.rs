@@ -3,16 +3,20 @@ use std::{
     sync::Arc,
 };
 
+use async_channel::{bounded, Receiver, Sender};
 use async_trait::async_trait;
 use tokio::sync::Mutex;
+use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::{error::BinaryOptionsResult, general::traits::DataHandler, pocketoption::parser::message::WebSocketMessage};
+use crate::{error::BinaryOptionsResult, general::traits::DataHandler, pocketoption::{error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset}};
 
 use super::{
     order::Deal,
-    update::{UpdateAssets, UpdateBalance},
+    update::{UpdateAssets, UpdateBalance, UpdateStream},
 };
+
+pub struct Channels(Sender<WebSocketMessage>, Receiver<WebSocketMessage>);
 
 #[derive(Default, Clone)]
 pub struct PocketData {
@@ -20,8 +24,17 @@ pub struct PocketData {
     opened_deals: Arc<Mutex<HashMap<Uuid, Deal>>>,
     closed_deals: Arc<Mutex<HashSet<Deal>>>,
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
-    server_tyme: Arc<Mutex<i64>>,
+    server_time: Arc<Mutex<i64>>,
+    stream_channels: Arc<Channels>
 }
+
+impl Default for Channels {
+    fn default() -> Self {
+        let (s, r) = bounded(128);
+        Self(s, r)
+    }
+}
+
 
 impl From<UpdateAssets> for HashMap<String, i32> {
     fn from(value: UpdateAssets) -> Self {
@@ -101,13 +114,26 @@ impl PocketData {
     }
 
     pub async fn update_server_time(&self, time: i64) {
-        let mut s_time = self.server_tyme.lock().await;
+        let mut s_time = self.server_time.lock().await;
         *s_time = time;
     }
 
     pub async fn get_server_time(&self) -> i64 {
-        *self.server_tyme.lock().await
+        *self.server_time.lock().await
     }
+
+    pub fn add_stream(&self, asset: String) -> StreamAsset {
+        info!("Created new channels and StreamAsset instance");
+        StreamAsset::new(self.stream_channels.1.clone(), asset)
+    }
+
+    pub async fn send_stream(&self, stream: UpdateStream) -> PocketResult<()> {
+        if self.stream_channels.1.receiver_count() > 1 {
+            return Ok(self.stream_channels.0.send(WebSocketMessage::UpdateStream(stream)).await?);
+        }
+        Ok(())
+    }
+
 }
 
 #[async_trait]
@@ -131,6 +157,13 @@ impl DataHandler for PocketData {
             }
             WebSocketMessage::SuccessopenOrder(order) => {
                 self.update_opened_deals(vec![order.clone()]).await
+            },
+            WebSocketMessage::UpdateStream(stream) => {
+                match stream.0.first() {
+                    Some(item) => self.update_server_time(item.time.timestamp()).await,
+                    None => warn!("Missing data in 'updateStream' message"),
+                }
+                self.send_stream(stream.clone()).await?;
             }
             _ => {}
         }

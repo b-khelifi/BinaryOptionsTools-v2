@@ -6,7 +6,7 @@ use futures_util::future::try_join3;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use async_channel::{bounded, Receiver, Sender};
+use async_channel::{bounded, Receiver, RecvError, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_tungstenite::tungstenite::Message;
@@ -14,10 +14,10 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
 use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
-use crate::general::types::{MessageType, UserRequest};
+use crate::general::types::MessageType;
 
 use super::traits::{Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
-use super::types::{Data, DataV2};
+use super::types::Data;
 
 const MAX_ALLOWED_LOOPS: u32 = 8;
 const SLEEP_INTERVAL: u32 = 2;
@@ -46,7 +46,6 @@ where
     pub connector: Connector,
     pub handler: Handler,
     pub data: Data<T, Transfer>,
-    pub data_v2: DataV2<T, Transfer>,
     pub sender: Sender<Transfer>,
     _event_loop: JoinHandle<()>,
 }
@@ -79,12 +78,11 @@ where
         credentials: Creds,
         connector: Connector,
         data: Data<T, Transfer>,
-        data_v2: DataV2<T, Transfer>,
         handler: Handler,
         timeout: Duration,
     ) -> BinaryOptionsResult<Self> {
         let inner =
-            WebSocketInnerClient::init(credentials, connector, data, data_v2, handler, timeout).await?;
+            WebSocketInnerClient::init(credentials, connector, data, handler, timeout).await?;
         Ok(Self {
             inner: Arc::new(inner),
         })
@@ -104,7 +102,6 @@ where
         credentials: Creds,
         connector: Connector,
         data: Data<T, Transfer>,
-        data_v2: DataV2<T, Transfer>,
         handler: Handler,
         timeout: Duration,
     ) -> BinaryOptionsResult<Self> {
@@ -123,7 +120,6 @@ where
             connector,
             handler,
             data,
-            data_v2,
             sender,
             _event_loop,
         })
@@ -152,13 +148,11 @@ where
                     );
                 let sender_future =
                     WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::sender_loop(
-                        &data,
                         &mut write,
                         &mut reciever,
                     );
                 let update_loop =
                     WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::api_loop(
-                        &data,
                         &mut msg_reciever,
                         &sender,
                     );
@@ -227,7 +221,11 @@ where
                             }
                             MessageType::Transfer(transfer) => {
                                 debug!("Recieved data of type: {}", transfer.info());
-                                data.update_data(transfer, sender).await?;
+                                if let Some(senders) = data.update_data(transfer.clone()).await? {
+                                    for sender in senders {
+                                        sender.send(transfer.clone()).await.map_err(|e| BinaryOptionsToolsError::ChannelRequestSendingError(e.to_string()))?;
+                                    }
+                                }
                             }
                         }
                     }
@@ -241,7 +239,6 @@ where
     }
 
     async fn sender_loop(
-        data: &Data<T, Transfer>,
         ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
         reciever: &mut Receiver<Message>,
     ) -> BinaryOptionsResult<()> {
@@ -254,29 +251,16 @@ where
                 }
             }
             ws.flush().await?;
-            data.list_pending_requests().await;
         }
         Ok(())
     }
 
     async fn api_loop(
-        data: &Data<T, Transfer>,
         reciever: &mut Receiver<Transfer>,
         sender: &Sender<Message>,
     ) -> BinaryOptionsResult<()> {
         while let Ok(msg) = reciever.recv().await {
-            if let Some(request) = msg.user_request() {
-                data.add_user_request(request.info, request.validator, request.sender)
-                    .await;
-                let message = *request.message;
-                if let Err(e) = sender.send(message.into()).await {
-                    warn!(
-                        "Error sending message: {}",
-                        BinaryOptionsToolsError::from(e)
-                    );
-                }
-            }
-            // data.update_data(msg, sender).await?;
+            sender.send(msg.into()).await?;
         }
         Ok(())
     }
@@ -285,26 +269,38 @@ where
         &self,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
+        validator: impl Fn(&Transfer) -> bool + Send + Sync,
     ) -> BinaryOptionsResult<Transfer> {
-        let (request, reciever) = UserRequest::new(msg, response_type, validator);
-        debug!(
-            "Sending request from user, expecting response: {}",
-            request.info
-        );
+        let reciever = self.data.add_request(response_type).await;
+
         self.sender
-            .send(Transfer::new_user(request))
+            .send(msg)
             .await
             .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
-        let resp = reciever.await?;
-        if let Some(e) = resp.error() {
-            Err(BinaryOptionsToolsError::WebSocketMessageError(
-                e.to_string(),
-            ))
-        } else {
-            Ok(resp)
+
+        while let Ok(msg) = reciever.recv().await {
+            if let Some(msg) = validate(&validator, msg).inspect_err(|e| eprintln!("Failed to place trade {e}"))? {
+                return Ok(msg)
+            }
         }
+        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
     }
 
     
+}
+
+
+pub fn validate<Transfer>(validator: impl Fn(&Transfer) -> bool + Send + Sync, message: Transfer) -> BinaryOptionsResult<Option<Transfer>>
+where
+    Transfer: MessageTransfer
+{
+    if let Some(e) = message.error() {
+        Err(BinaryOptionsToolsError::WebSocketMessageError(
+            e.to_string(),
+        ))
+    } else if validator(&message) {
+        Ok(Some(message))
+    } else {
+        Ok(None)
+    }
 }

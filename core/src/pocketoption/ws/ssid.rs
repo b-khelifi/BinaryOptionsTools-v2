@@ -1,5 +1,4 @@
 use core::fmt;
-use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,11 +10,6 @@ use crate::{
 
 use super::regions::Regions;
 
-#[derive(Clone)]
-pub struct PocketCreds {
-    pub ssid: Ssid,
-    pub demo: bool,
-}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionData {
@@ -147,15 +141,7 @@ impl<'de> Deserialize<'de> for Ssid {
     }
 }
 
-impl Credentials for PocketCreds {}
-
-impl Deref for PocketCreds {
-    type Target = Ssid;
-
-    fn deref(&self) -> &Self::Target {
-        &self.ssid
-    }
-}
+impl Credentials for Ssid {}
 
 #[cfg(test)]
 mod tests {

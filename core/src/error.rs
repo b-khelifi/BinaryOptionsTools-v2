@@ -23,10 +23,14 @@ pub enum BinaryOptionsToolsError {
     MessageSendingError(#[from] async_channel::SendError<Message>),
     #[error("Failed to recieve message from separate thread, {0}")]
     OneShotRecieverError(#[from] tokio::sync::oneshot::error::RecvError),
+    #[error("Failed to recieve message from request channel, {0}")]
+    ChannelRequestRecievingError(#[from] async_channel::RecvError),
+    #[error("Failed to send message to request channel, {0}")]
+    ChannelRequestSendingError(String),
     #[error("Failed to send message to websocket sender, {0}")]
     ThreadMessageSendingErrorMPCS(String),
     #[error(
-        "Error recieving response from server, {0} ,maybe you used invalid data in the request?"
+        "Error recieving response from server, {0}"
     )]
     WebSocketMessageError(String),
     #[error("Failed to parse data: {0}")]
@@ -48,3 +52,4 @@ where
         Self::WebsocketMessageSendingError(error.to_string())
     }
 }
+

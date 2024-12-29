@@ -35,6 +35,8 @@ pub trait MessageTransfer:
     fn user_request(&self) -> Option<UserRequest<Self>>;
 
     fn new_user(request: UserRequest<Self>) -> Self;
+
+    fn error_info(&self) -> Option<Vec<Self::Info>>;
 }
 
 pub trait MessageInformation:

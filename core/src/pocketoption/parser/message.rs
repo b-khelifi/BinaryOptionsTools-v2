@@ -1,4 +1,5 @@
 use core::fmt;
+use std::vec;
 
 use serde::Deserialize;
 use serde_json::{from_str, Value};
@@ -338,6 +339,14 @@ impl MessageTransfer for WebSocketMessage {
 
     fn new_user(request: PocketUser) -> Self {
         Self::UserRequest(Box::new(request))
+    }
+
+    fn error_info(&self) -> Option<Vec<Self::Info>> {
+        if let Self::FailOpenOrder(_) = self {
+            Some(vec![MessageInfo::SuccessopenOrder])
+        } else {
+            None
+        }
     }
 }
 

@@ -7,11 +7,8 @@ use serde_json::Value;
 use tokio::sync::Mutex;
 use tokio::sync::oneshot::Sender as OneShotSender;
 use async_channel::Sender;
-use tokio_tungstenite::tungstenite::Message;
-use tracing::{debug, info, warn};
 
 use crate::error::BinaryOptionsResult;
-use crate::error::BinaryOptionsToolsError;
 
 use super::traits::{DataHandler, MessageTransfer};
 
@@ -34,180 +31,6 @@ where
     pub sender: OneShotSender<Transfer>,
 }
 
-pub struct UserRequestV2<Transfer>
-where 
-    Transfer: MessageTransfer,
-{
-    pub info: Transfer::Info,
-}
-
-
-#[derive(Default, Clone)]
-pub struct Data<T, Transfer>
-where
-    Transfer: MessageTransfer,
-    T: DataHandler,
-{
-    inner: Arc<T>,
-    #[allow(clippy::type_complexity)]
-    pub pending_requests: Arc<
-        Mutex<
-            HashMap<
-                Transfer::Info,
-                Vec<(
-                    Box<dyn Fn(&Transfer) -> bool + Send + Sync>,
-                    OneShotSender<Transfer>,
-                )>,
-            >,
-        >,
-    >,
-}
-
-impl<T, Transfer> Deref for Data<T, Transfer>
-where
-    Transfer: MessageTransfer,
-    T: DataHandler,
-{
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T, Transfer> Data<T, Transfer>
-where
-    Transfer: MessageTransfer,
-    T: DataHandler,
-{
-    pub fn new(inner: T) -> Self {
-        Self {
-            inner: Arc::new(inner),
-            pending_requests: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-
-    pub async fn add_user_request(
-        &self,
-        info: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync + 'static,
-        sender: OneShotSender<Transfer>,
-    ) {
-        let mut requests = self.pending_requests.lock().await;
-        requests.entry(info).or_default().push((
-            Box::new(validator),
-            sender
-        ));
-    }
-
-    pub async fn get_request(
-        &self,
-        message: &Transfer,
-    ) -> BinaryOptionsResult<Option<Vec<OneShotSender<Transfer>>>> {
-        let mut requests = self.pending_requests.lock().await;
-        let info = message.info();
-
-        if let Some(reqs) = requests.get_mut(&info) {
-            // Find the index of the matching validator
-            info!("Foun request with correct info type");
-            let mut senders = Vec::new();
-            let mut keepers = Vec::new();
-            let drain = reqs.drain(..);
-            drain.for_each(|req| {
-                if req.0(message) {
-                    senders.push(req);
-                } else {
-                    keepers.push(req);
-                }
-            });
-            *reqs = keepers;
-            if !senders.is_empty() {
-                return Ok(Some(
-                    senders
-                        .into_iter()
-                        .map(|(_, s)| s)
-                        .collect::<Vec<OneShotSender<Transfer>>>(),
-                ));
-            } else {
-                return Ok(None);
-            }
-        }
-        if let Some(error) = message.error() {
-            let error = error.into();
-            if let Some(reqs) = requests.remove(&info) {
-                for (_, sender) in reqs.into_iter() {
-                    sender.send(error.clone())?;
-                }
-            }
-        }
-        Ok(None)
-    }
-
-    pub async fn list_pending_requests(&self) {
-        let requests = self.pending_requests.lock().await;
-        requests.iter().for_each(|(k, v)| {
-            println!("Request type: {}, amount: {}", k, v.len());
-        });
-    }
-}
-/*
-
-#[async_trait]
-impl<T, Transfer, Info> DataHandler for Data<T, Transfer, Info>
-where
-    Transfer: MessageTransfer,
-    Info: for<'de> MessageInformation<'de>,
-    T: DataHandler
-{
-    async fn update<M>(&self, message: M, sender: &Sender<Message>)
-    where
-        M: MessageTransfer
-    {
-        if message.is_user_request() {
-            self.add_user_request(info, validator, sender)
-        }
-    }
-}
-*/
-impl<T, Transfer> Data<T, Transfer>
-where
-    Transfer: MessageTransfer + 'static,
-    T: DataHandler<Transfer = Transfer>,
-{
-    pub async fn update_data(
-        &self,
-        message: Transfer,
-        sender: &Sender<Message>,
-    ) -> BinaryOptionsResult<()> {
-        if let Some(request) = message.user_request() {
-            debug!(
-                "Recieved user request, the message type is '{}'",
-                request.info
-            );
-            self.add_user_request(request.info, request.validator, request.sender)
-                .await;
-            warn!("Added user to request");
-            let message = *request.message;
-            if let Err(e) = sender.send(message.into()).await {
-                warn!(
-                    "Error sending message: {}",
-                    BinaryOptionsToolsError::from(e)
-                );
-            }
-            warn!("Added user to request p2");
-        } else {
-            self.update(&message).await?;
-            debug!("Updated data!");
-            if let Some(senders) = self.get_request(&message).await? {
-                info!("'get_request' function returned some senders, sending message");
-                for s in senders {
-                    s.send(message.clone())?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
 
 impl<Transfer> UserRequest<Transfer>
 where
@@ -283,7 +106,7 @@ where
 
 
 #[derive(Default, Clone)]
-pub struct DataV2<T, Transfer>
+pub struct Data<T, Transfer>
 where
     Transfer: MessageTransfer,
     T: DataHandler,
@@ -301,25 +124,46 @@ where
 }
 
 
-impl<T, Transfer> DataV2<T, Transfer>
+impl<T, Transfer> Data<T, Transfer>
 where
     Transfer: MessageTransfer,
     T: DataHandler<Transfer = Transfer>
 {
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner: Arc::new(inner),
+            pending_requests: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
     pub async fn add_request(&self, info: Transfer::Info) -> Receiver<Transfer> {
         let mut requests = self.pending_requests.lock().await;
         let (_, r) = requests.entry(info).or_insert(bounded(128));
         r.clone()
     }
 
-    pub async fn get_sender(&self, message: &Transfer) -> Option<Sender<Transfer>> {
+    pub async fn get_sender(&self, message: &Transfer) -> Option<Vec<Sender<Transfer>>> {
         let requests = self.pending_requests.lock().await;
-        requests.get(&message.info()).map(|(s, _)| s.to_owned())
+        if let Some(infos) = &message.error_info() {
+            return Some(infos.iter().filter_map(|i| requests.get(i).map(|(s, _)| s.to_owned())).collect())
+        }
+        requests.get(&message.info()).map(|(s, _)| vec![s.to_owned()])
     } 
 
-    pub async fn update_data(&self, message: &Transfer) -> BinaryOptionsResult<Option<Sender<Transfer>>> {
-        self.inner.update(message).await?;
-        Ok(self.get_sender(message).await)
+    pub async fn update_data(&self, message: Transfer) -> BinaryOptionsResult<Option<Vec<Sender<Transfer>>>> {
+        self.inner.update(&message).await?;
+        Ok(self.get_sender(&message).await)
     }   
     
+}
+
+impl<T, Transfer> Deref for Data<T, Transfer>
+where
+    Transfer: MessageTransfer,
+    T: DataHandler,
+{
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
