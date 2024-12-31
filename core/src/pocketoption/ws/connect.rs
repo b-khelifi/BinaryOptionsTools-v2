@@ -1,15 +1,12 @@
 use async_trait::async_trait;
 use tokio::net::TcpStream;
-use tokio_tungstenite::{
-    connect_async_tls_with_config,
-    tungstenite::{handshake::client::generate_key, http::Request},
-    Connector, MaybeTlsStream, WebSocketStream,
-};
-use url::Url;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use tracing::warn;
 
 use crate::{
-    error::{BinaryOptionsResult, BinaryOptionsToolsError},
+    error::BinaryOptionsResult,
     general::traits::Connect,
+    pocketoption::{error::PocketOptionError, utils::connect::try_connect},
 };
 
 use super::ssid::Ssid;
@@ -23,42 +20,29 @@ impl Connect for PocketConnect {
 
     async fn connect(
         &self,
-        creds: Ssid,
+        creds: Self::Creds,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
-        let tls_connector = native_tls::TlsConnector::builder().build()?;
-
-        let connector = Connector::NativeTls(tls_connector);
-
-        let url = creds.server().await?;
-        let user_agent = creds.user_agent();
-        let t_url = Url::parse(&url).map_err(|e| {
-            BinaryOptionsToolsError::GeneralParsingError(format!("Error getting host, {e}"))
-        })?;
-        let host = t_url
-            .host_str()
-            .ok_or(BinaryOptionsToolsError::GeneralParsingError(
-                "Host not found".into(),
-            ))?;
-        let request = Request::builder()
-            .uri(url)
-            .header("Origin", "https://pocketoption.com")
-            .header("Cache-Control", "no-cache")
-            .header("User-Agent", user_agent)
-            .header("Upgrade", "websocket")
-            .header("Connection", "upgrade")
-            .header("Sec-Websocket-Key", generate_key())
-            .header("Sec-Websocket-Version", "13")
-            .header("Host", host)
-            .body(())?;
-
-        let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await?;
-        Ok(ws)
-    }
-
-    async fn try_connect(
-        &self,
-        _creds: Ssid,
-    ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
-        todo!()
+        let urls = creds.servers().await?;
+        let mut error = None;
+        for url in urls.clone() {
+            match try_connect(creds.clone(), url).await {
+                Ok(connect) => return Ok(connect),
+                Err(e) => {
+                    warn!("Failed to connect to server, {e}");
+                    error = Some(e);
+                }
+            }
+        }
+        if let Some(error) = error {
+            Err(error.into())
+        } else {
+            Err(
+                PocketOptionError::WebsocketMultipleAttemptsConnectionError(format!(
+                    "Couldn't connect to server after {} attempts.",
+                    urls.len()
+                ))
+                .into(),
+            )
+        }
     }
 }

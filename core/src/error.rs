@@ -29,9 +29,7 @@ pub enum BinaryOptionsToolsError {
     ChannelRequestSendingError(String),
     #[error("Failed to send message to websocket sender, {0}")]
     ThreadMessageSendingErrorMPCS(String),
-    #[error(
-        "Error recieving response from server, {0}"
-    )]
+    #[error("Error recieving response from server, {0}")]
     WebSocketMessageError(String),
     #[error("Failed to parse data: {0}")]
     GeneralParsingError(String),
@@ -52,4 +50,3 @@ where
         Self::WebsocketMessageSendingError(error.to_string())
     }
 }
-

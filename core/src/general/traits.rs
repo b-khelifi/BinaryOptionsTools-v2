@@ -1,9 +1,9 @@
 use core::{error, fmt, hash};
 
+use async_channel::Sender;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::net::TcpStream;
-use async_channel::Sender;
 use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 use crate::error::BinaryOptionsResult;
@@ -18,6 +18,7 @@ pub trait DataHandler: Clone + Send + Sync {
 
     async fn update(&self, message: &Self::Transfer) -> BinaryOptionsResult<()>;
 }
+
 
 pub trait MessageTransfer:
     DeserializeOwned + Clone + Into<Message> + Send + Sync + error::Error + fmt::Debug + fmt::Display
@@ -64,12 +65,6 @@ pub trait Connect: Clone + Send + Sync {
     // type Uris: Iterator<Item = String>;
 
     async fn connect(
-        &self,
-        creds: Self::Creds,
-    ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;
-
-    // This function should try to call the connect function for multiple given urls.
-    async fn try_connect(
         &self,
         creds: Self::Creds,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;

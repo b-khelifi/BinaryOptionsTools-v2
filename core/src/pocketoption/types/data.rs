@@ -8,7 +8,9 @@ use tokio::sync::{oneshot::Sender as OneshotSender, Mutex};
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::pocketoption::{error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset};
+use crate::pocketoption::{
+    error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
+};
 
 use super::{
     info::MessageInfo,
@@ -31,7 +33,7 @@ pub struct Data {
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
     pending_requests: Arc<Mutex<HashMapData>>,
     server_time: Arc<Mutex<i64>>,
-    stream_channels: Arc<Channels>
+    stream_channels: Arc<Channels>,
 }
 
 impl Data {
@@ -173,7 +175,11 @@ impl Data {
 
     pub async fn send_stream(&self, stream: UpdateStream) -> PocketResult<()> {
         if self.stream_channels.1.receiver_count() > 1 {
-            return Ok(self.stream_channels.0.send(WebSocketMessage::UpdateStream(stream)).await?);
+            return Ok(self
+                .stream_channels
+                .0
+                .send(WebSocketMessage::UpdateStream(stream))
+                .await?);
         }
         Ok(())
     }

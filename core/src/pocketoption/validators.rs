@@ -40,15 +40,16 @@ pub fn order_result_validator(order_id: Uuid) -> impl Fn(&WebSocketMessage) -> b
     }
 }
 
-
-pub fn history_validator(asset: String, period: i64) -> impl Fn(&WebSocketMessage) -> bool + Send + Sync {
+pub fn history_validator(
+    asset: String,
+    period: i64,
+) -> impl Fn(&WebSocketMessage) -> bool + Send + Sync {
     move |message| {
         if let WebSocketMessage::UpdateHistoryNew(history) = message {
             if history.asset == asset && history.period == period {
-                return true
+                return true;
             }
         }
         false
     }
 }
-

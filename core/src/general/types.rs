@@ -2,11 +2,11 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use async_channel::bounded;
 use async_channel::Receiver;
+use async_channel::Sender;
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::sync::Mutex;
 use tokio::sync::oneshot::Sender as OneShotSender;
-use async_channel::Sender;
+use tokio::sync::Mutex;
 
 use crate::error::BinaryOptionsResult;
 
@@ -30,7 +30,6 @@ where
     pub validator: Box<dyn Fn(&Transfer) -> bool + Send + Sync>,
     pub sender: OneShotSender<Transfer>,
 }
-
 
 impl<Transfer> UserRequest<Transfer>
 where
@@ -104,7 +103,6 @@ where
     }
 }
 
-
 #[derive(Default, Clone)]
 pub struct Data<T, Transfer>
 where
@@ -113,21 +111,14 @@ where
 {
     inner: Arc<T>,
     #[allow(clippy::type_complexity)]
-    pub pending_requests: Arc<
-        Mutex<
-            HashMap<
-                Transfer::Info,
-                (Sender<Transfer>, Receiver<Transfer>),
-            >,
-        >,
-    >,
+    pub pending_requests:
+        Arc<Mutex<HashMap<Transfer::Info, (Sender<Transfer>, Receiver<Transfer>)>>>,
 }
-
 
 impl<T, Transfer> Data<T, Transfer>
 where
     Transfer: MessageTransfer,
-    T: DataHandler<Transfer = Transfer>
+    T: DataHandler<Transfer = Transfer>,
 {
     pub fn new(inner: T) -> Self {
         Self {
@@ -145,16 +136,25 @@ where
     pub async fn get_sender(&self, message: &Transfer) -> Option<Vec<Sender<Transfer>>> {
         let requests = self.pending_requests.lock().await;
         if let Some(infos) = &message.error_info() {
-            return Some(infos.iter().filter_map(|i| requests.get(i).map(|(s, _)| s.to_owned())).collect())
+            return Some(
+                infos
+                    .iter()
+                    .filter_map(|i| requests.get(i).map(|(s, _)| s.to_owned()))
+                    .collect(),
+            );
         }
-        requests.get(&message.info()).map(|(s, _)| vec![s.to_owned()])
-    } 
+        requests
+            .get(&message.info())
+            .map(|(s, _)| vec![s.to_owned()])
+    }
 
-    pub async fn update_data(&self, message: Transfer) -> BinaryOptionsResult<Option<Vec<Sender<Transfer>>>> {
+    pub async fn update_data(
+        &self,
+        message: Transfer,
+    ) -> BinaryOptionsResult<Option<Vec<Sender<Transfer>>>> {
         self.inner.update(&message).await?;
         Ok(self.get_sender(&message).await)
-    }   
-    
+    }
 }
 
 impl<T, Transfer> Deref for Data<T, Transfer>

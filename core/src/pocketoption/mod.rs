@@ -6,4 +6,4 @@ pub mod utils;
 pub mod validators;
 pub mod ws;
 
-pub use super::pocketoption::ws::basic::WebSocketClient;
+// pub use super::pocketoption::ws::basic::WebSocketClient;

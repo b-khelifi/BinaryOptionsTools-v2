@@ -10,7 +10,6 @@ use crate::{
 
 use super::regions::Regions;
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionData {
     session_id: String,

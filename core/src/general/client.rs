@@ -2,11 +2,11 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_channel::{bounded, Receiver, RecvError, Sender};
 use futures_util::future::try_join3;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use async_channel::{bounded, Receiver, RecvError, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_tungstenite::tungstenite::Message;
@@ -223,7 +223,11 @@ where
                                 debug!("Recieved data of type: {}", transfer.info());
                                 if let Some(senders) = data.update_data(transfer.clone()).await? {
                                     for sender in senders {
-                                        sender.send(transfer.clone()).await.map_err(|e| BinaryOptionsToolsError::ChannelRequestSendingError(e.to_string()))?;
+                                        sender.send(transfer.clone()).await.map_err(|e| {
+                                            BinaryOptionsToolsError::ChannelRequestSendingError(
+                                                e.to_string(),
+                                            )
+                                        })?;
                                     }
                                 }
                             }
@@ -279,20 +283,24 @@ where
             .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
 
         while let Ok(msg) = reciever.recv().await {
-            if let Some(msg) = validate(&validator, msg).inspect_err(|e| eprintln!("Failed to place trade {e}"))? {
-                return Ok(msg)
+            if let Some(msg) =
+                validate(&validator, msg).inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+            {
+                return Ok(msg);
             }
         }
-        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
+        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+            RecvError,
+        ))
     }
-
-    
 }
 
-
-pub fn validate<Transfer>(validator: impl Fn(&Transfer) -> bool + Send + Sync, message: Transfer) -> BinaryOptionsResult<Option<Transfer>>
+pub fn validate<Transfer>(
+    validator: impl Fn(&Transfer) -> bool + Send + Sync,
+    message: Transfer,
+) -> BinaryOptionsResult<Option<Transfer>>
 where
-    Transfer: MessageTransfer
+    Transfer: MessageTransfer,
 {
     if let Some(e) = message.error() {
         Err(BinaryOptionsToolsError::WebSocketMessageError(

@@ -34,7 +34,7 @@ pub struct LoadHistoryPeriodResult {
 pub enum Candle {
     Raw(RawCandle),
     Processed(ProcessedCandle),
-    Update(UpdateCandle)
+    Update(UpdateCandle),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -126,11 +126,23 @@ pub struct TimeCandle {
 
 impl DataCandle {
     fn new(time: DateTime<Utc>, open: f64, close: f64, high: f64, low: f64) -> Self {
-        Self { time, open, close, high, low }
+        Self {
+            time,
+            open,
+            close,
+            high,
+            low,
+        }
     }
 
     fn new_price(time: DateTime<Utc>, price: f64) -> Self {
-        Self { time, open: price, close: price, high: price, low: price }
+        Self {
+            time,
+            open: price,
+            close: price,
+            high: price,
+            low: price,
+        }
     }
 }
 
@@ -138,8 +150,14 @@ impl From<&Candle> for DataCandle {
     fn from(value: &Candle) -> Self {
         match value {
             Candle::Raw(candle) => Self::new_price(candle.time, candle.price),
-            Candle::Processed(candle) => Self::new(candle.time, candle.open, candle.close, candle.high, candle.low),
-            Candle::Update(candle) => Self::new_price(candle.time, candle.price)
+            Candle::Processed(candle) => Self::new(
+                candle.time,
+                candle.open,
+                candle.close,
+                candle.high,
+                candle.low,
+            ),
+            Candle::Update(candle) => Self::new_price(candle.time, candle.price),
         }
     }
 }
@@ -168,7 +186,6 @@ impl UpdateHistoryNew {
         self.history.iter().map(DataCandle::from).collect()
     }
 }
-
 
 impl Default for UpdateBalance {
     fn default() -> Self {

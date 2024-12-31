@@ -9,7 +9,13 @@ use tokio::sync::Mutex;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::{error::BinaryOptionsResult, general::traits::DataHandler, pocketoption::{error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset}};
+use crate::{
+    error::BinaryOptionsResult,
+    general::traits::DataHandler,
+    pocketoption::{
+        error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
+    },
+};
 
 use super::{
     order::Deal,
@@ -25,7 +31,7 @@ pub struct PocketData {
     closed_deals: Arc<Mutex<HashSet<Deal>>>,
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
     server_time: Arc<Mutex<i64>>,
-    stream_channels: Arc<Channels>
+    stream_channels: Arc<Channels>,
 }
 
 impl Default for Channels {
@@ -34,7 +40,6 @@ impl Default for Channels {
         Self(s, r)
     }
 }
-
 
 impl From<UpdateAssets> for HashMap<String, i32> {
     fn from(value: UpdateAssets) -> Self {
@@ -129,11 +134,14 @@ impl PocketData {
 
     pub async fn send_stream(&self, stream: UpdateStream) -> PocketResult<()> {
         if self.stream_channels.1.receiver_count() > 1 {
-            return Ok(self.stream_channels.0.send(WebSocketMessage::UpdateStream(stream)).await?);
+            return Ok(self
+                .stream_channels
+                .0
+                .send(WebSocketMessage::UpdateStream(stream))
+                .await?);
         }
         Ok(())
     }
-
 }
 
 #[async_trait]
@@ -157,7 +165,7 @@ impl DataHandler for PocketData {
             }
             WebSocketMessage::SuccessopenOrder(order) => {
                 self.update_opened_deals(vec![order.clone()]).await
-            },
+            }
             WebSocketMessage::UpdateStream(stream) => {
                 match stream.0.first() {
                     Some(item) => self.update_server_time(item.time.timestamp()).await,

@@ -2,10 +2,10 @@ use std::str;
 use std::sync::Arc;
 
 use binary_option_tools_core::pocketoption::error::PocketResult;
+use binary_option_tools_core::pocketoption::pocket_client::PocketOption;
 use binary_option_tools_core::pocketoption::ws::stream::StreamAsset;
 use futures_util::StreamExt;
-use binary_option_tools_core::pocketoption::{types::update::DataCandle, ws::listener::Handler};
-use binary_option_tools_core::pocketoption::WebSocketClient;
+use binary_option_tools_core::pocketoption::types::update::DataCandle;
 use futures_util::stream::{BoxStream, Fuse};
 use pyo3::exceptions::PyStopIteration;
 use pyo3::{pyclass, pymethods, Bound, Py, PyAny, PyResult, Python};
@@ -21,7 +21,7 @@ use crate::runtime::get_runtime;
 #[pyclass]
 #[derive(Clone)]
 pub struct RawPocketOption {
-    client: Arc<WebSocketClient<Handler>>,
+    client: PocketOption,
 }
 
 #[pyclass]
@@ -37,8 +37,8 @@ impl RawPocketOption {
     pub fn new(ssid: String, py: Python<'_>) -> PyResult<Self> {
         let runtime = get_runtime(py)?;
         runtime.block_on(async move { 
-            let client = WebSocketClient::<Handler>::new(ssid).await.map_err(BinaryErrorPy::from)?;
-            Ok(Self{client:Arc::new(client)})
+            let client = PocketOption::new(ssid).await.map_err(BinaryErrorPy::from)?;
+            Ok(Self{ client })
         })
     }
 
