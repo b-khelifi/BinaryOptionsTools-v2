@@ -8,4 +8,4 @@ description = "A simple asyncronous crate to place trades and get real time data
 license = "MIT"
 
 [dependencies]
-binary-option-tools-core = { path = "../core", version = "0.1.4"}
+binary-option-tools-core = { path = "../core", version = "0.1.0"}
