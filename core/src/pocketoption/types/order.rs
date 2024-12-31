@@ -1,8 +1,8 @@
 use core::fmt;
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash};
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -17,6 +17,12 @@ use super::update::{float_time, string_time};
 pub enum Action {
     Call, // Buy
     Put,  // Sell
+}
+
+#[derive(Clone, Debug)]
+pub enum PocketMessageFail {
+    Order(FailOpenOrder),
+    Pending(FailOpenPendingOrder)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,13 +49,47 @@ pub struct OpenOrder {
 pub struct OpenPendingOrder {
     amount: f64,
     asset: String,
-    command: i32,
+    #[serde(serialize_with = "serialize_action")]
+    command: Action,
     min_payout: i64,
     open_price: f64,
     #[serde(with = "string_time")]
     open_time: DateTime<Utc>,
     open_type: i32,
     time_frame: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessOpenPendingOrder {
+    data: SuccessOpenPendingOrderData
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SuccessOpenPendingOrderData {
+    ticket: Uuid,
+    open_type: i32,
+    amount: f64,
+    symbol: String,
+    #[serde(with = "string_time")]
+    open_time: DateTime<Utc>,
+    open_price: f64,
+    time_frame: i64,
+    min_payout: i64,
+    command: i64,
+    #[serde(with = "string_time")]
+    date_created: DateTime<Utc>,
+    id: i64
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct FailOpenPendingOrder {
+    data: String,
+    error: String,
+    #[serde(flatten)]
+    extra: HashMap<String, Value>
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
@@ -138,6 +178,12 @@ impl OpenOrder {
     }
 }
 
+impl OpenPendingOrder {
+    // pub fn new(amount: f64, asset: String, command: i64, min_payout: i64, open_price: f64, ) -> Self {
+    //     Self { amount: (), asset: (), command: (), min_payout: (), open_price: (), open_time: (), open_type: (), time_frame: () }
+    // }
+}
+
 impl fmt::Display for FailOpenOrder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Error: {}", self.error)?;
@@ -146,11 +192,32 @@ impl fmt::Display for FailOpenOrder {
     }
 }
 
-impl From<FailOpenOrder> for WebSocketMessage {
-    fn from(value: FailOpenOrder) -> Self {
-        Self::FailOpenOrder(value)
+impl fmt::Display for FailOpenPendingOrder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Error: {}", self.error)?;
+        writeln!(f, "Extra data: {:?}", self.extra)
     }
 }
+
+impl fmt::Display for PocketMessageFail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Order(order) => order.fmt(f),
+            Self::Pending(order) => order.fmt(f)
+        }
+    }
+}
+
+impl From<PocketMessageFail> for WebSocketMessage {
+    fn from(value: PocketMessageFail) -> Self {
+        match value {
+            PocketMessageFail::Order(order) => Self::FailOpenOrder(order),
+            PocketMessageFail::Pending(pending) => Self::FailOpenPendingOrder(pending)
+        }
+    }
+}
+
+
 
 impl FailOpenOrder {
     pub fn new(error: impl ToString, amount: f64, asset: impl ToString) -> Self {
@@ -159,6 +226,16 @@ impl FailOpenOrder {
             amount,
             asset: asset.to_string(),
         }
+    }
+}
+
+pub fn serialize_action<S>(action: &Action, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match action {
+        Action::Call => 0.serialize(serializer),
+        Action::Put => 1.serialize(serializer)
     }
 }
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use tracing::debug;
 use uuid::Uuid;
@@ -27,18 +27,8 @@ use super::{
     ws::{connect::PocketConnect, listener::Handler, stream::StreamAsset},
 };
 
-#[derive(Clone)]
-pub struct PocketOption {
-    client: WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData>,
-}
-
-impl Deref for PocketOption {
-    type Target = WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.client
-    }
-}
+/// Class to connect automatically to Pocket Option's quick trade passing a valid SSID
+pub type PocketOption = WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData>;
 
 impl PocketOption {
     pub async fn new(ssid: impl ToString) -> BinaryOptionsResult<Self> {
@@ -48,7 +38,7 @@ impl PocketOption {
         let timeout = Duration::from_millis(500);
         let client = WebSocketClient::init(ssid, PocketConnect {}, data, handler, timeout).await?;
         println!("Initialized!");
-        Ok(Self { client })
+        Ok(client)
     }
 
     pub async fn trade(

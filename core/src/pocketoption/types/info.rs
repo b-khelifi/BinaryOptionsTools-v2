@@ -27,6 +27,9 @@ pub enum MessageInfo {
     LoadHistoryPeriod,
     FailopenOrder,
     GetCandles,
+    OpenPendingOrder,
+    SuccessopenPendingOrder,
+    FailopenPendingOrder,
     None,
 }
 

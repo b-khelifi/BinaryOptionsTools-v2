@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::string::FromUtf8Error;
 
-use super::types::order::FailOpenOrder;
+use super::types::order::PocketMessageFail;
 use super::{parser::message::WebSocketMessage, types::info::MessageInfo};
 use thiserror::Error;
 use tokio_tungstenite::tungstenite::Error as TungsteniteError;
@@ -52,11 +52,11 @@ pub enum PocketOptionError {
     #[error("Unallowed operation, {0}")]
     Unallowed(String),
     #[error("Error sending request, {0}")]
-    WebsocketMessageSendingError(#[from] FailOpenOrder),
+    WebsocketMessageSendingError(#[from] PocketMessageFail),
 }
 
 pub type PocketResult<T> = Result<T, PocketOptionError>;
 
 impl Error for WebSocketMessage {}
 impl Error for MessageInfo {}
-impl Error for FailOpenOrder {}
+impl Error for PocketMessageFail {}
