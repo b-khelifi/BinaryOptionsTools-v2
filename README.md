@@ -13,13 +13,26 @@ Currently we only support **Pocket Option** (quick trading) with the following f
 * Get candle data for a specific asset
 * Subscribe to an asset to get realtime data
 
+# Python 
+For the full python documentation check [here](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/blob/master/BinaryOptionsToolsV2/Readme.md).
+
+# Rust
+For the full rust documentation check [here](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/tree/master/rust/Readme.md)
 # Todo
 * *Pocket Option*: Add support for pending trades 
-* *BinaryOptionsToolsV2*: Add support for **rust**
+* *BinaryOptionsToolsV2*: Add support for **rust** (done)
 * *BinaryOptionsToolsV2*: Add support for other trading platforms like Expert Options
 
 # Examples
 You can find the examples for all the features available of the library in the [examples](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/tree/master/examples) directory.
 
 # Info
-Our goal is to provide access to connect to important **Binary Options Trading** platforms programatically in multiple programming languages. Currently we only support **Python** and [**Pocket Option**](https://m.pocketoption.com) but we plan to support more languages starting with **Rust**.
+Our goal is to provide access to connect to important **Binary Options Trading** platforms programatically in multiple programming languages. 
+Currently we support the following languages:
+* Python
+* Rust
+
+And the following trading platforms:
+* Pocket Options
+
+We plan on supporting other programming languages and trading platforms in the future.

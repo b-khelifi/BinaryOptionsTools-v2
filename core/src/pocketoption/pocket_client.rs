@@ -10,7 +10,7 @@ use crate::{
         parser::basic::LoadHistoryPeriod,
         validators::{candle_validator, order_result_validator},
         ws::ssid::Ssid,
-    },
+    }
 };
 
 use super::{
