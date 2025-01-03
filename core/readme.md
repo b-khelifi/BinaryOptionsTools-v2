@@ -9,6 +9,7 @@
 
 ## Todo
 * Clean the code and add more logging info
+* Add functions to clean closed trades history
 * Add support for testing for multiple different connections, like passing an iterable
 * Add error handling in case there is an error parsing some data, to return an error and not keep waiting (It is for the `send_message` function) --> Done
 * Add support for pending requests by `time` and by `price`

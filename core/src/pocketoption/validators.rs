@@ -32,7 +32,7 @@ pub fn candle_validator(index: u64) -> impl Fn(&WebSocketMessage) -> bool + Send
 pub fn order_result_validator(order_id: Uuid) -> impl Fn(&WebSocketMessage) -> bool + Send + Sync {
     move |message| {
         if let WebSocketMessage::SuccesscloseOrder(orders) = message {
-            if orders.deals.iter().any(|o| o.id == order_id) {
+            if orders.deals.iter().any(|o| o == &order_id) {
                 return true;
             }
         }

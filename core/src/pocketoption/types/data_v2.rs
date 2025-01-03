@@ -101,6 +101,11 @@ impl PocketData {
         self.closed_deals.lock().await.clone().into_iter().collect()
     }
 
+    pub async fn clean_closed_deals(&self) {
+        let mut closed = self.closed_deals.lock().await;
+        closed.clear();
+    }
+
     pub async fn update_payout_data(&self, payout: UpdateAssets) {
         let mut data = self.payout_data.lock().await;
         *data = payout.into();
@@ -133,13 +138,11 @@ impl PocketData {
     }
 
     pub async fn send_stream(&self, stream: UpdateStream) -> PocketResult<()> {
-        if self.stream_channels.1.receiver_count() > 1 {
-            return Ok(self
-                .stream_channels
-                .0
-                .send(WebSocketMessage::UpdateStream(stream))
-                .await?);
-        }
+        self
+        .stream_channels
+        .0
+        .send(WebSocketMessage::UpdateStream(stream))
+        .await?;
         Ok(())
     }
 }

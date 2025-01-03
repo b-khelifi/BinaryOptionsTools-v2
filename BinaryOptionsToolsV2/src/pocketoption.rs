@@ -92,6 +92,10 @@ impl RawPocketOption {
         Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)
     }
 
+    pub async fn clear_closed_deals(&self) {
+        self.client.clear_closed_deals().await
+    }
+
     pub async fn opened_deals(&self) -> PyResult<String> {
         let res = self.client.get_opened_deals().await;
         Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)

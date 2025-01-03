@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use tracing::debug;
+use tracing::{debug, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -90,6 +90,7 @@ impl PocketOption {
 
     pub async fn check_results(&self, trade_id: Uuid) -> BinaryOptionsResult<Deal> {
         // TODO: Add verification so it doesn't try to wait if no trade has been made with that id
+
         if let Some(trade) = self
             .data
             .get_closed_deals()
@@ -100,6 +101,10 @@ impl PocketOption {
             return Ok(trade.clone());
         }
         debug!("Trade result not found in closed deals list, waiting for closing order to check.");
+        if !self.data.get_opened_deals().await.iter().any(|d| d == &trade_id) {
+            warn!("No opened trade with the given uuid please check if you are passing the correct id");
+            return Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()))
+        }
         let res = self
             .send_message(
                 WebSocketMessage::None,
@@ -174,6 +179,10 @@ impl PocketOption {
 
     pub async fn get_closed_deals(&self) -> Vec<Deal> {
         self.data.get_closed_deals().await
+    }
+
+    pub async fn clear_closed_deals(&self) {
+        self.data.clean_closed_deals().await
     }
 
     pub async fn get_opened_deals(&self) -> Vec<Deal> {

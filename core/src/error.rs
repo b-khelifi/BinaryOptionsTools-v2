@@ -37,6 +37,8 @@ pub enum BinaryOptionsToolsError {
     TLSError(#[from] native_tls::Error),
     #[error("Error making http request: {0}")]
     HTTPError(#[from] http::Error),
+    #[error("Unallowed operation, {0}")]
+    Unallowed(String),
 }
 
 pub type BinaryOptionsResult<T> = Result<T, BinaryOptionsToolsError>;

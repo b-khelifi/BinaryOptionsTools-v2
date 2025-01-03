@@ -229,6 +229,12 @@ impl FailOpenOrder {
     }
 }
 
+impl std::cmp::PartialEq<Uuid> for Deal {
+    fn eq(&self, other: &Uuid) -> bool {
+        &self.id == other
+    }
+}
+
 pub fn serialize_action<S>(action: &Action, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,

@@ -71,6 +71,10 @@ class PocketOptionAsync:
         "Returns a list of all the closed deals as dictionaries"
         return json.loads(await self.client.closed_deals())
     
+    async def clear_closed_deals(self):
+        "Removes all the closed deals from memory, this function doesn't return anything"
+        await self.client.clear_closed_deals()
+
     async def payout(self, asset: None | str | list[str] = None):
         "Returns a dict of asset : payout for each asset, if 'asset' is not None then it will return the payout of the asset or a list of the payouts for each asset it was passed"
         payout = json.loads(await self.client.payout())
