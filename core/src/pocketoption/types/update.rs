@@ -77,7 +77,7 @@ pub struct UpdateCandle {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateBalance {
     is_demo: u32,
-    balance: f64,
+    pub balance: f64,
     uid: Option<i64>,
     login: Option<i64>,
 }
