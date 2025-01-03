@@ -1,6 +1,6 @@
 [package]
 name = "binary_options_tools"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 repository = "https://github.com/ChipaDevTeam/BinaryOptionsTools-v2"
 readme = "../README.md"
@@ -8,4 +8,4 @@ description = "A simple asyncronous crate to place trades and get real time data
 license = "MIT"
 
 [dependencies]
-binary-option-tools-core = { path = "../core", version = "0.1.0"}
+binary-option-tools-core = { path = "../core", version = "0.1.1"}
