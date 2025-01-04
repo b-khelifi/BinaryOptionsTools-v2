@@ -1,6 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
+    collections::{HashMap, HashSet}, sync::Arc
 };
 
 use async_channel::{bounded, Receiver, Sender};
@@ -156,7 +155,11 @@ impl DataHandler for PocketData {
             WebSocketMessage::SuccessupdateBalance(balance) => {
                 self.update_balance(balance.clone()).await
             }
-            WebSocketMessage::UpdateAssets(assets) => self.update_payout_data(assets.clone()).await,
+            WebSocketMessage::UpdateAssets(assets) => {
+                // let mut file: std::fs::File = OpenOptions::new().create(true).truncate(true).write(true).open("tests/assets2.txt").unwrap();
+                // file.write_all(serde_json::to_string(assets).unwrap().as_bytes());                
+                self.update_payout_data(assets.clone()).await
+            },
             WebSocketMessage::UpdateClosedDeals(deals) => {
                 self.update_closed_deals(deals.0.clone()).await
             }

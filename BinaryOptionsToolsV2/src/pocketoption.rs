@@ -83,7 +83,7 @@ impl RawPocketOption {
     }
 
     pub async fn balance(&self) -> PyResult<String> {
-        let res = self.client.get_balande().await;
+        let res = self.client.get_balance().await;
         Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)
     }
 

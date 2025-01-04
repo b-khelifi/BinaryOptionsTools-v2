@@ -189,7 +189,7 @@ impl PocketOption {
         self.data.get_opened_deals().await
     }
 
-    pub async fn get_balande(&self) -> UpdateBalance {
+    pub async fn get_balance(&self) -> UpdateBalance {
         self.data.get_balance().await
     }
 
@@ -255,6 +255,15 @@ mod tests {
         let f2 = to_future(stream_asset2, 2);
         let f3 = to_future(stream_asset3, 3);
         let _ = try_join3(f1, f2, f3).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_payout() -> anyhow::Result<()> {
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let api = PocketOption::new(ssid).await?;
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        dbg!(api.get_payout().await);
         Ok(())
     }
 }

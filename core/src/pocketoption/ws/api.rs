@@ -172,7 +172,7 @@ impl<T: EventListener> WebSocketClient<T> {
         self.data.get_opened_deals().await
     }
 
-    pub async fn get_balande(&self) -> UpdateBalance {
+    pub async fn get_balance(&self) -> UpdateBalance {
         self.data.get_balance().await
     }
 
@@ -416,7 +416,7 @@ mod tests {
         let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"b718d584d524ee1bac02ef2ad56bbcc1\";s:10:\"ip_address\";s:14:\"191.113.153.59\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1734375340;}a7ae2d152460e813f196b3a01636c13a","isDemo":0,"uid":87742848,"platform":2}]	"#;
         let client = Arc::new(WebSocketClient::<Handler>::new(ssid).await?);
         sleep(Duration::from_secs(10)).await;
-        dbg!(client.get_balande().await);
+        dbg!(client.get_balance().await);
         let candles = client.get_candles("EURUSD_otc", 60, 3600).await?;
         dbg!(&candles);
         dbg!("Candles length: {}", candles.len()); // 4172
