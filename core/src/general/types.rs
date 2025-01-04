@@ -8,6 +8,7 @@ use serde_json::Value;
 use tokio::sync::oneshot::Sender as OneShotSender;
 use tokio::sync::Mutex;
 
+use crate::contstants::MAX_CHANNEL_CAPACITY;
 use crate::error::BinaryOptionsResult;
 
 use super::traits::{DataHandler, MessageTransfer};
@@ -129,7 +130,7 @@ where
 
     pub async fn add_request(&self, info: Transfer::Info) -> Receiver<Transfer> {
         let mut requests = self.pending_requests.lock().await;
-        let (_, r) = requests.entry(info).or_insert(bounded(128));
+        let (_, r) = requests.entry(info).or_insert(bounded(MAX_CHANNEL_CAPACITY));
         r.clone()
     }
 

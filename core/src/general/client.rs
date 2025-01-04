@@ -13,66 +13,72 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
+use crate::contstants::MAX_CHANNEL_CAPACITY;
 use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
 use crate::general::types::MessageType;
 
-use super::traits::{Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
+use super::traits::{Callback, Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
 use super::types::Data;
 
 const MAX_ALLOWED_LOOPS: u32 = 8;
 const SLEEP_INTERVAL: u32 = 2;
 
 #[derive(Clone)]
-pub struct WebSocketClient<Transfer, Handler, Connector, Creds, T>
+pub struct WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
+    C: Callback,
 {
-    inner: Arc<WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>>,
+    inner: Arc<WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, C>>,
 }
 
-pub struct WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>
+pub struct WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, C>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
+    C: Callback,
 {
     pub credentials: Creds,
     pub connector: Connector,
     pub handler: Handler,
     pub data: Data<T, Transfer>,
     pub sender: Sender<Transfer>,
-    _event_loop: JoinHandle<()>,
+    pub reconnect_callback: Option<C>,
+    _event_loop: JoinHandle<BinaryOptionsResult<()>>,
 }
 
-impl<Transfer, Handler, Connector, Creds, T> Deref
-    for WebSocketClient<Transfer, Handler, Connector, Creds, T>
+impl<Transfer, Handler, Connector, Creds, T, C> Deref
+    for WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
+    C: Callback,
 {
-    type Target = WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>;
+    type Target = WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, C>;
 
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref()
     }
 }
 
-impl<Transfer, Handler, Connector, Creds, T> WebSocketClient<Transfer, Handler, Connector, Creds, T>
+impl<Transfer, Handler, Connector, Creds, T, C> WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
 where
     Transfer: MessageTransfer + 'static,
     Handler: MessageHandler<Transfer = Transfer> + 'static,
     Creds: Credentials + 'static,
     Connector: Connect<Creds = Creds> + 'static,
     T: DataHandler<Transfer = Transfer> + 'static,
+    C: Callback<T = T, Transfer = Transfer> + 'static,
 {
     pub async fn init(
         credentials: Creds,
@@ -80,23 +86,25 @@ where
         data: Data<T, Transfer>,
         handler: Handler,
         timeout: Duration,
+        reconnect_callback: Option<C>,
     ) -> BinaryOptionsResult<Self> {
         let inner =
-            WebSocketInnerClient::init(credentials, connector, data, handler, timeout).await?;
+            WebSocketInnerClient::init(credentials, connector, data, handler, timeout, reconnect_callback).await?;
         Ok(Self {
             inner: Arc::new(inner),
         })
     }
 }
 
-impl<Transfer, Handler, Connector, Creds, T>
-    WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>
+impl<Transfer, Handler, Connector, Creds, T, C>
+    WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, C>
 where
     Transfer: MessageTransfer + 'static,
     Handler: MessageHandler<Transfer = Transfer> + 'static,
     Creds: Credentials + 'static,
     Connector: Connect<Creds = Creds> + 'static,
     T: DataHandler<Transfer = Transfer> + 'static,
+    C: Callback<T = T, Transfer = Transfer> + 'static, 
 {
     pub async fn init(
         credentials: Creds,
@@ -104,6 +112,7 @@ where
         data: Data<T, Transfer>,
         handler: Handler,
         timeout: Duration,
+        reconnect_callback: Option<C>,
     ) -> BinaryOptionsResult<Self> {
         let _connection = connector.connect(credentials.clone()).await?;
         let (_event_loop, sender) = Self::start_loops(
@@ -111,6 +120,7 @@ where
             credentials.clone(),
             data.clone(),
             connector.clone(),
+            reconnect_callback.clone()
         )
         .await?;
         info!("Started WebSocketClient");
@@ -121,6 +131,7 @@ where
             handler,
             data,
             sender,
+            reconnect_callback,
             _event_loop,
         })
     }
@@ -130,16 +141,18 @@ where
         credentials: Creds,
         data: Data<T, Transfer>,
         connector: Connector,
-    ) -> BinaryOptionsResult<(JoinHandle<()>, Sender<Transfer>)> {
+        reconnect_callback: Option<C>,
+    ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, Sender<Transfer>)> {
         let (mut write, mut read) = connector.connect(credentials.clone()).await?.split();
-        let (sender, mut reciever) = bounded(128);
-        let (msg_sender, mut msg_reciever) = bounded(128);
+        let (sender, mut reciever) = bounded(MAX_CHANNEL_CAPACITY);
+        let (msg_sender, mut msg_reciever) = bounded(MAX_CHANNEL_CAPACITY);
+        let sender_msg = msg_sender.clone();
         let task = tokio::task::spawn(async move {
             let previous = None;
             let mut loops = 0;
             loop {
                 let listener_future =
-                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::listener_loop(
+                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::listener_loop(
                         previous.clone(),
                         &data,
                         handler.clone(),
@@ -147,12 +160,12 @@ where
                         &mut read,
                     );
                 let sender_future =
-                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::sender_loop(
+                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::sender_loop(
                         &mut write,
                         &mut reciever,
                     );
                 let update_loop =
-                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::api_loop(
+                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::api_loop(
                         &mut msg_reciever,
                         &sender,
                     );
@@ -161,6 +174,9 @@ where
                         if let Ok(websocket) = connector.connect(credentials.clone()).await {
                             (write, read) = websocket.split();
                             info!("Reconnected successfully!");
+                            if let Some(callback) = &reconnect_callback {
+                                callback.call(data.clone(), &sender_msg).await.inspect_err(|e| error!(target: "EventLoop","Error calling callback, breaking loop, {e}"))?;
+                            }
                             loops = 0;
                         } else {
                             loops += 1;
@@ -175,6 +191,9 @@ where
                         if let Ok(websocket) = connector.connect(credentials.clone()).await {
                             (write, read) = websocket.split();
                             info!("Reconnected successfully!");
+                            if let Some(callback) = &reconnect_callback {
+                                callback.call(data.clone(), &sender_msg).await.inspect_err(|e| error!(target: "EventLoop","Error calling callback, breaking loop, {e}"))?;
+                            }
                             loops = 0;
                         } else {
                             loops += 1;
@@ -185,8 +204,10 @@ where
                             }
                         }
                     }
+                    
                 }
             }
+            Ok(())
         });
         Ok((task, msg_sender))
     }

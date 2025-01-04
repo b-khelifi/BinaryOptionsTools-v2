@@ -10,25 +10,21 @@ use crate::{
         parser::basic::LoadHistoryPeriod,
         validators::{candle_validator, order_result_validator},
         ws::ssid::Ssid,
-    }
+    },
 };
 
 use super::{
     error::PocketOptionError,
     parser::message::WebSocketMessage,
     types::{
-        base::ChangeSymbol,
-        data_v2::PocketData,
-        info::MessageInfo,
-        order::{Action, Deal, OpenOrder},
-        update::{DataCandle, UpdateBalance},
+        base::ChangeSymbol, callback::PocketCallback, data_v2::PocketData, info::MessageInfo, order::{Action, Deal, OpenOrder}, update::{DataCandle, UpdateBalance}
     },
     validators::{history_validator, order_validator},
     ws::{connect::PocketConnect, listener::Handler, stream::StreamAsset},
 };
 
 /// Class to connect automatically to Pocket Option's quick trade passing a valid SSID
-pub type PocketOption = WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData>;
+pub type PocketOption = WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>;
 
 impl PocketOption {
     pub async fn new(ssid: impl ToString) -> BinaryOptionsResult<Self> {
@@ -36,7 +32,8 @@ impl PocketOption {
         let data = Data::new(PocketData::default());
         let handler = Handler::new(ssid.clone());
         let timeout = Duration::from_millis(500);
-        let client = WebSocketClient::init(ssid, PocketConnect {}, data, handler, timeout).await?;
+        let callback = PocketCallback;
+        let client = WebSocketClient::init(ssid, PocketConnect {}, data, handler, timeout, Some(callback)).await?;
         println!("Initialized!");
         Ok(client)
     }
@@ -101,9 +98,15 @@ impl PocketOption {
             return Ok(trade.clone());
         }
         debug!("Trade result not found in closed deals list, waiting for closing order to check.");
-        if !self.data.get_opened_deals().await.iter().any(|d| d == &trade_id) {
+        if !self
+            .data
+            .get_opened_deals()
+            .await
+            .iter()
+            .any(|d| d == &trade_id)
+        {
             warn!("No opened trade with the given uuid please check if you are passing the correct id");
-            return Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()))
+            return Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()));
         }
         let res = self
             .send_message(
@@ -200,7 +203,7 @@ impl PocketOption {
     pub async fn subscribe_symbol(&self, asset: impl ToString) -> BinaryOptionsResult<StreamAsset> {
         let _ = self.history(asset.to_string(), 1).await?;
         debug!("Created StreamAsset instance.");
-        Ok(self.data.add_stream(asset.to_string()))
+        Ok(self.data.add_stream(asset.to_string()).await)
     }
 }
 
@@ -210,6 +213,7 @@ mod tests {
 
     use futures_util::{future::try_join3, StreamExt};
     use tokio::task::JoinHandle;
+    use tracing::error;
 
     use crate::utils::tracing::start_tracing;
 
@@ -239,7 +243,7 @@ mod tests {
         fn to_future(stream: StreamAsset, id: i32) -> JoinHandle<anyhow::Result<()>> {
             tokio::spawn(async move {
                 while let Some(item) = stream.to_stream().next().await {
-                    dbg!("StreamAsset n°{} data: \n{}", id, item?);
+                    error!("StreamAsset n°{}, price: {}", id, item?.close);
                 }
                 Ok(())
             })

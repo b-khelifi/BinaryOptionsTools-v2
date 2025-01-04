@@ -7,7 +7,7 @@ pub fn start_tracing() -> anyhow::Result<()> {
     let error_logs = OpenOptions::new()
         .append(true)
         .create(true)
-        .open("../logs/errors.log")?;
+        .open("errors.log")?;
 
     tracing_subscriber::registry()
         // .with(filtered_layer)
@@ -20,7 +20,6 @@ pub fn start_tracing() -> anyhow::Result<()> {
         )
         .with(
             fmt::Layer::default()
-                .pretty()
                 .with_filter(LevelFilter::DEBUG),
         )
         .try_init()?;

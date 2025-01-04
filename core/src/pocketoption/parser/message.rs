@@ -14,7 +14,9 @@ use crate::{
             base::{ChangeSymbol, SubscribeSymbol},
             info::MessageInfo,
             order::{
-                Deal, FailOpenOrder, FailOpenPendingOrder, OpenOrder, OpenPendingOrder, PocketMessageFail, SuccessCloseOrder, SuccessOpenPendingOrder, UpdateClosedDeals, UpdateOpenedDeals
+                Deal, FailOpenOrder, FailOpenPendingOrder, OpenOrder, OpenPendingOrder,
+                PocketMessageFail, SuccessCloseOrder, SuccessOpenPendingOrder, UpdateClosedDeals,
+                UpdateOpenedDeals,
             },
             success::SuccessAuth,
             update::{
@@ -181,25 +183,23 @@ impl WebSocketMessage {
                 if let Ok(fail) = from_str::<FailOpenOrder>(&data) {
                     return Ok(Self::FailOpenOrder(fail));
                 }
-            },
+            }
             MessageInfo::FailopenPendingOrder => {
                 if let Ok(fail) = from_str::<FailOpenPendingOrder>(&data) {
                     return Ok(Self::FailOpenPendingOrder(fail));
                 }
-            },
+            }
             MessageInfo::OpenPendingOrder => {
                 if let Ok(order) = from_str::<OpenPendingOrder>(&data) {
                     return Ok(Self::OpenPendingOrder(order));
                 }
-            },
+            }
             MessageInfo::SuccessopenPendingOrder => {
                 if let Ok(order) = from_str::<SuccessOpenPendingOrder>(&data) {
                     return Ok(Self::SuccessOpenPendingOrder(order));
                 }
-
             }
             MessageInfo::None => return WebSocketMessage::parse(data.clone()),
-            
         }
         warn!("Failed to parse message of type '{previous}':\n {data}");
         Err(PocketOptionError::GeneralParsingError(format!(
@@ -291,11 +291,11 @@ impl fmt::Display for WebSocketMessage {
             }
             WebSocketMessage::UpdateOpenedDeals(update_opened_deals) => {
                 write!(f, "{:?}", update_opened_deals)
-            },
+            }
             WebSocketMessage::SuccessOpenPendingOrder(order) => write!(f, "{:?}", order),
             WebSocketMessage::FailOpenPendingOrder(order) => write!(f, "{:?}", order),
             WebSocketMessage::OpenPendingOrder(order) => write!(f, "{:?}", order),
-            
+
             WebSocketMessage::None => write!(f, "None"),
             // 42["loadHistoryPeriod",{"asset":"#AXP_otc","index":173384282247,"time":1733482800,"offset":540000,"period":3600}]
             WebSocketMessage::LoadHistoryPeriod(period) => {
@@ -350,7 +350,11 @@ impl MessageTransfer for WebSocketMessage {
         if let Self::FailOpenOrder(fail) = self {
             PocketMessageFail::Order(fail.to_owned())
         } else {
-            PocketMessageFail::Order(FailOpenOrder::new("This is unexpected and should never happend", 1.0, "None"))
+            PocketMessageFail::Order(FailOpenOrder::new(
+                "This is unexpected and should never happend",
+                1.0,
+                "None",
+            ))
         }
     }
 

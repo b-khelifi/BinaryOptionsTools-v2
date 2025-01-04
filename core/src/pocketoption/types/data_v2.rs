@@ -1,5 +1,6 @@
 use std::{
-    collections::{HashMap, HashSet}, sync::Arc
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
 
 use async_channel::{bounded, Receiver, Sender};
@@ -9,17 +10,16 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
-    error::BinaryOptionsResult,
-    general::traits::DataHandler,
-    pocketoption::{
+    contstants::MAX_CHANNEL_CAPACITY, error::BinaryOptionsResult, general::traits::DataHandler, pocketoption::{
         error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
-    },
+    }
 };
 
 use super::{
     order::Deal,
     update::{UpdateAssets, UpdateBalance, UpdateStream},
 };
+
 
 pub struct Channels(Sender<WebSocketMessage>, Receiver<WebSocketMessage>);
 
@@ -31,11 +31,12 @@ pub struct PocketData {
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
     server_time: Arc<Mutex<i64>>,
     stream_channels: Arc<Channels>,
+    stream_assets: Arc<Mutex<Vec<String>>>
 }
 
 impl Default for Channels {
     fn default() -> Self {
-        let (s, r) = bounded(128);
+        let (s, r) = bounded(MAX_CHANNEL_CAPACITY);
         Self(s, r)
     }
 }
@@ -131,17 +132,23 @@ impl PocketData {
         *self.server_time.lock().await
     }
 
-    pub fn add_stream(&self, asset: String) -> StreamAsset {
+    pub async fn add_stream(&self, asset: String) -> StreamAsset {
         info!("Created new channels and StreamAsset instance");
+        let mut assets = self.stream_assets.lock().await;
+        assets.push(asset.clone());
         StreamAsset::new(self.stream_channels.1.clone(), asset)
     }
 
+    pub async fn stream_assets(&self) -> Vec<String> {
+        self.stream_assets.lock().await.clone()
+    }
+
     pub async fn send_stream(&self, stream: UpdateStream) -> PocketResult<()> {
-        self
-        .stream_channels
-        .0
-        .send(WebSocketMessage::UpdateStream(stream))
-        .await?;
+        if self.stream_channels.0.receiver_count() > 1 {
+            self.stream_channels
+                .0
+                .force_send(WebSocketMessage::UpdateStream(stream))?;
+        }
         Ok(())
     }
 }
@@ -157,9 +164,9 @@ impl DataHandler for PocketData {
             }
             WebSocketMessage::UpdateAssets(assets) => {
                 // let mut file: std::fs::File = OpenOptions::new().create(true).truncate(true).write(true).open("tests/assets2.txt").unwrap();
-                // file.write_all(serde_json::to_string(assets).unwrap().as_bytes());                
+                // file.write_all(serde_json::to_string(assets).unwrap().as_bytes());
                 self.update_payout_data(assets.clone()).await
-            },
+            }
             WebSocketMessage::UpdateClosedDeals(deals) => {
                 self.update_closed_deals(deals.0.clone()).await
             }

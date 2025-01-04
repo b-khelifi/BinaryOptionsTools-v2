@@ -6,3 +6,4 @@ pub mod order;
 pub mod success;
 pub mod update;
 pub mod user;
+pub mod callback;

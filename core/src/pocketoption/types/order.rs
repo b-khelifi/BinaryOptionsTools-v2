@@ -22,7 +22,7 @@ pub enum Action {
 #[derive(Clone, Debug)]
 pub enum PocketMessageFail {
     Order(FailOpenOrder),
-    Pending(FailOpenPendingOrder)
+    Pending(FailOpenPendingOrder),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,7 +62,7 @@ pub struct OpenPendingOrder {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SuccessOpenPendingOrder {
-    data: SuccessOpenPendingOrderData
+    data: SuccessOpenPendingOrderData,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -80,7 +80,7 @@ pub struct SuccessOpenPendingOrderData {
     command: i64,
     #[serde(with = "string_time")]
     date_created: DateTime<Utc>,
-    id: i64
+    id: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -89,7 +89,7 @@ pub struct FailOpenPendingOrder {
     data: String,
     error: String,
     #[serde(flatten)]
-    extra: HashMap<String, Value>
+    extra: HashMap<String, Value>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
@@ -203,7 +203,7 @@ impl fmt::Display for PocketMessageFail {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Order(order) => order.fmt(f),
-            Self::Pending(order) => order.fmt(f)
+            Self::Pending(order) => order.fmt(f),
         }
     }
 }
@@ -212,12 +212,10 @@ impl From<PocketMessageFail> for WebSocketMessage {
     fn from(value: PocketMessageFail) -> Self {
         match value {
             PocketMessageFail::Order(order) => Self::FailOpenOrder(order),
-            PocketMessageFail::Pending(pending) => Self::FailOpenPendingOrder(pending)
+            PocketMessageFail::Pending(pending) => Self::FailOpenPendingOrder(pending),
         }
     }
 }
-
-
 
 impl FailOpenOrder {
     pub fn new(error: impl ToString, amount: f64, asset: impl ToString) -> Self {
@@ -241,7 +239,7 @@ where
 {
     match action {
         Action::Call => 0.serialize(serializer),
-        Action::Put => 1.serialize(serializer)
+        Action::Put => 1.serialize(serializer),
     }
 }
 

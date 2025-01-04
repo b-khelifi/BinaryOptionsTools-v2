@@ -8,9 +8,9 @@ use tokio::sync::{oneshot::Sender as OneshotSender, Mutex};
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::pocketoption::{
+use crate::{contstants::MAX_CHANNEL_CAPACITY, pocketoption::{
     error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
-};
+}};
 
 use super::{
     info::MessageInfo,
@@ -187,7 +187,7 @@ impl Data {
 
 impl Default for Channels {
     fn default() -> Self {
-        let (s, r) = bounded(128);
+        let (s, r) = bounded(MAX_CHANNEL_CAPACITY);
         Self(s, r)
     }
 }
