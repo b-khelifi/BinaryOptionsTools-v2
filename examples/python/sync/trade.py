@@ -1,4 +1,4 @@
-from BinaryOptionsToolsV2.syncronous import PocketOption
+from BinaryOptionsToolsV2.pocketoption import PocketOption
 
 # Main part of the code
 def main(ssid: str):

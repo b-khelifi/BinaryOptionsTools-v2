@@ -1,9 +1,11 @@
+from BinaryOptionsToolsV2.tracing import start_logs
 from BinaryOptionsToolsV2.pocketoption import PocketOptionAsync
-
 
 import asyncio
 # Main part of the code
 async def main(ssid: str):
+    # Start logs, it works perfectly on async code
+    start_logs(path=".", level="DEBUG", terminal=True) # If false then the logs will only be written to the log files
     # The api automatically detects if the 'ssid' is for real or demo account
     api = PocketOptionAsync(ssid)
     (buy_id, _) = await api.buy(asset="EURUSD_otc", amount=1.0, time=300, check_win=False)

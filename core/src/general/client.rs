@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::{bounded, Receiver, RecvError, Sender};
-use futures_util::future::try_join3;
+use futures_util::future::try_join4;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
@@ -13,7 +13,7 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
-use crate::contstants::MAX_CHANNEL_CAPACITY;
+use crate::contstants::{MAX_CHANNEL_CAPACITY, RECONNECT_CALLBACK};
 use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
 use crate::general::types::MessageType;
 
@@ -21,7 +21,7 @@ use super::traits::{Callback, Connect, Credentials, DataHandler, MessageHandler,
 use super::types::Data;
 
 const MAX_ALLOWED_LOOPS: u32 = 8;
-const SLEEP_INTERVAL: u32 = 2;
+const SLEEP_INTERVAL: u64 = 2;
 
 #[derive(Clone)]
 pub struct WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
@@ -49,7 +49,7 @@ where
     pub connector: Connector,
     pub handler: Handler,
     pub data: Data<T, Transfer>,
-    pub sender: Sender<Transfer>,
+    pub sender: SenderMessage<Transfer>,
     pub reconnect_callback: Option<C>,
     _event_loop: JoinHandle<BinaryOptionsResult<()>>,
 }
@@ -71,7 +71,8 @@ where
     }
 }
 
-impl<Transfer, Handler, Connector, Creds, T, C> WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
+impl<Transfer, Handler, Connector, Creds, T, C>
+    WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
 where
     Transfer: MessageTransfer + 'static,
     Handler: MessageHandler<Transfer = Transfer> + 'static,
@@ -88,8 +89,15 @@ where
         timeout: Duration,
         reconnect_callback: Option<C>,
     ) -> BinaryOptionsResult<Self> {
-        let inner =
-            WebSocketInnerClient::init(credentials, connector, data, handler, timeout, reconnect_callback).await?;
+        let inner = WebSocketInnerClient::init(
+            credentials,
+            connector,
+            data,
+            handler,
+            timeout,
+            reconnect_callback,
+        )
+        .await?;
         Ok(Self {
             inner: Arc::new(inner),
         })
@@ -104,7 +112,7 @@ where
     Creds: Credentials + 'static,
     Connector: Connect<Creds = Creds> + 'static,
     T: DataHandler<Transfer = Transfer> + 'static,
-    C: Callback<T = T, Transfer = Transfer> + 'static, 
+    C: Callback<T = T, Transfer = Transfer> + 'static,
 {
     pub async fn init(
         credentials: Creds,
@@ -120,7 +128,7 @@ where
             credentials.clone(),
             data.clone(),
             connector.clone(),
-            reconnect_callback.clone()
+            reconnect_callback.clone(),
         )
         .await?;
         info!("Started WebSocketClient");
@@ -142,23 +150,31 @@ where
         data: Data<T, Transfer>,
         connector: Connector,
         reconnect_callback: Option<C>,
-    ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, Sender<Transfer>)> {
+    ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, SenderMessage<Transfer>)> {
         let (mut write, mut read) = connector.connect(credentials.clone()).await?.split();
         let (sender, mut reciever) = bounded(MAX_CHANNEL_CAPACITY);
         let (msg_sender, mut msg_reciever) = bounded(MAX_CHANNEL_CAPACITY);
+        let msg_sender = SenderMessage::new(msg_sender).clone();
         let sender_msg = msg_sender.clone();
         let task = tokio::task::spawn(async move {
             let previous = None;
             let mut loops = 0;
+            let mut reconnected = false;
             loop {
-                let listener_future =
-                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::listener_loop(
-                        previous.clone(),
-                        &data,
-                        handler.clone(),
-                        &sender,
-                        &mut read,
-                    );
+                let listener_future = WebSocketInnerClient::<
+                    Transfer,
+                    Handler,
+                    Connector,
+                    Creds,
+                    T,
+                    C,
+                >::listener_loop(
+                    previous.clone(),
+                    &data,
+                    handler.clone(),
+                    &sender,
+                    &mut read,
+                );
                 let sender_future =
                     WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::sender_loop(
                         &mut write,
@@ -169,18 +185,19 @@ where
                         &mut msg_reciever,
                         &sender,
                     );
-                match try_join3(listener_future, sender_future, update_loop).await {
+                let callback = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::reconnect_callback(reconnect_callback.clone(), data.clone(), sender_msg.clone(), reconnected);
+
+                match try_join4(listener_future, sender_future, update_loop, callback).await {
                     Ok(_) => {
                         if let Ok(websocket) = connector.connect(credentials.clone()).await {
                             (write, read) = websocket.split();
                             info!("Reconnected successfully!");
-                            if let Some(callback) = &reconnect_callback {
-                                callback.call(data.clone(), &sender_msg).await.inspect_err(|e| error!(target: "EventLoop","Error calling callback, breaking loop, {e}"))?;
-                            }
                             loops = 0;
+                            reconnected = true;
                         } else {
                             loops += 1;
                             warn!("Error reconnecting... trying again in {SLEEP_INTERVAL} seconds (try {loops} of {MAX_ALLOWED_LOOPS}");
+                            sleep(Duration::from_secs(SLEEP_INTERVAL)).await;
                             if loops >= MAX_ALLOWED_LOOPS {
                                 panic!("Too many failed connections");
                             }
@@ -191,20 +208,18 @@ where
                         if let Ok(websocket) = connector.connect(credentials.clone()).await {
                             (write, read) = websocket.split();
                             info!("Reconnected successfully!");
-                            if let Some(callback) = &reconnect_callback {
-                                callback.call(data.clone(), &sender_msg).await.inspect_err(|e| error!(target: "EventLoop","Error calling callback, breaking loop, {e}"))?;
-                            }
                             loops = 0;
+                            reconnected = true;
                         } else {
                             loops += 1;
                             warn!("Error reconnecting... trying again in {SLEEP_INTERVAL} seconds (try {loops} of {MAX_ALLOWED_LOOPS}");
+                            sleep(Duration::from_secs(SLEEP_INTERVAL)).await;
                             if loops >= MAX_ALLOWED_LOOPS {
                                 error!("Too many failed connections");
                                 break;
                             }
                         }
                     }
-                    
                 }
             }
             Ok(())
@@ -290,29 +305,34 @@ where
         Ok(())
     }
 
+    async fn reconnect_callback(
+        reconnect_callback: Option<C>,
+        data: Data<T, Transfer>,
+        sender: SenderMessage<Transfer>,
+        reconnect: bool,
+    ) -> BinaryOptionsResult<BinaryOptionsResult<()>> {
+        Ok(tokio::spawn(async move {
+            sleep(Duration::from_secs(RECONNECT_CALLBACK)).await;
+            if reconnect {
+                if let Some(callback) = &reconnect_callback {
+                    callback.call(data.clone(), &sender).await.inspect_err(
+                        |e| error!(target: "EventLoop","Error calling callback, {e}"),
+                    )?;
+                }
+            }
+            Ok(())
+        })
+        .await?)
+    }
     pub async fn send_message(
         &self,
         msg: Transfer,
         response_type: Transfer::Info,
         validator: impl Fn(&Transfer) -> bool + Send + Sync,
     ) -> BinaryOptionsResult<Transfer> {
-        let reciever = self.data.add_request(response_type).await;
-
         self.sender
-            .send(msg)
+            .send_message(&self.data, msg, response_type, validator)
             .await
-            .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
-
-        while let Ok(msg) = reciever.recv().await {
-            if let Some(msg) =
-                validate(&validator, msg).inspect_err(|e| eprintln!("Failed to place trade {e}"))?
-            {
-                return Ok(msg);
-            }
-        }
-        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
-            RecvError,
-        ))
     }
 }
 
@@ -331,5 +351,48 @@ where
         Ok(Some(message))
     } else {
         Ok(None)
+    }
+}
+
+#[derive(Clone)]
+pub struct SenderMessage<Transfer>
+where
+    Transfer: MessageTransfer,
+{
+    sender: Sender<Transfer>,
+}
+
+impl<Transfer> SenderMessage<Transfer>
+where
+    Transfer: MessageTransfer,
+{
+    fn new(sender: Sender<Transfer>) -> Self {
+        Self { sender }
+    }
+
+    pub async fn send_message<T: DataHandler<Transfer = Transfer>>(
+        &self,
+        data: &Data<T, Transfer>,
+        msg: Transfer,
+        response_type: Transfer::Info,
+        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+    ) -> BinaryOptionsResult<Transfer> {
+        let reciever = data.add_request(response_type).await;
+
+        self.sender
+            .send(msg)
+            .await
+            .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
+
+        while let Ok(msg) = reciever.recv().await {
+            if let Some(msg) =
+                validate(&validator, msg).inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+            {
+                return Ok(msg);
+            }
+        }
+        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+            RecvError,
+        ))
     }
 }

@@ -39,6 +39,8 @@ pub enum BinaryOptionsToolsError {
     HTTPError(#[from] http::Error),
     #[error("Unallowed operation, {0}")]
     Unallowed(String),
+    #[error("Failed to join thread, {0}")]
+    TaskJoinError(#[from] tokio::task::JoinError),
 }
 
 pub type BinaryOptionsResult<T> = Result<T, BinaryOptionsToolsError>;

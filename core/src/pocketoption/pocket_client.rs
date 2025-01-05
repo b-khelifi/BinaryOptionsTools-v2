@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -17,14 +17,20 @@ use super::{
     error::PocketOptionError,
     parser::message::WebSocketMessage,
     types::{
-        base::ChangeSymbol, callback::PocketCallback, data_v2::PocketData, info::MessageInfo, order::{Action, Deal, OpenOrder}, update::{DataCandle, UpdateBalance}
+        base::ChangeSymbol,
+        callback::PocketCallback,
+        data_v2::PocketData,
+        info::MessageInfo,
+        order::{Action, Deal, OpenOrder},
+        update::{DataCandle, UpdateBalance},
     },
     validators::{history_validator, order_validator},
     ws::{connect::PocketConnect, listener::Handler, stream::StreamAsset},
 };
 
 /// Class to connect automatically to Pocket Option's quick trade passing a valid SSID
-pub type PocketOption = WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>;
+pub type PocketOption =
+    WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>;
 
 impl PocketOption {
     pub async fn new(ssid: impl ToString) -> BinaryOptionsResult<Self> {
@@ -33,7 +39,15 @@ impl PocketOption {
         let handler = Handler::new(ssid.clone());
         let timeout = Duration::from_millis(500);
         let callback = PocketCallback;
-        let client = WebSocketClient::init(ssid, PocketConnect {}, data, handler, timeout, Some(callback)).await?;
+        let client = WebSocketClient::init(
+            ssid,
+            PocketConnect {},
+            data,
+            handler,
+            timeout,
+            Some(callback),
+        )
+        .await?;
         println!("Initialized!");
         Ok(client)
     }
@@ -73,6 +87,7 @@ impl PocketOption {
         amount: f64,
         time: u32,
     ) -> BinaryOptionsResult<(Uuid, Deal)> {
+        info!(target: "Buy", "Placing a buy trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
         self.trade(asset, Action::Call, amount, time).await
     }
 
@@ -82,12 +97,13 @@ impl PocketOption {
         amount: f64,
         time: u32,
     ) -> BinaryOptionsResult<(Uuid, Deal)> {
+        info!(target: "Sell", "Placing a sell trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
         self.trade(asset, Action::Put, amount, time).await
     }
 
     pub async fn check_results(&self, trade_id: Uuid) -> BinaryOptionsResult<Deal> {
         // TODO: Add verification so it doesn't try to wait if no trade has been made with that id
-
+        info!(target: "CheckResults", "Checking results for trade of id {}", trade_id);
         if let Some(trade) = self
             .data
             .get_closed_deals()
@@ -135,6 +151,7 @@ impl PocketOption {
         period: i64,
         offset: i64,
     ) -> BinaryOptionsResult<Vec<DataCandle>> {
+        info!(target: "GetCandles", "Retrieving candles for asset '{}' with period of '{}' and offset of '{}'", asset.to_string(), period, offset);
         let time = self.data.get_server_time().await.div_euclid(period) * period;
         if time == 0 {
             return Err(BinaryOptionsToolsError::GeneralParsingError(
@@ -166,6 +183,8 @@ impl PocketOption {
         asset: impl ToString,
         period: i64,
     ) -> BinaryOptionsResult<Vec<DataCandle>> {
+        info!(target: "History", "Retrieving candles for asset '{}' with period of '{}'", asset.to_string(), period);
+
         let request = ChangeSymbol::new(asset.to_string(), period);
         let res = self
             .send_message(
@@ -181,26 +200,32 @@ impl PocketOption {
     }
 
     pub async fn get_closed_deals(&self) -> Vec<Deal> {
+        info!(target: "GetClosedDeals", "Retrieving list of closed deals");
         self.data.get_closed_deals().await
     }
 
     pub async fn clear_closed_deals(&self) {
+        info!(target: "ClearClosedDeals", "Clearing list of closed deals");
         self.data.clean_closed_deals().await
     }
 
     pub async fn get_opened_deals(&self) -> Vec<Deal> {
+        info!(target: "GetOpenDeals", "Retrieving list of open deals");
         self.data.get_opened_deals().await
     }
 
     pub async fn get_balance(&self) -> UpdateBalance {
+        info!(target: "GetBalance", "Retrieving account balance");
         self.data.get_balance().await
     }
 
     pub async fn get_payout(&self) -> HashMap<String, i32> {
+        info!(target: "GetPayout", "Retrieving payout for all the assets");
         self.data.get_full_payout().await
     }
 
     pub async fn subscribe_symbol(&self, asset: impl ToString) -> BinaryOptionsResult<StreamAsset> {
+        info!(target: "SubscribeSymbol", "Subscribing to asset '{}'", asset.to_string());
         let _ = self.history(asset.to_string(), 1).await?;
         debug!("Created StreamAsset instance.");
         Ok(self.data.add_stream(asset.to_string()).await)
@@ -211,8 +236,11 @@ impl PocketOption {
 mod tests {
     use std::time::Instant;
 
-    use futures_util::{future::try_join3, StreamExt};
-    use tokio::task::JoinHandle;
+    use futures_util::{
+        future::{try_join3, try_join_all},
+        StreamExt,
+    };
+    use tokio::{task::JoinHandle, time::sleep};
     use tracing::error;
 
     use crate::utils::tracing::start_tracing;
@@ -268,6 +296,36 @@ mod tests {
         let api = PocketOption::new(ssid).await?;
         tokio::time::sleep(Duration::from_secs(5)).await;
         dbg!(api.get_payout().await);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_check_win() -> anyhow::Result<()> {
+        start_tracing()?;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await.unwrap();
+        let mut test = 0;
+        let mut checks = Vec::new();
+        while test < 1000 {
+            test += 1;
+            if test % 100 == 0 {
+                let res = client.sell("EURUSD_otc", 1.0, 15).await?;
+                dbg!("Trade id: {}", res.0);
+                let m_client = client.clone();
+                let res: tokio::task::JoinHandle<Result<(), BinaryOptionsToolsError>> =
+                    tokio::spawn(async move {
+                        let result = m_client.check_results(res.0).await?;
+                        dbg!("Trade result: {}", result.profit);
+                        Ok(())
+                    });
+                checks.push(res);
+            } else if test % 100 == 50 {
+                let res = &client.buy("#AAPL_otc", 1.0, 5).await?;
+                dbg!(res);
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+        try_join_all(checks).await?;
         Ok(())
     }
 }

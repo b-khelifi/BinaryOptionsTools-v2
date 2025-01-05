@@ -1,4 +1,6 @@
-use binary_option_tools_core::{error::BinaryOptionsToolsError, pocketoption::error::PocketOptionError};
+use binary_option_tools_core::{
+    error::BinaryOptionsToolsError, pocketoption::error::PocketOptionError,
+};
 use pyo3::{exceptions::PyValueError, PyErr};
 use thiserror::Error;
 

@@ -1,8 +1,10 @@
+
 from .BinaryOptionsToolsV2 import *  # noqa: F403
-from .BinaryOptionsToolsV2 import __all__
 
 # optional: include the documentation from the Rust module
 from .BinaryOptionsToolsV2 import __doc__  # noqa: F401
-from . import asyncronous
-from . import syncronous
-__all__ = __all__ + ["asyncronous", "syncronous"]
+
+from .pocketoption import __all__ as __pocket_all__
+from . import tracing
+
+__all__ = __pocket_all__ + ['tracing']

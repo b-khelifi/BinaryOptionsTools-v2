@@ -6,7 +6,7 @@ import asyncio
 # from BinaryOptionsToolsV2 import connect
 
 # print(BinaryOptionsToolsV2)
-from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync
+from BinaryOptionsToolsV2.BinaryOptionsToolsV2.pocketoption.asyncronous import PocketOptionAsync
 
 # async def main(ssid):
 #     api = await async_connect(ssid)

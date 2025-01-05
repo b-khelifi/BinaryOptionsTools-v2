@@ -1,4 +1,4 @@
-from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync
+from BinaryOptionsToolsV2.pocketoption import PocketOptionAsync
 
 import pandas as pd
 import asyncio

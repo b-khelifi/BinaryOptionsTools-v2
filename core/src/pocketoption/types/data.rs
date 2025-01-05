@@ -8,9 +8,12 @@ use tokio::sync::{oneshot::Sender as OneshotSender, Mutex};
 use tracing::debug;
 use uuid::Uuid;
 
-use crate::{contstants::MAX_CHANNEL_CAPACITY, pocketoption::{
-    error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
-}};
+use crate::{
+    contstants::MAX_CHANNEL_CAPACITY,
+    pocketoption::{
+        error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
+    },
+};
 
 use super::{
     info::MessageInfo,

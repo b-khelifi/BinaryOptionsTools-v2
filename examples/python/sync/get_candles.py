@@ -1,4 +1,4 @@
-from BinaryOptionsToolsV2.syncronous import PocketOption
+from BinaryOptionsToolsV2.pocketoption import PocketOption
 
 import pandas as pd
 import time

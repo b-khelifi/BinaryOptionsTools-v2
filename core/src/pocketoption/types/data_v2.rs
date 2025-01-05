@@ -10,16 +10,18 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
-    contstants::MAX_CHANNEL_CAPACITY, error::BinaryOptionsResult, general::traits::DataHandler, pocketoption::{
+    contstants::MAX_CHANNEL_CAPACITY,
+    error::BinaryOptionsResult,
+    general::traits::DataHandler,
+    pocketoption::{
         error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
-    }
+    },
 };
 
 use super::{
     order::Deal,
     update::{UpdateAssets, UpdateBalance, UpdateStream},
 };
-
 
 pub struct Channels(Sender<WebSocketMessage>, Receiver<WebSocketMessage>);
 
@@ -31,7 +33,7 @@ pub struct PocketData {
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
     server_time: Arc<Mutex<i64>>,
     stream_channels: Arc<Channels>,
-    stream_assets: Arc<Mutex<Vec<String>>>
+    stream_assets: Arc<Mutex<Vec<String>>>,
 }
 
 impl Default for Channels {

@@ -18,10 +18,7 @@ pub fn start_tracing() -> anyhow::Result<()> {
                 .with_writer(error_logs)
                 .with_filter(LevelFilter::WARN),
         )
-        .with(
-            fmt::Layer::default()
-                .with_filter(LevelFilter::DEBUG),
-        )
+        .with(fmt::Layer::default().with_filter(LevelFilter::DEBUG))
         .try_init()?;
     Ok(())
 }

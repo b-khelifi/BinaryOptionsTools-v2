@@ -3,20 +3,18 @@ use std::sync::Arc;
 
 use binary_option_tools_core::pocketoption::error::PocketResult;
 use binary_option_tools_core::pocketoption::pocket_client::PocketOption;
-use binary_option_tools_core::pocketoption::ws::stream::StreamAsset;
-use futures_util::StreamExt;
 use binary_option_tools_core::pocketoption::types::update::DataCandle;
+use binary_option_tools_core::pocketoption::ws::stream::StreamAsset;
 use futures_util::stream::{BoxStream, Fuse};
+use futures_util::StreamExt;
 use pyo3::exceptions::PyStopIteration;
 use pyo3::{pyclass, pymethods, Bound, Py, PyAny, PyResult, Python};
 use pyo3_async_runtimes::tokio::future_into_py;
 use uuid::Uuid;
 
-use tokio::sync::Mutex;
 use crate::error::BinaryErrorPy;
 use crate::runtime::get_runtime;
-
-
+use tokio::sync::Mutex;
 
 #[pyclass]
 #[derive(Clone)]
@@ -26,19 +24,17 @@ pub struct RawPocketOption {
 
 #[pyclass]
 pub struct StreamIterator {
-    stream: Arc<Mutex<Fuse<BoxStream<'static, PocketResult<DataCandle>>>>>
+    stream: Arc<Mutex<Fuse<BoxStream<'static, PocketResult<DataCandle>>>>>,
 }
-
-
 
 #[pymethods]
 impl RawPocketOption {
     #[new]
     pub fn new(ssid: String, py: Python<'_>) -> PyResult<Self> {
         let runtime = get_runtime(py)?;
-        runtime.block_on(async move { 
+        runtime.block_on(async move {
             let client = PocketOption::new(ssid).await.map_err(BinaryErrorPy::from)?;
-            Ok(Self{ client })
+            Ok(Self { client })
         })
     }
 
@@ -107,23 +103,32 @@ impl RawPocketOption {
     }
 
     pub async fn history(&self, asset: String, period: i64) -> PyResult<String> {
-        let res = self.client.history(asset, period).await.map_err(BinaryErrorPy::from)?;
+        let res = self
+            .client
+            .history(asset, period)
+            .await
+            .map_err(BinaryErrorPy::from)?;
         Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)
     }
 
     pub async fn subscribe_symbol(&self, symbol: String) -> PyResult<StreamIterator> {
-        let stream_asset = self.client.subscribe_symbol(symbol).await.map_err(BinaryErrorPy::from)?;
-    
+        let stream_asset = self
+            .client
+            .subscribe_symbol(symbol)
+            .await
+            .map_err(BinaryErrorPy::from)?;
+
         // Clone the stream_asset and convert it to a BoxStream
-        let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset)).boxed().fuse();
-        
+        let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset))
+            .boxed()
+            .fuse();
+
         // Wrap the BoxStream in an Arc and Mutex
         let stream = Arc::new(Mutex::new(boxed_stream));
-        
+
         Ok(StreamIterator { stream })
     }
 }
-
 
 #[pymethods]
 impl StreamIterator {
@@ -137,9 +142,7 @@ impl StreamIterator {
 
     fn __anext__<'py>(&'py mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let stream = self.stream.clone();
-        future_into_py(py, 
-            next_stream(stream)
-        )
+        future_into_py(py, next_stream(stream))
     }
 
     fn __next__<'py>(&'py self, py: Python<'py>) -> PyResult<String> {
@@ -147,16 +150,17 @@ impl StreamIterator {
         let stream = self.stream.clone();
         runtime.block_on(next_stream(stream))
     }
-
 }
 
-async fn next_stream(stream: Arc<Mutex<Fuse<BoxStream<'static, PocketResult<DataCandle>>>>>) -> PyResult<String> {
+async fn next_stream(
+    stream: Arc<Mutex<Fuse<BoxStream<'static, PocketResult<DataCandle>>>>>,
+) -> PyResult<String> {
     let mut stream = stream.lock().await;
     match stream.next().await {
         Some(item) => match item {
             Ok(itm) => Ok(itm.to_string()),
-            Err(e) => Err(PyStopIteration::new_err(e.to_string()))
+            Err(e) => Err(PyStopIteration::new_err(e.to_string())),
         },
-        None => Err(PyStopIteration::new_err("stream exhausted"))
+        None => Err(PyStopIteration::new_err("stream exhausted")),
     }
 }

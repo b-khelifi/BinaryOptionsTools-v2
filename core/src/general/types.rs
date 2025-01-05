@@ -130,8 +130,15 @@ where
 
     pub async fn add_request(&self, info: Transfer::Info) -> Receiver<Transfer> {
         let mut requests = self.pending_requests.lock().await;
-        let (_, r) = requests.entry(info).or_insert(bounded(MAX_CHANNEL_CAPACITY));
+        let (_, r) = requests
+            .entry(info)
+            .or_insert(bounded(MAX_CHANNEL_CAPACITY));
         r.clone()
+    }
+
+    pub async fn sender(&self, info: Transfer::Info) -> Option<Sender<Transfer>> {
+        let requests = self.pending_requests.lock().await;
+        requests.get(&info).map(|(s, _)| s.clone())
     }
 
     pub async fn get_sender(&self, message: &Transfer) -> Option<Vec<Sender<Transfer>>> {

@@ -1,5 +1,5 @@
 import json
-from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync
+from .asyncronous import PocketOptionAsync
 import asyncio
 
 class PocketOption:
@@ -29,7 +29,7 @@ class PocketOption:
     
     def check_win(self, id: str):
         """Returns a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)"""
-        return self.loop.run_in_executor(self._client.check_win(id))
+        return self.loop.run_until_complete(self._client.check_win(id))
 
     def get_candles(self, asset: str, period: int, offset: int):
         """
