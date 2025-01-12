@@ -15,6 +15,10 @@ Currently we only support **Pocket Option** (quick trading) with the following f
 
 # Python 
 For the full python documentation check [here](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/blob/master/BinaryOptionsToolsV2/Readme.md).
+To install it use pip:
+```
+pip install binaryoptiontoolsv2
+```
 
 # Rust
 For the full rust documentation check [here](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/tree/master/rust/Readme.md)

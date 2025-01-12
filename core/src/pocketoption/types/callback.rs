@@ -54,11 +54,15 @@ impl Callback for PocketCallback {
             if !deals.is_empty() {
                 info!(target: "PocketCallback", "Sending closed orders data after disconnection");
                 let close_order = SuccessCloseOrder { profit: 0.0, deals };
-                sender.send(WebSocketMessage::SuccesscloseOrder(close_order)).await.map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
+                sender
+                    .send(WebSocketMessage::SuccesscloseOrder(close_order))
+                    .await
+                    .map_err(|e| {
+                        BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string())
+                    })?;
             }
         }
 
-        
         Ok(())
     }
 }

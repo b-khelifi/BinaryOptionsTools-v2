@@ -69,6 +69,10 @@ impl RawPocketOption {
         Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)
     }
 
+    pub async fn get_deal_end_time(&self, trade_id: String) -> PyResult<Option<i64>> {
+        Ok(self.client.get_deal_end_time(Uuid::parse_str(&trade_id).map_err(BinaryErrorPy::from)?).await.map(|d|d.timestamp()))
+    }
+
     pub async fn get_candles(&self, asset: String, period: i64, offset: i64) -> PyResult<String> {
         let res = self
             .client

@@ -1,5 +1,9 @@
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
+use chrono::{DateTime, Utc};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
@@ -11,6 +15,7 @@ use crate::{
         validators::{candle_validator, order_result_validator},
         ws::ssid::Ssid,
     },
+    utils::time::timeout,
 };
 
 use super::{
@@ -87,8 +92,10 @@ impl PocketOption {
         amount: f64,
         time: u32,
     ) -> BinaryOptionsResult<(Uuid, Deal)> {
-        info!(target: "Buy", "Placing a buy trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
-        self.trade(asset, Action::Call, amount, time).await
+        timeout(Duration::from_secs(5), async {
+            info!(target: "Buy", "Placing a buy trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
+            self.trade(asset, Action::Call, amount, time).await
+        }, String::from("Trade")).await
     }
 
     pub async fn sell(
@@ -97,12 +104,32 @@ impl PocketOption {
         amount: f64,
         time: u32,
     ) -> BinaryOptionsResult<(Uuid, Deal)> {
-        info!(target: "Sell", "Placing a sell trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
-        self.trade(asset, Action::Put, amount, time).await
+        timeout(Duration::from_secs(5), async {
+            info!(target: "Sell", "Placing a sell trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
+            self.trade(asset, Action::Put, amount, time).await
+        }, String::from("Trade")).await
+    }
+
+    pub async fn get_deal_end_time(&self, id: Uuid) -> Option<DateTime<Utc>> {
+        if let Some(trade) = self.data.get_opened_deals().await.iter().find(|d| *d == &id) {
+            return Some(trade.close_timestamp - Duration::from_secs(2 * 3600)) // Pocket Option server seems 2 hours advanced
+        }
+
+        if let Some(trade) = self
+            .data
+            .get_opened_deals()
+            .await
+            .iter()
+            .find(|d| *d == &id) 
+        {
+            return Some(trade.close_timestamp - Duration::from_secs(2 * 3600)) // Pocket Option server seems 2 hours advanced
+        }
+        None
     }
 
     pub async fn check_results(&self, trade_id: Uuid) -> BinaryOptionsResult<Deal> {
         // TODO: Add verification so it doesn't try to wait if no trade has been made with that id
+
         info!(target: "CheckResults", "Checking results for trade of id {}", trade_id);
         if let Some(trade) = self
             .data
@@ -114,35 +141,48 @@ impl PocketOption {
             return Ok(trade.clone());
         }
         debug!("Trade result not found in closed deals list, waiting for closing order to check.");
-        if !self
-            .data
-            .get_opened_deals()
-            .await
-            .iter()
-            .any(|d| d == &trade_id)
+        if let Some(timestamp) = self
+            .get_deal_end_time(trade_id).await
         {
-            warn!("No opened trade with the given uuid please check if you are passing the correct id");
-            return Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()));
+            let exp = timestamp
+                .signed_duration_since(Utc::now()) // TODO: Change this since the current time depends on the timezone.
+                .to_std()?;
+            debug!(target: "CheckResult", "Expiration time in {exp:?} seconds.");
+            let start = Instant::now();
+            // println!("Expiration time in {exp:?} seconds.");
+            let res: WebSocketMessage = self
+                .send_message_with_timout(
+                    exp + Duration::from_secs(5),
+                    "CheckResult",
+                    WebSocketMessage::None,
+                    MessageInfo::SuccesscloseOrder,
+                    order_result_validator(trade_id),
+                )
+                .await
+                .inspect_err(|_| println!("Time elapsed, {:?}", start.elapsed()))?;
+            // let res: WebSocketMessage = self
+            //     .send_message(
+            //         WebSocketMessage::None,
+            //         MessageInfo::SuccesscloseOrder,
+            //         order_result_validator(trade_id),
+            //     )
+            //     .await.inspect_err(|_| println!("Time elapsed, {:?}", start.elapsed()))?;
+
+            if let WebSocketMessage::SuccesscloseOrder(order) = res {
+                return order
+                    .deals
+                    .iter()
+                    .find(|d| d.id == trade_id)
+                    .cloned()
+                    .ok_or(
+                        PocketOptionError::UnreachableError("Error finding correct trade".into())
+                            .into(),
+                    );
+            }
+            return Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()).into());
         }
-        let res = self
-            .send_message(
-                WebSocketMessage::None,
-                MessageInfo::SuccesscloseOrder,
-                order_result_validator(trade_id),
-            )
-            .await?;
-        if let WebSocketMessage::SuccesscloseOrder(order) = res {
-            return order
-                .deals
-                .iter()
-                .find(|d| d.id == trade_id)
-                .cloned()
-                .ok_or(
-                    PocketOptionError::UnreachableError("Error finding correct trade".into())
-                        .into(),
-                );
-        }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()).into())
+        warn!("No opened trade with the given uuid please check if you are passing the correct id");
+        return Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()));
     }
 
     pub async fn get_candles(
@@ -240,38 +280,38 @@ mod tests {
         future::{try_join3, try_join_all},
         StreamExt,
     };
+    use rand::{random, seq::SliceRandom, thread_rng};
     use tokio::{task::JoinHandle, time::sleep};
-    use tracing::error;
 
-    use crate::utils::tracing::start_tracing;
+    use crate::utils::{time::timeout, tracing::start_tracing};
 
     use super::*;
 
     #[tokio::test]
-    async fn test_pocket_option() -> anyhow::Result<()> {
+    #[should_panic(expected = "MaxDemoTrades")]
+    async fn test_pocket_option() {
         // start_tracing()?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
-        let api = PocketOption::new(ssid).await?;
+        let api = PocketOption::new(ssid).await.unwrap();
         // let mut loops = 0;
         // while loops < 100 {
         //     loops += 1;
         //     sleep(Duration::from_millis(100)).await;
         // }
-        let now = Instant::now();
         for i in 0..100 {
-            let _ = api.buy("EURUSD_otc", 1.0, 60).await?;
+            let now = Instant::now();
+            let _ = api.buy("EURUSD_otc", 1.0, 60).await.expect("MaxDemoTrades");
             println!("Loop n°{i}, Elapsed time: {:.8?} ms", now.elapsed());
         }
-        Ok(())
     }
 
     #[tokio::test]
     async fn test_subscribe_symbol_v2() -> anyhow::Result<()> {
-        start_tracing()?;
+        start_tracing(true)?;
         fn to_future(stream: StreamAsset, id: i32) -> JoinHandle<anyhow::Result<()>> {
             tokio::spawn(async move {
                 while let Some(item) = stream.to_stream().next().await {
-                    error!("StreamAsset n°{}, price: {}", id, item?.close);
+                    info!("StreamAsset n°{}, price: {}", id, item?.close);
                 }
                 Ok(())
             })
@@ -300,8 +340,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_check_win() -> anyhow::Result<()> {
-        start_tracing()?;
+    async fn test_check_win_v1() -> anyhow::Result<()> {
+        start_tracing(true)?;
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         let client = PocketOption::new(ssid).await.unwrap();
         let mut test = 0;
@@ -327,5 +367,100 @@ mod tests {
         }
         try_join_all(checks).await?;
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_check_win_v2() -> anyhow::Result<()> {
+        start_tracing(true)?;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await.unwrap();
+        let times = [5, 15, 30, 60, 300];
+        for time in times {
+            info!("Checkind for an expiration of '{time}' seconds!");
+            let res: Result<(), BinaryOptionsToolsError> =
+                tokio::time::timeout(Duration::from_secs(time as u64 + 30), async {
+                    let (id1, _) = client.buy("EURUSD_otc", 1.5, time).await?;
+                    let (id2, _) = client.sell("EURUSD_otc", 4.2, time).await?;
+                    let r1 = client.check_results(id1).await?;
+                    let r2 = client.check_results(id2).await?;
+                    assert_eq!(r1.id, id1);
+                    assert_eq!(r2.id, id2);
+                    Ok(())
+                })
+                .await?;
+            res?;
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_check_win_v3() -> anyhow::Result<()> {
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await.unwrap();
+        let times = [5, 15, 30, 60, 300];
+        let assets = ["#AAPL_otc", "#MSFT_otc", "EURUSD_otc", "YERUSD_otc"];
+        for asset in assets {
+            for time in times {
+                println!("Checkind for an expiration of '{time}' seconds!");
+                let at = tokio::time::Instant::now() + Duration::from_secs(time as u64 + 5);
+                let res: Result<Duration, BinaryOptionsToolsError> =
+                    tokio::time::timeout_at(at, async {
+                        let start = tokio::time::Instant::now();
+                        let (id1, _) = client.buy(asset, 1.5, time).await?;
+                        let (id2, _) = client.sell(asset, 4.2, time).await?;
+                        let r1 = client.check_results(id1).await?;
+                        let r2 = client.check_results(id2).await?;
+                        assert_eq!(r1.id, id1);
+                        assert_eq!(r2.id, id2);
+                        let elapsed = start.elapsed();
+                        Ok(elapsed)
+                    })
+                    .await?;
+                let duration = res?;
+                println!(
+                    "Test passed for expiration of '{time}' seconds in '{:#?}'!",
+                    duration
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "CheckResults")]
+    async fn test_timeout() {
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await.unwrap();
+        let (id, _) = client.buy("EURUSD_otc", 1.5, 60).await.unwrap();
+        dbg!(&id);
+        let check = client.check_results(id);
+        let res = timeout(Duration::from_secs(30), check, "CheckResults".into())
+            .await
+            .expect("CheckResults");
+        dbg!(res);
+    }
+
+    #[tokio::test]
+    async fn test_buy_check() -> anyhow::Result<()> {
+        start_tracing(false)?;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await.unwrap();
+        let time_frames = [5, 15, 30, 60, 300];
+        let assets = ["EURUSD_otc"];
+        let mut rng = thread_rng();
+        loop {
+            let amount = (random::<f64>() * 10.0).max(1.0);
+            let asset =assets.choose(&mut rng).ok_or(anyhow::anyhow!("Error"))?;
+            let timeframe = time_frames.choose(&mut rng).ok_or(anyhow::anyhow!("Error"))?;
+            let direction = if random() { Action::Call } else { Action::Put };
+            println!("Placing '{direction:?}' trade on asset '{asset}', amount '{amount}' usd and expiration of '{timeframe}'s.");
+            let (id, _) = client.trade(asset, direction, amount, timeframe.to_owned()).await?;
+            match client.check_results(id).await {
+                Ok(res) => println!("Result for trade: {}", res.profit),
+                Err(e) => eprintln!("Error, {e}\nTime: {}", Utc::now())
+            }
+        }
     }
 }

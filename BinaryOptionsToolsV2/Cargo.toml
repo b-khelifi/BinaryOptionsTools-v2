@@ -1,6 +1,6 @@
 [package]
 name = "BinaryOptionsToolsV2"
-version = "0.1.5"
+version = "0.1.6-alpha.1"
 edition = "2021"
 description = "A library to connect to PocketOption using python with async and sync support."
 license = "BSD License (BSD)"
@@ -24,5 +24,4 @@ uuid = "1.11.0"
 tracing = "0.1.41"
 tokio = "1.42.0"
 futures-util = "0.3.31"
-pythonize = "0.23.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

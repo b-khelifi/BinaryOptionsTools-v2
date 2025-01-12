@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use thiserror::Error;
 
 use tokio::sync::mpsc::error::SendError;
@@ -41,6 +43,10 @@ pub enum BinaryOptionsToolsError {
     Unallowed(String),
     #[error("Failed to join thread, {0}")]
     TaskJoinError(#[from] tokio::task::JoinError),
+    #[error("Failed to execute '{task}' task before the maximum allowed time of '{duration:?}'")]
+    TimeoutError { task: String, duration: Duration },
+    #[error("Failed to parse duration, error {0}")]
+    ChronoDurationParsingError(#[from] chrono::OutOfRangeError),
 }
 
 pub type BinaryOptionsResult<T> = Result<T, BinaryOptionsToolsError>;

@@ -1,2 +1,3 @@
 /core/target
 /rust/target    
+/examples/*.log

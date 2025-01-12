@@ -16,6 +16,7 @@ use tracing::{debug, error, info, warn};
 use crate::contstants::{MAX_CHANNEL_CAPACITY, RECONNECT_CALLBACK};
 use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
 use crate::general::types::MessageType;
+use crate::utils::time::timeout;
 
 use super::traits::{Callback, Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
 use super::types::Data;
@@ -334,6 +335,19 @@ where
             .send_message(&self.data, msg, response_type, validator)
             .await
     }
+
+    pub async fn send_message_with_timout(
+        &self,
+        timeout: Duration,
+        task: impl ToString,
+        msg: Transfer,
+        response_type: Transfer::Info,
+        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+    ) -> BinaryOptionsResult<Transfer> {
+        self.sender
+            .send_message_with_timout(timeout, task, &self.data, msg, response_type, validator)
+            .await
+    }
 }
 
 pub fn validate<Transfer>(
@@ -394,5 +408,86 @@ where
         Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
             RecvError,
         ))
+    }
+
+    // pub async fn send_message_with_timout<T: DataHandler<Transfer = Transfer>>(
+    //     &self,
+    //     timeout: Duration,
+    //     task: impl ToString,
+    //     data: &Data<T, Transfer>,
+    //     msg: Transfer,
+    //     response_type: Transfer::Info,
+    //     validator: impl Fn(&Transfer) -> bool + Send + Sync,
+    // ) -> BinaryOptionsResult<Transfer> {
+    //     let reciever = data.add_request(response_type).await;
+
+    //     self.sender
+    //         .send(msg)
+    //         .await
+    //         .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
+
+    //     let start_time = Instant::now();
+
+    //     loop {
+    //         match reciever.try_recv() {
+    //             Ok(msg) => {
+    //                 println!("Called");
+    //                 if let Some(msg) = validate(&validator, msg)
+    //                     .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+    //                 {
+    //                     return Ok(msg);
+    //                 }
+    //             }
+    //             Err(err) => match err {
+    //                 TryRecvError::Closed => {
+    //                     return Err(BinaryOptionsToolsError::Unallowed(
+    //                         "Api channel connectionc closed".into(),
+    //                     ))
+    //                 }
+    //                 TryRecvError::Empty => {}
+    //             },
+    //         }
+    //         if Instant::now() - start_time >= timeout {
+    //             return Err(BinaryOptionsToolsError::TimeoutError {
+    //                 task: task.to_string(),
+    //                 duration: timeout,
+    //             });
+    //         }
+    //     }
+    // }
+
+    pub async fn send_message_with_timout<T: DataHandler<Transfer = Transfer>>(
+        &self,
+        time: Duration,
+        task: impl ToString,
+        data: &Data<T, Transfer>,
+        msg: Transfer,
+        response_type: Transfer::Info,
+        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+    ) -> BinaryOptionsResult<Transfer> {
+        let reciever = data.add_request(response_type).await;
+
+        self.sender
+            .send(msg)
+            .await
+            .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
+
+        timeout(
+            time,
+            async {
+                while let Ok(msg) = reciever.recv().await {
+                    if let Some(msg) = validate(&validator, msg)
+                        .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+                    {
+                        return Ok(msg);
+                    }
+                }
+                Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+                    RecvError,
+                ))
+            },
+            task.to_string(),
+        )
+        .await
     }
 }

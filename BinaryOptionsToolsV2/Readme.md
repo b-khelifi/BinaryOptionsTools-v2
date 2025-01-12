@@ -10,12 +10,13 @@ This file initializes the Python module and organizes the imports for both synch
 Key Details 
 
 - **Imports `BinaryOptionsToolsV2`**: Imports all elements and documentation from the Rust module. 
-- **Includes Submodules**: Imports and exposes `asyncronous` and `syncronous` modules for user convenience. 
+- **Includes Submodules**: Imports and exposes `pocketoption` and `tracing` modules for user convenience. 
 
 Purpose 
 
 Serves as the entry point for the package, exposing all essential components of the library. 
 
+### Inside the `pocketoption` folder there are 2 main files
 2. `asyncronous.py` 
 
 This file implements the `PocketOptionAsync` class, which provides an asynchronous interface to interact with Pocket Option. 
@@ -44,7 +45,7 @@ Facilitates asynchronous iteration over live data streams, enabling non-blocking
 Example Usage 
 
 ```python
-from BinaryOptionsToolsV2.asyncronous import PocketOptionAsync 
+from BinaryOptionsToolsV2.pocketoption import PocketOptionAsync 
 import asyncio 
  
 async def main(): 
@@ -86,7 +87,7 @@ Example Usage
 
  
 ```python
-from BinaryOptionsToolsV2.syncronous import PocketOption 
+from BinaryOptionsToolsV2.pocketoption import PocketOption 
 import time
 
 client = PocketOption(ssid="your-session-id") 

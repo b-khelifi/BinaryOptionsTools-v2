@@ -3,7 +3,7 @@ use std::vec;
 
 use serde::Deserialize;
 use serde_json::{from_str, Value};
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::{Bytes, Message};
 use tracing::warn;
 
 use crate::{
@@ -324,6 +324,9 @@ impl From<WebSocketMessage> for Message {
 
 impl From<Box<WebSocketMessage>> for Message {
     fn from(value: Box<WebSocketMessage>) -> Self {
+        if value.info() == MessageInfo::None {
+            return Message::Ping(Bytes::new());
+        }
         Message::text(value.to_string())
     }
 }
