@@ -11,9 +11,7 @@ use crate::{
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
     general::{client::WebSocketClient, types::Data},
     pocketoption::{
-        parser::basic::LoadHistoryPeriod,
-        validators::{candle_validator, order_result_validator},
-        ws::ssid::Ssid,
+        parser::basic::LoadHistoryPeriod, types::order::SuccessCloseOrder, validators::{candle_validator, order_result_validator}, ws::ssid::Ssid
     },
     utils::time::timeout,
 };
@@ -150,7 +148,7 @@ impl PocketOption {
             debug!(target: "CheckResult", "Expiration time in {exp:?} seconds.");
             let start = Instant::now();
             // println!("Expiration time in {exp:?} seconds.");
-            let res: WebSocketMessage = self
+            let res: WebSocketMessage = match self
                 .send_message_with_timout(
                     exp + Duration::from_secs(5),
                     "CheckResult",
@@ -158,15 +156,18 @@ impl PocketOption {
                     MessageInfo::SuccesscloseOrder,
                     order_result_validator(trade_id),
                 )
-                .await
-                .inspect_err(|_| println!("Time elapsed, {:?}", start.elapsed()))?;
-            // let res: WebSocketMessage = self
-            //     .send_message(
-            //         WebSocketMessage::None,
-            //         MessageInfo::SuccesscloseOrder,
-            //         order_result_validator(trade_id),
-            //     )
-            //     .await.inspect_err(|_| println!("Time elapsed, {:?}", start.elapsed()))?;
+                .await 
+            {
+                Ok(msg) => msg,
+                Err(e) => {
+                    info!(target: "CheckResults", "Time elapsed, {:?}, checking closed deals one last time.", start.elapsed());
+                    if let Some(deal) = self.get_closed_deals().await.iter().find(|d| d.id == trade_id) {
+                        WebSocketMessage::SuccesscloseOrder(SuccessCloseOrder { profit: 0.0, deals: vec![deal.to_owned()] })
+                    } else {
+                        return Err(e);
+                    }
+                } 
+            };
 
             if let WebSocketMessage::SuccesscloseOrder(order) = res {
                 return order

@@ -48,11 +48,17 @@ class PocketOptionAsync:
  
     async def check_win(self, id: str) -> dict:
         """Returns a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)"""
-        duration = await self.client.get_deal_end_time(id) - int(time.time())
-        if duration <= 0:
-            duration = 5 # If duration is less than 0 then the trade is closed and the function should take less than 5 seconds to run
+        end_time = await self.client.get_deal_end_time(id)
+        
+        if end_time != None:
+            duration = end_time - int(time.time())
+            if duration <= 0:
+                duration = 5 # If duration is less than 0 then the trade is closed and the function should take less than 5 seconds to run
+        else:
+            duration = 5
+
         print(f"Duration: {duration}")
-        async with asyncio.timeout(duration):
+        async with asyncio.timeout(duration + 6): # Give 6 extra seconds for network delays or something like that (6 seconds since the rust side gives 5 extra seconds so it should only work if the rust one doesn't)
             trade = await self.client.check_win(id)
             trade = json.loads(trade)
             win = trade["profit"]

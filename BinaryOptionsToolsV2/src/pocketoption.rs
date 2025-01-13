@@ -8,7 +8,7 @@ use binary_option_tools_core::pocketoption::ws::stream::StreamAsset;
 use futures_util::stream::{BoxStream, Fuse};
 use futures_util::StreamExt;
 use pyo3::exceptions::PyStopIteration;
-use pyo3::{pyclass, pymethods, Bound, Py, PyAny, PyResult, Python};
+use pyo3::{pyclass, pymethods, Bound, IntoPyObjectExt, Py, PyAny, PyResult, Python};
 use pyo3_async_runtimes::tokio::future_into_py;
 use uuid::Uuid;
 
@@ -38,35 +38,46 @@ impl RawPocketOption {
         })
     }
 
-    pub async fn buy(&self, asset: String, amount: f64, time: u32) -> PyResult<Vec<String>> {
-        let res = self
-            .client
-            .buy(asset, amount, time)
-            .await
-            .map_err(BinaryErrorPy::from)?;
-        let deal = serde_json::to_string(&res.1).map_err(BinaryErrorPy::from)?;
-        let result = vec![res.0.to_string(), deal];
-        Ok(result)
+    pub fn buy<'py>(&self, py: Python<'py>, asset: String, amount: f64, time: u32) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            let res = 
+                    client
+                .buy(asset, amount, time)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+            let deal = serde_json::to_string(&res.1).map_err(BinaryErrorPy::from)?;
+            let result = vec![res.0.to_string(), deal];
+            Python::with_gil(|py| result.into_py_any(py))
+
+        })
     }
 
-    pub async fn sell(&self, asset: String, amount: f64, time: u32) -> PyResult<Vec<String>> {
-        let res = self
-            .client
-            .sell(asset, amount, time)
-            .await
-            .map_err(BinaryErrorPy::from)?;
-        let deal = serde_json::to_string(&res.1).map_err(BinaryErrorPy::from)?;
-        let result = vec![res.0.to_string(), deal];
-        Ok(result)
+    pub fn sell<'py>(&self, py: Python<'py>, asset: String, amount: f64, time: u32) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            let res = 
+                    client
+                .sell(asset, amount, time)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+            let deal = serde_json::to_string(&res.1).map_err(BinaryErrorPy::from)?;
+            let result = vec![res.0.to_string(), deal];
+            Python::with_gil(|py| result.into_py_any(py))
+
+        })
     }
 
-    pub async fn check_win(&self, trade_id: String) -> PyResult<String> {
-        let res = self
-            .client
+    pub fn check_win<'py>(&self,py: Python<'py>,  trade_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+
+        let res = client
             .check_results(Uuid::parse_str(&trade_id).map_err(BinaryErrorPy::from)?)
             .await
             .map_err(BinaryErrorPy::from)?;
-        Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)
+        Python::with_gil(|py| serde_json::to_string(&res).map_err(BinaryErrorPy::from)?.into_py_any(py))
+        })
     }
 
     pub async fn get_deal_end_time(&self, trade_id: String) -> PyResult<Option<i64>> {

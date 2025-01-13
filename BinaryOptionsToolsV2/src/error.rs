@@ -3,6 +3,7 @@ use binary_option_tools_core::{
 };
 use pyo3::{exceptions::PyValueError, PyErr};
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Error, Debug)]
 pub enum BinaryErrorPy {
@@ -16,6 +17,8 @@ pub enum BinaryErrorPy {
     DeserializingError(#[from] serde_json::Error),
     #[error("UUID parsing error, {0}")]
     UuidParsingError(#[from] uuid::Error),
+    #[error("Trade not found, haven't found trade for id '{0}'")]
+    TradeNotFound(Uuid),
 }
 
 impl From<BinaryErrorPy> for PyErr {
