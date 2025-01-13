@@ -183,7 +183,7 @@ impl PocketOption {
             return Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()).into());
         }
         warn!("No opened trade with the given uuid please check if you are passing the correct id");
-        return Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()));
+        Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()))
     }
 
     pub async fn get_candles(

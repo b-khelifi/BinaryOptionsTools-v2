@@ -47,6 +47,7 @@ pub fn start_tracing(path: String, level: String, terminal: bool) -> PyResult<()
 
 
 #[pyclass]
+#[derive(Default)]
 pub struct Logger;
 
 #[pymethods]
