@@ -46,10 +46,9 @@ jobs:
           python-version: 3.x
       - name: Build wheels
         uses: PyO3/maturin-action@v1
-        with:
-          path: BinaryOptionsToolsV2 # Confirm this path is correct
 
         with:
+          # path: BinaryOptionsToolsV2 # Confirm this path is correct
           target: ${{ matrix.platform.target }}
           args: --release --out dist --find-interpreter
           sccache: 'true'
