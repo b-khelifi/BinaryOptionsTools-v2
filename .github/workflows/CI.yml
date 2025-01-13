@@ -56,7 +56,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-linux-${{ matrix.platform.target }}
+          name: wheels
           path: BinaryOptionsToolsV2/dist
 
   musllinux:
@@ -89,7 +89,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-musllinux-${{ matrix.platform.target }}
+          name: wheels
           path: BinaryOptionsToolsV2/dist
 
   windows:
@@ -117,7 +117,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-windows-${{ matrix.platform.target }}
+          name: wheels
           path: BinaryOptionsToolsV2/dist
 
   macos:
@@ -144,7 +144,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-macos-${{ matrix.platform.target }}
+          name: wheels
           path: BinaryOptionsToolsV2/dist
 
   sdist:
@@ -160,7 +160,7 @@ jobs:
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-sdist
+          name: wheels
           path: BinaryOptionsToolsV2/dist
 
   release:
