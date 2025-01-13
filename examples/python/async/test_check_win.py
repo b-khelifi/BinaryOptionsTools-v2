@@ -4,7 +4,7 @@ import random
 import asyncio
 
 async def main(ssid: str):
-    start_logs(".", "info", terminal=False)
+    start_logs(".", "debug", terminal=True)
     api = PocketOptionAsync(ssid)
     await asyncio.sleep(5)
     trades = 0

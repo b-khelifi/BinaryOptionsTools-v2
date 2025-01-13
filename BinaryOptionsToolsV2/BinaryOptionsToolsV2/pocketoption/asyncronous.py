@@ -1,4 +1,4 @@
-from BinaryOptionsToolsV2 import RawPocketOption
+from BinaryOptionsToolsV2 import RawPocketOption, Logger
 
 import asyncio
 import json
@@ -18,6 +18,7 @@ class AsyncSubscription:
 class PocketOptionAsync:
     def __init__(self, ssid: str):
         self.client = RawPocketOption(ssid)
+        self.logger = Logger()
         
     
     async def buy(self, asset: str, amount: float, time: int, check_win: bool = False) -> tuple[str, dict]:
@@ -56,9 +57,10 @@ class PocketOptionAsync:
                 duration = 5 # If duration is less than 0 then the trade is closed and the function should take less than 5 seconds to run
         else:
             duration = 5
-
-        print(f"Duration: {duration}")
-        async with asyncio.timeout(duration + 6): # Give 6 extra seconds for network delays or something like that (6 seconds since the rust side gives 5 extra seconds so it should only work if the rust one doesn't)
+        duration += 6
+        
+        self.logger.debug(f"Timeout set to: {duration} (6 extra seconds)")
+        async with asyncio.timeout(duration): # Give 6 extra seconds for network delays or something like that (6 seconds since the rust side gives 5 extra seconds so it should only work if the rust one doesn't)
             trade = await self.client.check_win(id)
             trade = json.loads(trade)
             win = trade["profit"]

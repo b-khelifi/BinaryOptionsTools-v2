@@ -51,7 +51,7 @@ impl PocketOption {
             Some(callback),
         )
         .await?;
-        println!("Initialized!");
+        // println!("Initialized!");
         Ok(client)
     }
 

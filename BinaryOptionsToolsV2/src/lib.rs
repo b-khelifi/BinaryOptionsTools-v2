@@ -5,7 +5,7 @@ pub mod logs;
 pub mod pocketoption;
 pub mod runtime;
 
-use logs::start_tracing;
+use logs::{start_tracing, Logger};
 use pocketoption::RawPocketOption;
 use pyo3::prelude::*;
 
@@ -13,6 +13,7 @@ use pyo3::prelude::*;
 #[pyo3(name = "BinaryOptionsToolsV2")]
 fn BinaryOptionsTools(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RawPocketOption>()?;
+    m.add_class::<Logger>()?;
 
     m.add_function(wrap_pyfunction!(start_tracing, m)?)?;
     Ok(())
