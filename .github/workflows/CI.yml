@@ -166,7 +166,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    needs: [macos, windows, linux, linux-cross]
+    needs: [macos, windows] # [macos, windows, linux, musllinux]
     steps:
       - uses: actions/download-artifact@v3
         with:
