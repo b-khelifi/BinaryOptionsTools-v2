@@ -5,13 +5,13 @@ on:
     branches:
       - main
       - master
-  tags:
-    - '*'
+  # tags:
+  #   - '*'
   # pull_request:
   # workflow_dispatch:
 
-permissions:
-  contents: read
+# permissions:
+#   contents: read
 
 jobs:
   linux:
