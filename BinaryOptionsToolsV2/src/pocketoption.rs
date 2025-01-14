@@ -164,22 +164,24 @@ impl RawPocketOption {
         })
     }
 
-    pub async fn subscribe_symbol(&self, symbol: String) -> PyResult<StreamIterator> {
-        let stream_asset = self
-            .client
-            .subscribe_symbol(symbol)
-            .await
-            .map_err(BinaryErrorPy::from)?;
+    pub fn subscribe_symbol<'py>(&self, py:Python<'py>, symbol: String) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            let stream_asset = client
+                .subscribe_symbol(symbol)
+                .await
+                .map_err(BinaryErrorPy::from)?;
 
-        // Clone the stream_asset and convert it to a BoxStream
-        let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset))
-            .boxed()
-            .fuse();
+            // Clone the stream_asset and convert it to a BoxStream
+            let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset))
+                .boxed()
+                .fuse();
 
-        // Wrap the BoxStream in an Arc and Mutex
-        let stream = Arc::new(Mutex::new(boxed_stream));
+            // Wrap the BoxStream in an Arc and Mutex
+            let stream = Arc::new(Mutex::new(boxed_stream));
 
-        Ok(StreamIterator { stream })
+            Python::with_gil(|py| StreamIterator { stream }.into_py_any(py))
+        })
     }
 }
 
