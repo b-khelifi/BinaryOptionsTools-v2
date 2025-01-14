@@ -491,3 +491,20 @@ where
         .await
     }
 }
+
+
+// impl<Transfer, Handler, Connector, Creds, T, C> Drop
+//     for WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
+// where
+//     Transfer: MessageTransfer,
+//     Handler: MessageHandler,
+//     Connector: Connect,
+//     Creds: Credentials,
+//     T: DataHandler,
+//     C: Callback,
+// {
+//     fn drop(&mut self) {
+//         self._event_loop.abort();
+//         info!(target: "Drop", "Dropping WebSocketClient instance");
+//     }
+// }

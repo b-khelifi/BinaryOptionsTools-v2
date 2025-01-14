@@ -13,7 +13,6 @@ use crate::{
     pocketoption::{
         parser::basic::LoadHistoryPeriod, types::order::SuccessCloseOrder, validators::{candle_validator, order_result_validator}, ws::ssid::Ssid
     },
-    utils::time::timeout,
 };
 
 use super::{
@@ -71,7 +70,9 @@ impl PocketOption {
         )?;
         let request_id = order.request_id;
         let res = self
-            .send_message(
+            .send_message_with_timout(
+                Duration::from_secs(5),
+                "Trade",
                 WebSocketMessage::OpenOrder(order),
                 MessageInfo::SuccessopenOrder,
                 order_validator(request_id),
@@ -90,10 +91,8 @@ impl PocketOption {
         amount: f64,
         time: u32,
     ) -> BinaryOptionsResult<(Uuid, Deal)> {
-        timeout(Duration::from_secs(5), async {
-            info!(target: "Buy", "Placing a buy trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
-            self.trade(asset, Action::Call, amount, time).await
-        }, String::from("Trade")).await
+        info!(target: "Buy", "Placing a buy trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
+        self.trade(asset, Action::Call, amount, time).await
     }
 
     pub async fn sell(
@@ -102,10 +101,8 @@ impl PocketOption {
         amount: f64,
         time: u32,
     ) -> BinaryOptionsResult<(Uuid, Deal)> {
-        timeout(Duration::from_secs(5), async {
-            info!(target: "Sell", "Placing a sell trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
-            self.trade(asset, Action::Put, amount, time).await
-        }, String::from("Trade")).await
+        info!(target: "Sell", "Placing a sell trade for asset '{}', with amount '{}' and time '{}'", asset.to_string(), amount, time);
+        self.trade(asset, Action::Put, amount, time).await
     }
 
     pub async fn get_deal_end_time(&self, id: Uuid) -> Option<DateTime<Utc>> {
@@ -207,10 +204,13 @@ impl PocketOption {
         );
         let request = LoadHistoryPeriod::new(asset.to_string(), time, period, offset)?;
         let res = self
-            .send_message(
+            .send_message_with_timout(
+                Duration::from_secs(5),
+                "GetCandles",
                 WebSocketMessage::GetCandles(request),
                 MessageInfo::LoadHistoryPeriod,
                 candle_validator(index),
+                
             )
             .await?;
         if let WebSocketMessage::LoadHistoryPeriod(history) = res {
@@ -228,7 +228,9 @@ impl PocketOption {
 
         let request = ChangeSymbol::new(asset.to_string(), period);
         let res = self
-            .send_message(
+            .send_message_with_timout(
+                Duration::from_secs(5),
+                "History",
                 WebSocketMessage::ChangeSymbol(request),
                 MessageInfo::UpdateHistoryNew,
                 history_validator(asset.to_string(), period),
@@ -270,6 +272,10 @@ impl PocketOption {
         let _ = self.history(asset.to_string(), 1).await?;
         debug!("Created StreamAsset instance.");
         Ok(self.data.add_stream(asset.to_string()).await)
+    }
+
+    pub fn kill(self) {
+        drop(self)
     }
 }
 

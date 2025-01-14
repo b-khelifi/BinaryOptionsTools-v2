@@ -9,10 +9,15 @@ async def main(ssid: str):
     await asyncio.sleep(5)
     
     # Candñes are returned in the format of a list of dictionaries
-    candles = await api.get_candles("EURUSD_otc", 60, 3600)
-    print(f"Raw Candles: {candles}")
-    candles_pd = pd.DataFrame.from_dict(candles)
-    print(f"Candles: {candles_pd}")
+    times = [ 3600 * i for i in range(1, 11)]
+    time_frames = [ 1, 5, 15, 30, 60, 300]
+    for time in times:
+        for frame in time_frames:
+            
+            candles = await api.get_candles("EURUSD_otc", 60, time)
+            # print(f"Raw Candles: {candles}")
+            candles_pd = pd.DataFrame.from_dict(candles)
+            print(f"Candles: {candles_pd}")
     
 if __name__ == '__main__':
     ssid = input('Please enter your ssid: ')

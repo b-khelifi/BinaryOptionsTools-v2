@@ -38,59 +38,86 @@ impl RawPocketOption {
         })
     }
 
-    pub fn buy<'py>(&self, py: Python<'py>, asset: String, amount: f64, time: u32) -> PyResult<Bound<'py, PyAny>> {
+    pub fn buy<'py>(
+        &self,
+        py: Python<'py>,
+        asset: String,
+        amount: f64,
+        time: u32,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let client = self.client.clone();
         future_into_py(py, async move {
-            let res = 
-                    client
+            let res = client
                 .buy(asset, amount, time)
                 .await
                 .map_err(BinaryErrorPy::from)?;
             let deal = serde_json::to_string(&res.1).map_err(BinaryErrorPy::from)?;
             let result = vec![res.0.to_string(), deal];
             Python::with_gil(|py| result.into_py_any(py))
-
         })
     }
 
-    pub fn sell<'py>(&self, py: Python<'py>, asset: String, amount: f64, time: u32) -> PyResult<Bound<'py, PyAny>> {
+    pub fn sell<'py>(
+        &self,
+        py: Python<'py>,
+        asset: String,
+        amount: f64,
+        time: u32,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let client = self.client.clone();
         future_into_py(py, async move {
-            let res = 
-                    client
+            let res = client
                 .sell(asset, amount, time)
                 .await
                 .map_err(BinaryErrorPy::from)?;
             let deal = serde_json::to_string(&res.1).map_err(BinaryErrorPy::from)?;
             let result = vec![res.0.to_string(), deal];
             Python::with_gil(|py| result.into_py_any(py))
-
         })
     }
 
-    pub fn check_win<'py>(&self,py: Python<'py>,  trade_id: String) -> PyResult<Bound<'py, PyAny>> {
+    pub fn check_win<'py>(&self, py: Python<'py>, trade_id: String) -> PyResult<Bound<'py, PyAny>> {
         let client = self.client.clone();
         future_into_py(py, async move {
-
-        let res = client
-            .check_results(Uuid::parse_str(&trade_id).map_err(BinaryErrorPy::from)?)
-            .await
-            .map_err(BinaryErrorPy::from)?;
-        Python::with_gil(|py| serde_json::to_string(&res).map_err(BinaryErrorPy::from)?.into_py_any(py))
+            let res = client
+                .check_results(Uuid::parse_str(&trade_id).map_err(BinaryErrorPy::from)?)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+            Python::with_gil(|py| {
+                serde_json::to_string(&res)
+                    .map_err(BinaryErrorPy::from)?
+                    .into_py_any(py)
+            })
         })
     }
 
     pub async fn get_deal_end_time(&self, trade_id: String) -> PyResult<Option<i64>> {
-        Ok(self.client.get_deal_end_time(Uuid::parse_str(&trade_id).map_err(BinaryErrorPy::from)?).await.map(|d|d.timestamp()))
+        Ok(self
+            .client
+            .get_deal_end_time(Uuid::parse_str(&trade_id).map_err(BinaryErrorPy::from)?)
+            .await
+            .map(|d| d.timestamp()))
     }
 
-    pub async fn get_candles(&self, asset: String, period: i64, offset: i64) -> PyResult<String> {
-        let res = self
-            .client
-            .get_candles(asset, period, offset)
-            .await
-            .map_err(BinaryErrorPy::from)?;
-        Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)
+    pub fn get_candles<'py>(
+        &self,
+        py: Python<'py>,
+        asset: String,
+        period: i64,
+        offset: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            let res = client
+                .get_candles(asset, period, offset)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+            Python::with_gil(|py| {
+                serde_json::to_string(&res)
+                    .map_err(BinaryErrorPy::from)?
+                    .into_py_any(py)
+            })
+        })
     }
 
     pub async fn balance(&self) -> PyResult<String> {
@@ -117,13 +144,24 @@ impl RawPocketOption {
         Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)
     }
 
-    pub async fn history(&self, asset: String, period: i64) -> PyResult<String> {
-        let res = self
-            .client
-            .history(asset, period)
-            .await
-            .map_err(BinaryErrorPy::from)?;
-        Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)
+    pub fn history<'py>(
+        &self,
+        py: Python<'py>,
+        asset: String,
+        period: i64,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            let res = client
+                .history(asset, period)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+            Python::with_gil(|py| {
+                serde_json::to_string(&res)
+                    .map_err(BinaryErrorPy::from)?
+                    .into_py_any(py)
+            })
+        })
     }
 
     pub async fn subscribe_symbol(&self, symbol: String) -> PyResult<StreamIterator> {
