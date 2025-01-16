@@ -1,10 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time::Duration,
 };
 
 use async_channel::{bounded, Receiver, Sender};
 use async_trait::async_trait;
+use chrono::Utc;
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -131,7 +133,8 @@ impl PocketData {
     }
 
     pub async fn get_server_time(&self) -> i64 {
-        *self.server_time.lock().await
+        // *self.server_time.lock().await
+        (Utc::now() + Duration::from_secs(2 * 3600 + 123)).timestamp()
     }
 
     pub async fn add_stream(&self, asset: String) -> StreamAsset {
@@ -139,6 +142,13 @@ impl PocketData {
         let mut assets = self.stream_assets.lock().await;
         assets.push(asset.clone());
         StreamAsset::new(self.stream_channels.1.clone(), asset)
+    }
+
+    pub async fn add_stream_chuncked(&self, asset: String, chunck_size: usize) -> StreamAsset {
+        info!("Created new channels and StreamAsset instance");
+        let mut assets = self.stream_assets.lock().await;
+        assets.push(asset.clone());
+        StreamAsset::new_chuncked(self.stream_channels.1.clone(), asset, chunck_size)
     }
 
     pub async fn stream_assets(&self) -> Vec<String> {

@@ -49,6 +49,8 @@ pub enum PocketOptionError {
     Unallowed(String),
     #[error("Error sending request, {0}")]
     WebsocketMessageSendingError(#[from] PocketMessageFail),
+    #[error("Expected the data to be non-empty for type '{0}'")]
+    EmptyArrayError(String),
 }
 
 pub type PocketResult<T> = Result<T, PocketOptionError>;

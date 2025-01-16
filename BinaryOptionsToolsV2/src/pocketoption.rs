@@ -27,6 +27,7 @@ pub struct StreamIterator {
     stream: Arc<Mutex<Fuse<BoxStream<'static, PocketResult<DataCandle>>>>>,
 }
 
+
 #[pymethods]
 impl RawPocketOption {
     #[new]
@@ -183,6 +184,27 @@ impl RawPocketOption {
             Python::with_gil(|py| StreamIterator { stream }.into_py_any(py))
         })
     }
+
+    pub fn subscribe_symbol_chuncked<'py>(&self, py:Python<'py>, symbol: String, chunck_size: usize) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            let stream_asset = client
+                .subscribe_symbol_chuncked(symbol, chunck_size)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+
+            // Clone the stream_asset and convert it to a BoxStream
+            let boxed_stream = StreamAsset::to_stream_chuncked_static(Arc::new(stream_asset))
+                .boxed()
+                .fuse();
+
+            // Wrap the BoxStream in an Arc and Mutex
+            let stream = Arc::new(Mutex::new(boxed_stream));
+
+            Python::with_gil(|py| StreamIterator { stream }.into_py_any(py))
+        })
+    }
+
 }
 
 #[pymethods]

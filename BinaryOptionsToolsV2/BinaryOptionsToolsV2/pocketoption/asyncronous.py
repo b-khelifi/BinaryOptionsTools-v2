@@ -51,7 +51,7 @@ class PocketOptionAsync:
         """Returns a dictionary containing the trade data and the result of the trade ("win", "draw", "loss)"""
         end_time = await self.client.get_deal_end_time(id)
         
-        if end_time != None:
+        if end_time is not None:
             duration = end_time - int(time.time())
             if duration <= 0:
                 duration = 5 # If duration is less than 0 then the trade is closed and the function should take less than 5 seconds to run
@@ -115,10 +115,16 @@ class PocketOptionAsync:
         "Returns a list of dictionaries containing the latest data available for the specified asset starting from 'period', the data is in the same format as the returned data of the 'get_candles' function."
         return json.loads(await self.client.history(asset, period))
     
-    async def _subscribe_symbol_inner(self, asset: str):
+    async def _subscribe_symbol_inner(self, asset: str) :
         return await self.client.subscribe_symbol(asset)
+    
+    async def _subscribe_symbol_chuncked_inner(self, asset: str, chunck_size: int):
+        return await self.client.subscribe_symbol_chuncked(asset, chunck_size)
     
     async def subscribe_symbol(self, asset: str) -> AsyncSubscription:
         """Returns an async iterator over the associated asset, it will return real time raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
         return AsyncSubscription(await self._subscribe_symbol_inner(asset))
-        
+    
+    async def subscribe_symbol_chuncked(self, asset: str, chunck_size: int) -> AsyncSubscription:
+        """Returns an async iterator over the associated asset, it will return real time candles formed with the specified amount of raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
+        return AsyncSubscription(await self._subscribe_symbol_chuncked_inner(asset, chunck_size))

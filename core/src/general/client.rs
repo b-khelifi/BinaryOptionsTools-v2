@@ -206,9 +206,11 @@ where
                     }
                     Err(e) => {
                         warn!("Error in event loop, {e}, reconnecting...");
+                        println!("Reconnecting...");
                         if let Ok(websocket) = connector.connect(credentials.clone()).await {
                             (write, read) = websocket.split();
                             info!("Reconnected successfully!");
+                            println!("Reconnected successfully!");
                             loops = 0;
                             reconnected = true;
                         } else {
@@ -348,6 +350,26 @@ where
             .send_message_with_timout(timeout, task, &self.data, msg, response_type, validator)
             .await
     }
+
+    pub async fn send_message_with_timeout_and_retry(
+        &self,
+        timeout: Duration,
+        task: impl ToString,
+        msg: Transfer,
+        response_type: Transfer::Info,
+        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+    ) -> BinaryOptionsResult<Transfer> {
+        self.sender
+            .send_message_with_timeout_and_retry(
+                timeout,
+                task,
+                &self.data,
+                msg,
+                response_type,
+                validator,
+            )
+            .await
+    }
 }
 
 pub fn validate<Transfer>(
@@ -374,15 +396,57 @@ where
     Transfer: MessageTransfer,
 {
     sender: Sender<Transfer>,
+    // sender_priority: Sender<Transfer>
 }
 
 impl<Transfer> SenderMessage<Transfer>
 where
     Transfer: MessageTransfer,
 {
+    // fn new(cap: usize) -> (Self, (Receiver<Transfer>, Receiver<Transfer>)) {
+    //     let (s, r) = bounded(cap);
+    //     let (sp, rp) = bounded(cap);
+
+    //     (
+    //         Self { sender: s, sender_priority: sp },
+    //         (r, rp)
+    //     )
+    // }
     fn new(sender: Sender<Transfer>) -> Self {
         Self { sender }
     }
+    async fn reciever<T: DataHandler<Transfer = Transfer>>(
+        &self,
+        data: &Data<T, Transfer>,
+        msg: Transfer,
+        response_type: Transfer::Info,
+    ) -> BinaryOptionsResult<Receiver<Transfer>> {
+        let reciever = data.add_request(response_type).await;
+
+        self.sender
+            .send(msg)
+            .await
+            .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
+        Ok(reciever)
+    }
+
+    // pub async fn send(&self, msg: Transfer) -> BinaryOptionsResult<()> {
+    //     self.sender.send(msg).await.map_err(|e| {
+    //         BinaryOptionsToolsError::ChannelRequestSendingError(
+    //             e.to_string(),
+    //         )
+    //     })?;
+    //     Ok(())
+    // }
+
+    // pub async fn priority_send(&self, msg: Transfer) -> BinaryOptionsResult<()> {
+    //     self.sender_priority.send(msg).await.map_err(|e| {
+    //         BinaryOptionsToolsError::ChannelRequestSendingError(
+    //             e.to_string(),
+    //         )
+    //     })?;
+    //     Ok(())
+    // }
 
     pub async fn send_message<T: DataHandler<Transfer = Transfer>>(
         &self,
@@ -391,16 +455,11 @@ where
         response_type: Transfer::Info,
         validator: impl Fn(&Transfer) -> bool + Send + Sync,
     ) -> BinaryOptionsResult<Transfer> {
-        let reciever = data.add_request(response_type).await;
-
-        self.sender
-            .send(msg)
-            .await
-            .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
+        let reciever = self.reciever(data, msg, response_type).await?;
 
         while let Ok(msg) = reciever.recv().await {
             if let Some(msg) =
-                validate(&validator, msg).inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+                validate(&validator, msg).inspect_err(|e| error!("Failed to place trade {e}"))?
             {
                 return Ok(msg);
             }
@@ -465,12 +524,7 @@ where
         response_type: Transfer::Info,
         validator: impl Fn(&Transfer) -> bool + Send + Sync,
     ) -> BinaryOptionsResult<Transfer> {
-        let reciever = data.add_request(response_type).await;
-
-        self.sender
-            .send(msg)
-            .await
-            .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
+        let reciever = self.reciever(data, msg, response_type).await?;
 
         timeout(
             time,
@@ -490,8 +544,63 @@ where
         )
         .await
     }
-}
 
+    pub async fn send_message_with_timeout_and_retry<T: DataHandler<Transfer = Transfer>>(
+        &self,
+        time: Duration,
+        task: impl ToString,
+        data: &Data<T, Transfer>,
+        msg: Transfer,
+        response_type: Transfer::Info,
+        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+    ) -> BinaryOptionsResult<Transfer> {
+        let reciever = self
+            .reciever(data, msg.clone(), response_type.clone())
+            .await?;
+
+        let call1 = timeout(
+            time,
+            async {
+                while let Ok(msg) = reciever.recv().await {
+                    if let Some(msg) = validate(&validator, msg)
+                        .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+                    {
+                        return Ok(msg);
+                    }
+                }
+                Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+                    RecvError,
+                ))
+            },
+            task.to_string(),
+        )
+        .await;
+        match call1 {
+            Ok(res) => Ok(res),
+            Err(_) => {
+                println!("Failded 1 trying again");
+                let reciever = self.reciever(data, msg, response_type).await?;
+                timeout(
+                    time,
+                    async {
+                        while let Ok(msg) = reciever.recv().await {
+                            if let Some(msg) = validate(&validator, msg)
+                                .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+                            {
+                                return Ok(msg);
+                            }
+                        }
+                        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+                            RecvError,
+                        ))
+                    },
+                    task.to_string(),
+                )
+                .await
+            }
+        }
+    }
+}
 
 // impl<Transfer, Handler, Connector, Creds, T, C> Drop
 //     for WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
@@ -508,3 +617,90 @@ where
 //         info!(target: "Drop", "Dropping WebSocketClient instance");
 //     }
 // }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use async_channel::{bounded, Receiver, Sender};
+    use futures_util::{future::try_join, stream::{select_all, unfold}, Stream, StreamExt};
+    use rand::{distributions::Alphanumeric, Rng};
+    use tokio::time::sleep;
+    use tracing::info;
+
+    use crate::utils::tracing::start_tracing;
+
+    struct RecieverStream<T> {
+        inner: Receiver<T>
+    }
+
+    impl<T> RecieverStream<T> {
+        fn new(inner: Receiver<T>) -> Self {
+            Self { inner }
+        }
+
+        async fn receive(&self) -> anyhow::Result<T> {
+            Ok(self.inner.recv().await?)
+        }
+
+        fn to_stream(&self) -> impl Stream<Item = anyhow::Result<T>> + '_ {
+            Box::pin(unfold(self, |state| async move {
+                let item = state.receive().await;
+                Some((item, state))
+            }))        
+        }
+        
+    }
+
+
+
+    async fn recieve_dif(reciever: Receiver<String>, receiver_priority: Receiver<String>) -> anyhow::Result<()> {
+        async fn receiv(r: &Receiver<String>) -> anyhow::Result<()> {
+            while let Ok(t) = r.recv().await {
+                info!(target: "High priority", "Recieved: {}", t);
+            }
+            Ok(())
+        }
+        tokio::select! {
+            _ = receiv(&receiver_priority) => {
+
+            },
+            _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+        }
+        let receiver = RecieverStream::new(reciever);
+        let receiver_priority = RecieverStream::new(receiver_priority);
+        let mut fused = select_all([receiver.to_stream(), receiver_priority.to_stream()]);
+        while let Some(value) = fused.next().await {
+            info!(target: "Fused", "Recieved: {}", value?);
+        }
+    
+        Ok(())
+    }
+
+    async fn sender_dif(sender: Sender<String>, sender_priority: Sender<String>) -> anyhow::Result<()> {
+        loop {
+            let s1: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(7)
+            .map(char::from)
+            .collect();
+            let s2: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(7)
+            .map(char::from)
+            .collect();
+            sender.send(s1).await?;
+            sender_priority.send(s2).await?;
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_multi_priority_reciever() -> anyhow::Result<()> {
+        start_tracing(true)?;
+        let (s, r) = bounded(8);
+        let (sp, rp) = bounded(8);
+        try_join(sender_dif(s, sp), recieve_dif(r, rp)).await?;
+        Ok(())
+    }
+}

@@ -5,6 +5,7 @@ use tokio::time::sleep;
 use tracing::{debug, info};
 
 use crate::{
+    contstants::{POCKET_CALLBACK_TIME, TIMOUT_TIME},
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
     general::{client::SenderMessage, traits::Callback, types::Data},
     pocketoption::{
@@ -28,13 +29,15 @@ impl Callback for PocketCallback {
         data: Data<Self::T, Self::Transfer>,
         sender: &SenderMessage<Self::Transfer>,
     ) -> BinaryOptionsResult<()> {
-        sleep(Duration::from_secs(5)).await;
+        sleep(Duration::from_secs(POCKET_CALLBACK_TIME)).await;
 
         for asset in data.stream_assets().await {
             sleep(Duration::from_secs(1)).await;
             let history = ChangeSymbol::new(asset.to_string(), 3600);
             let res = sender
-                .send_message(
+                .send_message_with_timout(
+                    Duration::from_secs(TIMOUT_TIME),
+                    "HistoryCallback",
                     &data,
                     WebSocketMessage::ChangeSymbol(history),
                     MessageInfo::UpdateHistoryNew,

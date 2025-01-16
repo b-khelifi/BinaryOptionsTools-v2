@@ -83,3 +83,6 @@ class PocketOption:
         """Returns an async iterator over the associated asset, it will return real time raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
         return SyncSubscription(self.loop.run_until_complete(self._client._subscribe_symbol_inner(asset)))
 
+    def subscribe_symbol_chuncked(self, asset: str, chunck_size: int) -> SyncSubscription:
+        """Returns an async iterator over the associated asset, it will return real time candles formed with the specified amount of raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
+        return SyncSubscription(self.loop.run_until_complete(self._client._subscribe_symbol_chuncked_inner(asset, chunck_size)))

@@ -3,6 +3,8 @@ use core::fmt;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::pocketoption::error::PocketOptionError;
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UpdateStream(pub Vec<UpdateStreamItem>);
 
@@ -195,6 +197,32 @@ impl Default for UpdateBalance {
             uid: None,
             login: None,
         }
+    }
+}
+
+impl TryFrom<Vec<DataCandle>> for DataCandle {
+    type Error = PocketOptionError;
+
+    fn try_from(value: Vec<DataCandle>) -> Result<Self, Self::Error> {
+        if value.is_empty() {
+            return Err(PocketOptionError::EmptyArrayError("DataCandle".into()));
+        }
+        let mut low = f64::INFINITY;
+        let mut high = f64::NEG_INFINITY;
+        let first = value
+            .first()
+            .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?;
+        let time = first.time;
+        let open = first.open;
+        let close = value
+            .last()
+            .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?
+            .close;
+        value.iter().for_each(|c| {
+            high = high.max(c.high);
+            low = low.min(c.low);
+        });
+        Ok(DataCandle::new(time, open, close, high, low))
     }
 }
 
