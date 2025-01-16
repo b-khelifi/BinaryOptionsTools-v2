@@ -243,7 +243,7 @@ impl PocketOption {
 
         let request = ChangeSymbol::new(asset.to_string(), period);
         let res = self
-            .send_message_with_timout(
+            .send_message_with_timeout_and_retry(
                 Duration::from_secs(TIMOUT_TIME),
                 "History",
                 WebSocketMessage::ChangeSymbol(request),
@@ -531,4 +531,17 @@ mod tests {
         }
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_history() -> anyhow::Result<()> {
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
+        // time: 1733040000, offset: 540000, period: 3600
+        let client = PocketOption::new(ssid).await.unwrap();
+        for i in 0..1000 {
+            let candles = client.history("EURUSD_otc", 6000).await?;
+            println!("Candles n°{} len: {}, ", i + 1, candles.len());
+        }
+        Ok(())
+    }
+
 }
