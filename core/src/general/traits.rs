@@ -1,6 +1,4 @@
 use core::{error, fmt, hash};
-
-use async_channel::Sender;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::net::TcpStream;
@@ -9,7 +7,7 @@ use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use crate::error::BinaryOptionsResult;
 
 use super::{
-    client::SenderMessage,
+    send::SenderMessage,
     types::{Data, MessageType, UserRequest},
 };
 
@@ -69,7 +67,7 @@ pub trait MessageHandler: Clone + Send + Sync {
         &self,
         message: &Message,
         previous: &Option<<<Self as MessageHandler>::Transfer as MessageTransfer>::Info>,
-        sender: &Sender<Message>,
+        sender: &SenderMessage<Self::Transfer>,
     ) -> BinaryOptionsResult<(Option<MessageType<Self::Transfer>>, bool)>;
 }
 

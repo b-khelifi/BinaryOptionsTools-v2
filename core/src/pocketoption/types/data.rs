@@ -1,45 +1,61 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time::Duration,
 };
 
 use async_channel::{bounded, Receiver, Sender};
-use tokio::sync::{oneshot::Sender as OneshotSender, Mutex};
-use tracing::debug;
+use async_trait::async_trait;
+use chrono::Utc;
+use tokio::sync::Mutex;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::{
     contstants::MAX_CHANNEL_CAPACITY,
+    error::BinaryOptionsResult,
+    general::traits::DataHandler,
     pocketoption::{
         error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
     },
 };
 
 use super::{
-    info::MessageInfo,
     order::Deal,
     update::{UpdateAssets, UpdateBalance, UpdateStream},
 };
-type Element = (
-    Box<dyn Fn(&WebSocketMessage) -> bool + Send + Sync>,
-    OneshotSender<WebSocketMessage>,
-);
-type HashMapData = HashMap<MessageInfo, Vec<Element>>;
 
 pub struct Channels(Sender<WebSocketMessage>, Receiver<WebSocketMessage>);
 
 #[derive(Default, Clone)]
-pub struct Data {
+pub struct PocketData {
     balance: Arc<Mutex<UpdateBalance>>,
     opened_deals: Arc<Mutex<HashMap<Uuid, Deal>>>,
     closed_deals: Arc<Mutex<HashSet<Deal>>>,
     payout_data: Arc<Mutex<HashMap<String, i32>>>,
-    pending_requests: Arc<Mutex<HashMapData>>,
     server_time: Arc<Mutex<i64>>,
     stream_channels: Arc<Channels>,
+    stream_assets: Arc<Mutex<Vec<String>>>,
 }
 
-impl Data {
+impl Default for Channels {
+    fn default() -> Self {
+        let (s, r) = bounded(MAX_CHANNEL_CAPACITY);
+        Self(s, r)
+    }
+}
+
+impl From<UpdateAssets> for HashMap<String, i32> {
+    fn from(value: UpdateAssets) -> Self {
+        value
+            .0
+            .iter()
+            .map(|a| (a.symbol.clone(), a.payout))
+            .collect()
+    }
+}
+
+impl PocketData {
     pub async fn update_balance(&self, balance: UpdateBalance) {
         let mut blnc = self.balance.lock().await;
         *blnc = balance;
@@ -89,6 +105,11 @@ impl Data {
         self.closed_deals.lock().await.clone().into_iter().collect()
     }
 
+    pub async fn clean_closed_deals(&self) {
+        let mut closed = self.closed_deals.lock().await;
+        closed.clear();
+    }
+
     pub async fn update_payout_data(&self, payout: UpdateAssets) {
         let mut data = self.payout_data.lock().await;
         *data = payout.into();
@@ -106,91 +127,121 @@ impl Data {
             .cloned()
     }
 
-    pub async fn add_user_request(
-        &self,
-        info: MessageInfo,
-        validator: impl Fn(&WebSocketMessage) -> bool + Send + Sync + 'static,
-        sender: tokio::sync::oneshot::Sender<WebSocketMessage>,
-    ) {
-        let mut requests = self.pending_requests.lock().await;
-        if let Some(reqs) = requests.get_mut(&info) {
-            reqs.push((Box::new(validator), sender));
-            return;
-        }
-
-        requests.insert(info, vec![(Box::new(validator), sender)]);
-    }
-
-    pub async fn get_request(
-        &self,
-        message: &WebSocketMessage,
-    ) -> PocketResult<Option<Vec<OneshotSender<WebSocketMessage>>>> {
-        let mut requests = self.pending_requests.lock().await;
-        let info = message.info();
-
-        if let Some(reqs) = requests.get_mut(&info) {
-            // Find the index of the matching validator
-            let mut senders = Vec::new();
-            let mut keepers = Vec::new();
-            let drain = reqs.drain(std::ops::RangeFull);
-            drain.for_each(|req| {
-                if req.0(message) {
-                    senders.push(req);
-                } else {
-                    keepers.push(req);
-                }
-            });
-            *reqs = keepers;
-            if !senders.is_empty() {
-                return Ok(Some(
-                    senders
-                        .into_iter()
-                        .map(|(_, s)| s)
-                        .collect::<Vec<OneshotSender<WebSocketMessage>>>(),
-                ));
-            } else {
-                return Ok(None);
-            }
-        }
-        if let WebSocketMessage::FailOpenOrder(fail) = message {
-            if let Some(reqs) = requests.remove(&MessageInfo::SuccessopenOrder) {
-                for (_, sender) in reqs.into_iter() {
-                    sender.send(WebSocketMessage::FailOpenOrder(fail.clone()))?;
-                }
-            }
-        }
-        Ok(None)
-    }
-
     pub async fn update_server_time(&self, time: i64) {
         let mut s_time = self.server_time.lock().await;
         *s_time = time;
     }
 
     pub async fn get_server_time(&self) -> i64 {
-        *self.server_time.lock().await
+        // *self.server_time.lock().await
+        (Utc::now() + Duration::from_secs(2 * 3600 + 123)).timestamp()
     }
 
     pub async fn add_stream(&self, asset: String) -> StreamAsset {
-        debug!("Created new channels and StreamAsset instance");
+        info!("Created new channels and StreamAsset instance");
+        let mut assets = self.stream_assets.lock().await;
+        assets.push(asset.clone());
         StreamAsset::new(self.stream_channels.1.clone(), asset)
     }
 
+    pub async fn add_stream_chuncked(&self, asset: String, chunck_size: usize) -> StreamAsset {
+        info!("Created new channels and StreamAsset instance");
+        let mut assets = self.stream_assets.lock().await;
+        assets.push(asset.clone());
+        StreamAsset::new_chuncked(self.stream_channels.1.clone(), asset, chunck_size)
+    }
+
+    pub async fn stream_assets(&self) -> Vec<String> {
+        self.stream_assets.lock().await.clone()
+    }
+
     pub async fn send_stream(&self, stream: UpdateStream) -> PocketResult<()> {
-        if self.stream_channels.1.receiver_count() > 1 {
-            return Ok(self
-                .stream_channels
+        if self.stream_channels.0.receiver_count() > 1 {
+            self.stream_channels
                 .0
-                .send(WebSocketMessage::UpdateStream(stream))
-                .await?);
+                .force_send(WebSocketMessage::UpdateStream(stream))?;
         }
         Ok(())
     }
 }
 
-impl Default for Channels {
-    fn default() -> Self {
-        let (s, r) = bounded(MAX_CHANNEL_CAPACITY);
-        Self(s, r)
+#[async_trait]
+impl DataHandler for PocketData {
+    type Transfer = WebSocketMessage;
+
+    async fn update(&self, message: &WebSocketMessage) -> BinaryOptionsResult<()> {
+        match message {
+            WebSocketMessage::SuccessupdateBalance(balance) => {
+                self.update_balance(balance.clone()).await
+            }
+            WebSocketMessage::UpdateAssets(assets) => {
+                // let mut file: std::fs::File = OpenOptions::new().create(true).truncate(true).write(true).open("tests/assets2.txt").unwrap();
+                // file.write_all(serde_json::to_string(assets).unwrap().as_bytes());
+                self.update_payout_data(assets.clone()).await
+            }
+            WebSocketMessage::UpdateClosedDeals(deals) => {
+                self.update_closed_deals(deals.0.clone()).await
+            }
+            WebSocketMessage::UpdateOpenedDeals(deals) => {
+                self.update_opened_deals(deals.0.clone()).await
+            }
+            WebSocketMessage::SuccesscloseOrder(order) => {
+                self.update_closed_deals(order.deals.clone()).await
+            }
+            WebSocketMessage::SuccessopenOrder(order) => {
+                self.update_opened_deals(vec![order.clone()]).await
+            }
+            WebSocketMessage::UpdateStream(stream) => {
+                match stream.0.first() {
+                    Some(item) => self.update_server_time(item.time.timestamp()).await,
+                    None => warn!("Missing data in 'updateStream' message"),
+                }
+                self.send_stream(stream.clone()).await?;
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }
+
+/*
+    async fn update_loop(
+        data: Data,
+        reciever: &mut Receiver<WebSocketMessage>,
+        sender: &Sender<Message>,
+    ) -> PocketResult<()> {
+        while let Some(msg) = reciever.recv().await {
+            match msg {
+                WebSocketMessage::SuccessupdateBalance(balance) => {
+                    data.update_balance(balance).await
+                }
+                WebSocketMessage::UpdateAssets(assets) => data.update_payout_data(assets).await,
+                WebSocketMessage::UpdateClosedDeals(deals) => {
+                    data.update_closed_deals(deals.0).await
+                }
+                WebSocketMessage::UpdateOpenedDeals(deals) => {
+                    data.update_opened_deals(deals.0).await
+                }
+                WebSocketMessage::SuccesscloseOrder(order) => {
+                    data.update_closed_deals(order.deals).await
+                }
+                WebSocketMessage::SuccessopenOrder(order) => {
+                    data.update_opened_deals(vec![order.into()]).await
+                }
+                WebSocketMessage::UserRequest(request) => {
+                    data.add_user_request(request.info, request.validator, request.sender)
+                        .await;
+                    if request.message.info() == WebSocketMessage::None.info() {
+                        continue;
+                    }
+                    if let Err(e) = sender.send(request.message.into()).await {
+                        warn!("Error sending message: {}", PocketOptionError::from(e));
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+*/

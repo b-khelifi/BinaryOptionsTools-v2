@@ -57,6 +57,8 @@ pub enum WebSocketMessage {
     OpenPendingOrder(OpenPendingOrder),
     SuccessOpenPendingOrder(SuccessOpenPendingOrder),
     UserRequest(Box<PocketUser>),
+
+    Raw(String),
     None,
 }
 
@@ -232,6 +234,7 @@ impl WebSocketMessage {
             Self::FailOpenPendingOrder(_) => MessageInfo::FailopenPendingOrder,
             Self::SuccessOpenPendingOrder(_) => MessageInfo::SuccessopenPendingOrder,
             Self::OpenPendingOrder(_) => MessageInfo::OpenPendingOrder,
+            Self::Raw(_) => MessageInfo::None,
             Self::None => MessageInfo::None,
         }
     }
@@ -268,7 +271,8 @@ impl fmt::Display for WebSocketMessage {
             }
             WebSocketMessage::SubscribeSymbol(subscribe_symbol) => {
                 write!(f, "{:?}", subscribe_symbol)
-            }
+            },
+            WebSocketMessage::Raw(text) => text.fmt(f),
 
             WebSocketMessage::UpdateStream(update_stream) => write!(f, "{:?}", update_stream),
             WebSocketMessage::UpdateHistoryNew(update_history_new) => {

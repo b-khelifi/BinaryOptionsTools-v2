@@ -7,14 +7,14 @@ use tracing::{debug, info};
 use crate::{
     contstants::{POCKET_CALLBACK_TIME, TIMOUT_TIME},
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
-    general::{client::SenderMessage, traits::Callback, types::Data},
+    general::{send::SenderMessage, traits::Callback, types::Data},
     pocketoption::{
         error::PocketOptionError, parser::message::WebSocketMessage, types::info::MessageInfo,
         validators::history_validator,
     },
 };
 
-use super::{base::ChangeSymbol, data_v2::PocketData, order::SuccessCloseOrder};
+use super::{base::ChangeSymbol, data::PocketData, order::SuccessCloseOrder};
 
 #[derive(Clone)]
 pub struct PocketCallback;

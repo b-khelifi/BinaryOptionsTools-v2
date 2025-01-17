@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_channel::{bounded, Receiver, RecvError, Sender};
+use async_channel::{Receiver, RecvError};
 use futures_util::future::try_join4;
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
@@ -13,11 +13,11 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
-use crate::contstants::{MAX_CHANNEL_CAPACITY, RECONNECT_CALLBACK};
+use crate::contstants::MAX_CHANNEL_CAPACITY;
 use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
 use crate::general::types::MessageType;
-use crate::utils::time::timeout;
 
+use super::send::SenderMessage;
 use super::traits::{Callback, Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
 use super::types::Data;
 
@@ -52,6 +52,7 @@ where
     pub data: Data<T, Transfer>,
     pub sender: SenderMessage<Transfer>,
     pub reconnect_callback: Option<C>,
+    pub reconnect_time: u64,
     _event_loop: JoinHandle<BinaryOptionsResult<()>>,
 }
 
@@ -89,6 +90,7 @@ where
         handler: Handler,
         timeout: Duration,
         reconnect_callback: Option<C>,
+        reconnect_time: Option<u64>,
     ) -> BinaryOptionsResult<Self> {
         let inner = WebSocketInnerClient::init(
             credentials,
@@ -97,6 +99,7 @@ where
             handler,
             timeout,
             reconnect_callback,
+            reconnect_time.unwrap_or_default()
         )
         .await?;
         Ok(Self {
@@ -122,6 +125,7 @@ where
         handler: Handler,
         timeout: Duration,
         reconnect_callback: Option<C>,
+        reconnect_time: u64
     ) -> BinaryOptionsResult<Self> {
         let _connection = connector.connect(credentials.clone()).await?;
         let (_event_loop, sender) = Self::start_loops(
@@ -130,6 +134,7 @@ where
             data.clone(),
             connector.clone(),
             reconnect_callback.clone(),
+            reconnect_time,
         )
         .await?;
         info!("Started WebSocketClient");
@@ -141,6 +146,7 @@ where
             data,
             sender,
             reconnect_callback,
+            reconnect_time,
             _event_loop,
         })
     }
@@ -151,12 +157,11 @@ where
         data: Data<T, Transfer>,
         connector: Connector,
         reconnect_callback: Option<C>,
+        time: u64,
     ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, SenderMessage<Transfer>)> {
         let (mut write, mut read) = connector.connect(credentials.clone()).await?.split();
-        let (sender, mut reciever) = bounded(MAX_CHANNEL_CAPACITY);
-        let (msg_sender, mut msg_reciever) = bounded(MAX_CHANNEL_CAPACITY);
-        let msg_sender = SenderMessage::new(msg_sender).clone();
-        let sender_msg = msg_sender.clone();
+        let (sender, (reciever, reciever_priority)) = SenderMessage::new(MAX_CHANNEL_CAPACITY);
+        let loop_sender = sender.clone();
         let task = tokio::task::spawn(async move {
             let previous = None;
             let mut loops = 0;
@@ -173,22 +178,24 @@ where
                     previous.clone(),
                     &data,
                     handler.clone(),
-                    &sender,
+                    &loop_sender,
                     &mut read,
                 );
                 let sender_future =
-                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::sender_loop(
+                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::prioritairy_sending_loop(
                         &mut write,
-                        &mut reciever,
+                        &reciever_priority,
                     );
-                let update_loop =
-                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::api_loop(
-                        &mut msg_reciever,
-                        &sender,
-                    );
-                let callback = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::reconnect_callback(reconnect_callback.clone(), data.clone(), sender_msg.clone(), reconnected);
 
-                match try_join4(listener_future, sender_future, update_loop, callback).await {
+                let api_loop = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::api_loop(&reciever, &loop_sender, time);
+                // let update_loop =
+                //     WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::api_loop(
+                //         &mut msg_reciever,
+                //         &sender,
+                //     );
+                let callback = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::reconnect_callback(reconnect_callback.clone(), data.clone(), loop_sender.clone(), reconnected, time);
+
+                match try_join4(listener_future, sender_future, api_loop, callback).await {
                     Ok(_) => {
                         if let Ok(websocket) = connector.connect(credentials.clone()).await {
                             (write, read) = websocket.split();
@@ -206,11 +213,11 @@ where
                     }
                     Err(e) => {
                         warn!("Error in event loop, {e}, reconnecting...");
-                        println!("Reconnecting...");
+                        // println!("Reconnecting...");
                         if let Ok(websocket) = connector.connect(credentials.clone()).await {
                             (write, read) = websocket.split();
                             info!("Reconnected successfully!");
-                            println!("Reconnected successfully!");
+                            // println!("Reconnected successfully!");
                             loops = 0;
                             reconnected = true;
                         } else {
@@ -227,14 +234,15 @@ where
             }
             Ok(())
         });
-        Ok((task, msg_sender))
+        Ok((task, sender))
     }
 
+    /// Recieves all the messages from the websocket connection and handles it 
     async fn listener_loop(
         mut previous: Option<<<Handler as MessageHandler>::Transfer as MessageTransfer>::Info>,
         data: &Data<T, Transfer>,
         handler: Handler,
-        sender: &Sender<Message>,
+        sender: &SenderMessage<Transfer>,
         ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     ) -> BinaryOptionsResult<()> {
         while let Some(msg) = &ws.next().await {
@@ -281,41 +289,47 @@ where
         todo!()
     }
 
-    async fn sender_loop(
+    /// Recieves all the messages and sends them to the websocket
+    async fn prioritairy_sending_loop(
         ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-        reciever: &mut Receiver<Message>,
+        reciever_priority: &Receiver<Message>,
     ) -> BinaryOptionsResult<()> {
-        while let Ok(msg) = reciever.recv().await {
-            match ws.send(msg).await {
-                Ok(_) => debug!("Sent message"),
-                Err(e) => {
-                    warn!("Error sending messge: {e}");
-                    return Err(e.into());
-                }
-            }
+        while let Ok(msg) = reciever_priority.recv().await {
+            ws.send(msg).await.inspect_err(|e| warn!("Error sending message to websocket, {e}"))?;
             ws.flush().await?;
+            debug!("Sent message to websocket!");
         }
-        Ok(())
+        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
     }
 
-    async fn api_loop(
-        reciever: &mut Receiver<Transfer>,
-        sender: &Sender<Message>,
-    ) -> BinaryOptionsResult<()> {
-        while let Ok(msg) = reciever.recv().await {
-            sender.send(msg.into()).await?;
+    async fn api_loop(reciever: &Receiver<Transfer>, sender: &SenderMessage<Transfer>, time: u64) -> BinaryOptionsResult<()> {
+        sleep(Duration::from_secs(time)).await;
+
+        while let Ok(item) = reciever.recv().await {
+            sender.priority_send(item.into()).await?;
         }
-        Ok(())
+        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
     }
+
+    // async fn api_loop(
+    //     reciever: &mut Receiver<Transfer>,
+    //     sender: &Sender<Message>,
+    // ) -> BinaryOptionsResult<()> {
+    //     while let Ok(msg) = reciever.recv().await {
+    //         sender.send(msg.into()).await?;
+    //     }
+    //     Ok(())
+    // }
 
     async fn reconnect_callback(
         reconnect_callback: Option<C>,
         data: Data<T, Transfer>,
         sender: SenderMessage<Transfer>,
         reconnect: bool,
+        reconnect_time: u64
     ) -> BinaryOptionsResult<BinaryOptionsResult<()>> {
         Ok(tokio::spawn(async move {
-            sleep(Duration::from_secs(RECONNECT_CALLBACK)).await;
+            sleep(Duration::from_secs(reconnect_time)).await;
             if reconnect {
                 if let Some(callback) = &reconnect_callback {
                     callback.call(data.clone(), &sender).await.inspect_err(
@@ -372,235 +386,8 @@ where
     }
 }
 
-pub fn validate<Transfer>(
-    validator: impl Fn(&Transfer) -> bool + Send + Sync,
-    message: Transfer,
-) -> BinaryOptionsResult<Option<Transfer>>
-where
-    Transfer: MessageTransfer,
-{
-    if let Some(e) = message.error() {
-        Err(BinaryOptionsToolsError::WebSocketMessageError(
-            e.to_string(),
-        ))
-    } else if validator(&message) {
-        Ok(Some(message))
-    } else {
-        Ok(None)
-    }
-}
 
-#[derive(Clone)]
-pub struct SenderMessage<Transfer>
-where
-    Transfer: MessageTransfer,
-{
-    sender: Sender<Transfer>,
-    // sender_priority: Sender<Transfer>
-}
 
-impl<Transfer> SenderMessage<Transfer>
-where
-    Transfer: MessageTransfer,
-{
-    // fn new(cap: usize) -> (Self, (Receiver<Transfer>, Receiver<Transfer>)) {
-    //     let (s, r) = bounded(cap);
-    //     let (sp, rp) = bounded(cap);
-
-    //     (
-    //         Self { sender: s, sender_priority: sp },
-    //         (r, rp)
-    //     )
-    // }
-    fn new(sender: Sender<Transfer>) -> Self {
-        Self { sender }
-    }
-    async fn reciever<T: DataHandler<Transfer = Transfer>>(
-        &self,
-        data: &Data<T, Transfer>,
-        msg: Transfer,
-        response_type: Transfer::Info,
-    ) -> BinaryOptionsResult<Receiver<Transfer>> {
-        let reciever = data.add_request(response_type).await;
-
-        self.sender
-            .send(msg)
-            .await
-            .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
-        Ok(reciever)
-    }
-
-    // pub async fn send(&self, msg: Transfer) -> BinaryOptionsResult<()> {
-    //     self.sender.send(msg).await.map_err(|e| {
-    //         BinaryOptionsToolsError::ChannelRequestSendingError(
-    //             e.to_string(),
-    //         )
-    //     })?;
-    //     Ok(())
-    // }
-
-    // pub async fn priority_send(&self, msg: Transfer) -> BinaryOptionsResult<()> {
-    //     self.sender_priority.send(msg).await.map_err(|e| {
-    //         BinaryOptionsToolsError::ChannelRequestSendingError(
-    //             e.to_string(),
-    //         )
-    //     })?;
-    //     Ok(())
-    // }
-
-    pub async fn send_message<T: DataHandler<Transfer = Transfer>>(
-        &self,
-        data: &Data<T, Transfer>,
-        msg: Transfer,
-        response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
-    ) -> BinaryOptionsResult<Transfer> {
-        let reciever = self.reciever(data, msg, response_type).await?;
-
-        while let Ok(msg) = reciever.recv().await {
-            if let Some(msg) =
-                validate(&validator, msg).inspect_err(|e| error!("Failed to place trade {e}"))?
-            {
-                return Ok(msg);
-            }
-        }
-        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
-            RecvError,
-        ))
-    }
-
-    // pub async fn send_message_with_timout<T: DataHandler<Transfer = Transfer>>(
-    //     &self,
-    //     timeout: Duration,
-    //     task: impl ToString,
-    //     data: &Data<T, Transfer>,
-    //     msg: Transfer,
-    //     response_type: Transfer::Info,
-    //     validator: impl Fn(&Transfer) -> bool + Send + Sync,
-    // ) -> BinaryOptionsResult<Transfer> {
-    //     let reciever = data.add_request(response_type).await;
-
-    //     self.sender
-    //         .send(msg)
-    //         .await
-    //         .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
-
-    //     let start_time = Instant::now();
-
-    //     loop {
-    //         match reciever.try_recv() {
-    //             Ok(msg) => {
-    //                 println!("Called");
-    //                 if let Some(msg) = validate(&validator, msg)
-    //                     .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
-    //                 {
-    //                     return Ok(msg);
-    //                 }
-    //             }
-    //             Err(err) => match err {
-    //                 TryRecvError::Closed => {
-    //                     return Err(BinaryOptionsToolsError::Unallowed(
-    //                         "Api channel connectionc closed".into(),
-    //                     ))
-    //                 }
-    //                 TryRecvError::Empty => {}
-    //             },
-    //         }
-    //         if Instant::now() - start_time >= timeout {
-    //             return Err(BinaryOptionsToolsError::TimeoutError {
-    //                 task: task.to_string(),
-    //                 duration: timeout,
-    //             });
-    //         }
-    //     }
-    // }
-
-    pub async fn send_message_with_timout<T: DataHandler<Transfer = Transfer>>(
-        &self,
-        time: Duration,
-        task: impl ToString,
-        data: &Data<T, Transfer>,
-        msg: Transfer,
-        response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
-    ) -> BinaryOptionsResult<Transfer> {
-        let reciever = self.reciever(data, msg, response_type).await?;
-
-        timeout(
-            time,
-            async {
-                while let Ok(msg) = reciever.recv().await {
-                    if let Some(msg) = validate(&validator, msg)
-                        .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
-                    {
-                        return Ok(msg);
-                    }
-                }
-                Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
-                    RecvError,
-                ))
-            },
-            task.to_string(),
-        )
-        .await
-    }
-
-    pub async fn send_message_with_timeout_and_retry<T: DataHandler<Transfer = Transfer>>(
-        &self,
-        time: Duration,
-        task: impl ToString,
-        data: &Data<T, Transfer>,
-        msg: Transfer,
-        response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
-    ) -> BinaryOptionsResult<Transfer> {
-        let reciever = self
-            .reciever(data, msg.clone(), response_type.clone())
-            .await?;
-
-        let call1 = timeout(
-            time,
-            async {
-                while let Ok(msg) = reciever.recv().await {
-                    if let Some(msg) = validate(&validator, msg)
-                        .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
-                    {
-                        return Ok(msg);
-                    }
-                }
-                Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
-                    RecvError,
-                ))
-            },
-            task.to_string(),
-        )
-        .await;
-        match call1 {
-            Ok(res) => Ok(res),
-            Err(_) => {
-                println!("Failded 1 trying again");
-                let reciever = self.reciever(data, msg, response_type).await?;
-                timeout(
-                    time,
-                    async {
-                        while let Ok(msg) = reciever.recv().await {
-                            if let Some(msg) = validate(&validator, msg)
-                                .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
-                            {
-                                return Ok(msg);
-                            }
-                        }
-                        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
-                            RecvError,
-                        ))
-                    },
-                    task.to_string(),
-                )
-                .await
-            }
-        }
-    }
-}
 
 // impl<Transfer, Handler, Connector, Creds, T, C> Drop
 //     for WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
@@ -652,8 +439,6 @@ mod tests {
         
     }
 
-
-
     async fn recieve_dif(reciever: Receiver<String>, receiver_priority: Receiver<String>) -> anyhow::Result<()> {
         async fn receiv(r: &Receiver<String>) -> anyhow::Result<()> {
             while let Ok(t) = r.recv().await {
@@ -662,9 +447,34 @@ mod tests {
             Ok(())
         }
         tokio::select! {
-            _ = receiv(&receiver_priority) => {
+            err = receiv(&receiver_priority) => err?,
+            _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+        }
+        let receiver = RecieverStream::new(reciever);
+        let receiver_priority = RecieverStream::new(receiver_priority);
+        let mut fused = select_all([receiver.to_stream(), receiver_priority.to_stream()]);
+        while let Some(value) = fused.next().await {
+            info!(target: "Fused", "Recieved: {}", value?);
+        }
+    
+        Ok(())
+    }
 
-            },
+
+    async fn recieve_dif_err(reciever: Receiver<String>, receiver_priority: Receiver<String>) -> anyhow::Result<()> {
+        async fn receiv(r: &Receiver<String>) -> anyhow::Result<()> {
+            let mut loops = 0;
+            while let Ok(t) = r.recv().await {
+                if loops == 2 {
+                    return Err(anyhow::Error::msg("error receiving message"))
+                }
+                loops += 1;
+                info!(target: "High priority", "Recieved: {}", t);
+            }
+            Ok(())
+        }
+        tokio::select! {
+            err = receiv(&receiver_priority) => err?,
             _ = tokio::time::sleep(Duration::from_secs(5)) => {}
         }
         let receiver = RecieverStream::new(reciever);
@@ -695,12 +505,23 @@ mod tests {
         }
     }
 
+
     #[tokio::test]
-    async fn test_multi_priority_reciever() -> anyhow::Result<()> {
+    async fn test_multi_priority_reciever_ok() -> anyhow::Result<()> {
         start_tracing(true)?;
         let (s, r) = bounded(8);
         let (sp, rp) = bounded(8);
         try_join(sender_dif(s, sp), recieve_dif(r, rp)).await?;
         Ok(())
     }
+
+    #[tokio::test]
+    #[should_panic(expected = "error receiving message")]
+    async fn test_multi_priority_reciever_err() {
+        start_tracing(true).unwrap();
+        let (s, r) = bounded(8);
+        let (sp, rp) = bounded(8);
+        try_join(sender_dif(s, sp), recieve_dif_err(r, rp)).await.unwrap();
+    }
+
 }

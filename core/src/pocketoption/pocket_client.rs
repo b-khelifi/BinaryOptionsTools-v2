@@ -25,7 +25,7 @@ use super::{
     types::{
         base::ChangeSymbol,
         callback::PocketCallback,
-        data_v2::PocketData,
+        data::PocketData,
         info::MessageInfo,
         order::{Action, Deal, OpenOrder},
         update::{DataCandle, UpdateBalance},
@@ -52,6 +52,7 @@ impl PocketOption {
             handler,
             timeout,
             Some(callback),
+            Some(5)
         )
         .await?;
         // println!("Initialized!");
@@ -368,9 +369,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_payout() -> anyhow::Result<()> {
+        start_tracing(true)?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let api = PocketOption::new(ssid).await?;
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(6)).await;
         dbg!(api.get_payout().await);
         Ok(())
     }
