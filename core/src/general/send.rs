@@ -11,19 +11,15 @@ use super::{traits::{DataHandler, MessageTransfer}, types::Data};
 
 
 #[derive(Clone)]
-pub struct SenderMessage<Transfer>
-where
-    Transfer: MessageTransfer,
+pub struct SenderMessage
 {
-    sender: Sender<Transfer>,
+    sender: Sender<Message>,
     sender_priority: Sender<Message>
 }
 
-impl<Transfer> SenderMessage<Transfer>
-where
-    Transfer: MessageTransfer,
+impl SenderMessage
 {
-    pub fn new(cap: usize) -> (Self, (Receiver<Transfer>, Receiver<Message>)) {
+    pub fn new(cap: usize) -> (Self, (Receiver<Message>, Receiver<Message>)) {
         let (s, r) = bounded(cap);
         let (sp, rp) = bounded(cap);
 
@@ -35,7 +31,7 @@ where
     // pub fn new(sender: Sender<Transfer>) -> Self {
     //     Self { sender }
     // }
-    async fn reciever<T: DataHandler<Transfer = Transfer>>(
+    async fn reciever<Transfer: MessageTransfer, T: DataHandler<Transfer = Transfer>>(
         &self,
         data: &Data<T, Transfer>,
         msg: Transfer,
@@ -43,15 +39,14 @@ where
     ) -> BinaryOptionsResult<Receiver<Transfer>> {
         let reciever = data.add_request(response_type).await;
 
-        self.sender
-            .send(msg)
+        self.send(msg)
             .await
             .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
         Ok(reciever)
     }
 
-    pub async fn send(&self, msg: Transfer) -> BinaryOptionsResult<()> {
-        self.sender.send(msg).await.map_err(|e| {
+    pub async fn send<Transfer: MessageTransfer>(&self, msg: Transfer) -> BinaryOptionsResult<()> {
+        self.sender.send(msg.into()).await.map_err(|e| {
             BinaryOptionsToolsError::ChannelRequestSendingError(
                 e.to_string(),
             )
@@ -68,7 +63,7 @@ where
         Ok(())
     }
 
-    pub async fn send_message<T: DataHandler<Transfer = Transfer>>(
+    pub async fn send_message<Transfer: MessageTransfer, T: DataHandler<Transfer = Transfer>>(
         &self,
         data: &Data<T, Transfer>,
         msg: Transfer,
@@ -135,7 +130,7 @@ where
     //     }
     // }
 
-    pub async fn send_message_with_timout<T: DataHandler<Transfer = Transfer>>(
+    pub async fn send_message_with_timout<Transfer: MessageTransfer, T: DataHandler<Transfer = Transfer>>(
         &self,
         time: Duration,
         task: impl ToString,
@@ -165,7 +160,7 @@ where
         .await
     }
 
-    pub async fn send_message_with_timeout_and_retry<T: DataHandler<Transfer = Transfer>>(
+    pub async fn send_message_with_timeout_and_retry<Transfer: MessageTransfer, T: DataHandler<Transfer = Transfer>>(
         &self,
         time: Duration,
         task: impl ToString,

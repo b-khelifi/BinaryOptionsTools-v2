@@ -27,7 +27,7 @@ impl Callback for PocketCallback {
     async fn call(
         &self,
         data: Data<Self::T, Self::Transfer>,
-        sender: &SenderMessage<Self::Transfer>,
+        sender: &SenderMessage,
     ) -> BinaryOptionsResult<()> {
         sleep(Duration::from_secs(POCKET_CALLBACK_TIME)).await;
 

@@ -53,7 +53,7 @@ impl Handler {
     pub async fn handle_text_msg(
         &self,
         text: &str,
-        sender: &SenderMessage<WebSocketMessage>,
+        sender: &SenderMessage,
     ) -> BinaryOptionsResult<Option<MessageInfo>> {
         match text {
             _ if text.starts_with('0') && text.contains("sid") => {
@@ -99,7 +99,7 @@ impl MessageHandler for Handler {
         &self,
         message: &Message,
         previous: &Option<MessageInfo>,
-        sender: &SenderMessage<Self::Transfer>,
+        sender: &SenderMessage,
     ) -> BinaryOptionsResult<(Option<MessageType<WebSocketMessage>>, bool)> {
         match message {
             Message::Binary(binary) => {

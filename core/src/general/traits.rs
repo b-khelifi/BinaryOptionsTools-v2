@@ -28,7 +28,7 @@ pub trait Callback: Clone + Send + Sync {
     async fn call(
         &self,
         data: Data<Self::T, Self::Transfer>,
-        sender: &SenderMessage<Self::Transfer>,
+        sender: &SenderMessage,
     ) -> BinaryOptionsResult<()>;
 }
 
@@ -67,7 +67,7 @@ pub trait MessageHandler: Clone + Send + Sync {
         &self,
         message: &Message,
         previous: &Option<<<Self as MessageHandler>::Transfer as MessageTransfer>::Info>,
-        sender: &SenderMessage<Self::Transfer>,
+        sender: &SenderMessage,
     ) -> BinaryOptionsResult<(Option<MessageType<Self::Transfer>>, bool)>;
 }
 

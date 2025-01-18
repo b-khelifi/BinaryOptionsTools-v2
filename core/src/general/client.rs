@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::{Receiver, RecvError};
-use futures_util::future::try_join4;
-use futures_util::stream::{SplitSink, SplitStream};
+use futures_util::future::try_join3;
+use futures_util::stream::{select_all, SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
@@ -15,6 +15,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::contstants::MAX_CHANNEL_CAPACITY;
 use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
+use crate::general::stream::RecieverStream;
 use crate::general::types::MessageType;
 
 use super::send::SenderMessage;
@@ -50,7 +51,7 @@ where
     pub connector: Connector,
     pub handler: Handler,
     pub data: Data<T, Transfer>,
-    pub sender: SenderMessage<Transfer>,
+    pub sender: SenderMessage,
     pub reconnect_callback: Option<C>,
     pub reconnect_time: u64,
     _event_loop: JoinHandle<BinaryOptionsResult<()>>,
@@ -158,7 +159,7 @@ where
         connector: Connector,
         reconnect_callback: Option<C>,
         time: u64,
-    ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, SenderMessage<Transfer>)> {
+    ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, SenderMessage)> {
         let (mut write, mut read) = connector.connect(credentials.clone()).await?.split();
         let (sender, (reciever, reciever_priority)) = SenderMessage::new(MAX_CHANNEL_CAPACITY);
         let loop_sender = sender.clone();
@@ -182,12 +183,13 @@ where
                     &mut read,
                 );
                 let sender_future =
-                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::prioritairy_sending_loop(
+                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::sender_loop(
                         &mut write,
+                        &reciever,
                         &reciever_priority,
+                        time
                     );
 
-                let api_loop = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::api_loop(&reciever, &loop_sender, time);
                 // let update_loop =
                 //     WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::api_loop(
                 //         &mut msg_reciever,
@@ -195,7 +197,7 @@ where
                 //     );
                 let callback = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::reconnect_callback(reconnect_callback.clone(), data.clone(), loop_sender.clone(), reconnected, time);
 
-                match try_join4(listener_future, sender_future, api_loop, callback).await {
+                match try_join3(listener_future, sender_future, callback).await {
                     Ok(_) => {
                         if let Ok(websocket) = connector.connect(credentials.clone()).await {
                             (write, read) = websocket.split();
@@ -242,7 +244,7 @@ where
         mut previous: Option<<<Handler as MessageHandler>::Transfer as MessageTransfer>::Info>,
         data: &Data<T, Transfer>,
         handler: Handler,
-        sender: &SenderMessage<Transfer>,
+        sender: &SenderMessage,
         ws: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     ) -> BinaryOptionsResult<()> {
         while let Some(msg) = &ws.next().await {
@@ -290,23 +292,33 @@ where
     }
 
     /// Recieves all the messages and sends them to the websocket
-    async fn prioritairy_sending_loop(
+    async fn sender_loop(
         ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+        reciever: &Receiver<Message>,
         reciever_priority: &Receiver<Message>,
+        time: u64
     ) -> BinaryOptionsResult<()> {
-        while let Ok(msg) = reciever_priority.recv().await {
+        async fn priority_mesages(ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, reciever_priority: &Receiver<Message>) -> BinaryOptionsResult<()> {
+            while let Ok(msg) = reciever_priority.recv().await {
+                ws.send(msg).await.inspect_err(|e| warn!("Error sending message to websocket, {e}"))?;
+                ws.flush().await?;
+                debug!("Sent message to websocket!");
+            }
+            Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
+        }
+
+        tokio::select! {
+            res = priority_mesages(ws, reciever_priority) => res?,
+            _ = sleep(Duration::from_secs(time)) => {}
+        }
+        let stream1 = RecieverStream::new(reciever.to_owned());
+        let stream2 = RecieverStream::new(reciever_priority.to_owned());
+        let mut fused_streams = select_all([stream1.to_stream(), stream2.to_stream()]);
+
+        while let Some(Ok(msg)) = fused_streams.next().await {
             ws.send(msg).await.inspect_err(|e| warn!("Error sending message to websocket, {e}"))?;
             ws.flush().await?;
             debug!("Sent message to websocket!");
-        }
-        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
-    }
-
-    async fn api_loop(reciever: &Receiver<Transfer>, sender: &SenderMessage<Transfer>, time: u64) -> BinaryOptionsResult<()> {
-        sleep(Duration::from_secs(time)).await;
-
-        while let Ok(item) = reciever.recv().await {
-            sender.priority_send(item.into()).await?;
         }
         Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
     }
@@ -324,7 +336,7 @@ where
     async fn reconnect_callback(
         reconnect_callback: Option<C>,
         data: Data<T, Transfer>,
-        sender: SenderMessage<Transfer>,
+        sender: SenderMessage,
         reconnect: bool,
         reconnect_time: u64
     ) -> BinaryOptionsResult<BinaryOptionsResult<()>> {
