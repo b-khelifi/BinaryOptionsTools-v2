@@ -53,10 +53,7 @@ pub trait MessageTransfer:
 }
 
 pub trait MessageInformation:
-    Serialize + DeserializeOwned + Clone + Send + Sync + Eq + hash::Hash + fmt::Debug + fmt::Display
-{
-    fn none(&self) -> Self;
-}
+    Serialize + DeserializeOwned + Clone + Send + Sync + Eq + hash::Hash + fmt::Debug + fmt::Display {}
 
 #[async_trait]
 /// Every struct that implements MessageHandler will recieve a message and should return

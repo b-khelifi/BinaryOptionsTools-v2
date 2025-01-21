@@ -40,11 +40,7 @@ impl Display for MessageInfo {
     }
 }
 
-impl MessageInformation for MessageInfo {
-    fn none(&self) -> Self {
-        Self::None
-    }
-}
+impl MessageInformation for MessageInfo {}
 
 #[cfg(test)]
 mod tests {
