@@ -1,11 +1,12 @@
 # This is the core for all the `BinaryOptionsTools-v2` versions in the different languages
 
 ## Supported Languages (todo)
-* Python
-* JavaScript
-* C / C++
-* Java
-* Dart
+* Python [Done]
+* Rust [Done]
+* JavaScript 
+* C / C++ 
+* Java 
+* Dart 
 
 ## Todo
 * Clean the code and add more logging info
