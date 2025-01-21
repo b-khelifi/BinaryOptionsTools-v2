@@ -1,6 +1,4 @@
-use binary_option_tools_core::{
-    error::BinaryOptionsToolsError, pocketoption::error::PocketOptionError,
-};
+use binary_option_tools::pocketoption::error::PocketOptionError;
 use pyo3::{exceptions::PyValueError, PyErr};
 use thiserror::Error;
 use uuid::Uuid;
@@ -9,8 +7,6 @@ use uuid::Uuid;
 pub enum BinaryErrorPy {
     #[error("PocketOptionError, {0}")]
     PocketOptionError(#[from] PocketOptionError),
-    #[error("BinaryOptionError, {0}")]
-    BinaryOptionError(#[from] BinaryOptionsToolsError),
     #[error("Uninitialized, {0}")]
     Uninitialized(String),
     #[error("Error descerializing data, {0}")]

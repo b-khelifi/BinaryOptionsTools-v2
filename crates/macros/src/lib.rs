@@ -1,0 +1,41 @@
+mod deserialize;
+mod serialize;
+mod timeout;
+
+use proc_macro::TokenStream;
+
+use quote::quote;
+use syn::parse_macro_input;
+use deserialize::Deserializer;
+use serialize::Serializer;
+use timeout::{TimeoutArgs, TimeoutBody, Timeout};
+
+
+#[proc_macro]
+pub fn deserialize(input: TokenStream) -> TokenStream {
+    let d = parse_macro_input!(input as Deserializer);
+    quote! { #d }.into()
+}
+
+#[proc_macro]
+pub fn serialize(input: TokenStream) -> TokenStream {
+    let s = parse_macro_input!(input as Serializer);
+    quote! { #s }.into()
+}
+
+/// This macro wraps any async function and transforms it's output `T` into `anyhow::Result<T>`, 
+/// if the function doesn't end before the timout it will rais an error
+/// The macro also supports creating a `#[tracing::instrument]` macro with all the params inside `tracing(args)`
+/// Example:
+///     #[timeout(10, tracing(skip(non_debug_input)))]
+///     #[timeout(12)]
+#[proc_macro_attribute]
+pub fn timeout(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(attr as TimeoutArgs);
+    let body = parse_macro_input!(item as TimeoutBody);
+    let timeout = Timeout::new(body, args);
+    let q = quote! { #timeout };
+
+    // println!("{q}");
+    q.into()
+}

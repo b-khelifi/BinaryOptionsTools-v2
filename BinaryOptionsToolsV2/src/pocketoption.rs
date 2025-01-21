@@ -1,10 +1,10 @@
 use std::str;
 use std::sync::Arc;
 
-use binary_option_tools_core::pocketoption::error::PocketResult;
-use binary_option_tools_core::pocketoption::pocket_client::PocketOption;
-use binary_option_tools_core::pocketoption::types::update::DataCandle;
-use binary_option_tools_core::pocketoption::ws::stream::StreamAsset;
+use binary_option_tools::pocketoption::error::PocketResult;
+use binary_option_tools::pocketoption::pocket_client::PocketOption;
+use binary_option_tools::pocketoption::types::update::DataCandle;
+use binary_option_tools::pocketoption::ws::stream::StreamAsset;
 use futures_util::stream::{BoxStream, Fuse};
 use futures_util::StreamExt;
 use pyo3::exceptions::PyStopIteration;

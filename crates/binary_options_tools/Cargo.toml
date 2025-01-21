@@ -1,0 +1,28 @@
+[package]
+name = "binary-option-tools"
+version = "0.1.4"
+edition = "2021"
+repository = "https://github.com/ChipaDevTeam/BinaryOptionsTools-v2"
+readme = "../README.md"
+description = "The core of the `binary-options-tools` crate and the python library `BinaryOptionsToolsV2`."
+license = "MIT"
+
+[dependencies]
+binary-options-tools-core = { path = "../core" }
+
+anyhow = "1.0.95"
+async-channel = "2.3.1"
+async-trait = "0.1.85"
+chrono = { version = "0.4.39", features = ["serde"] }
+futures-util = "0.3.31"
+native-tls = "0.2.12"
+php_serde = "0.6.0"
+rand = "0.8.5"
+reqwest = "0.12.12"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"
+thiserror = "2.0.11"
+tokio = { version = "1.43.0", features = ["full"] }
+tracing = "0.1.41"
+url = "2.5.4"
+uuid = { version = "1.12.1", features = ["serde"] }
