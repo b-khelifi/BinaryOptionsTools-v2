@@ -1,1 +1,5 @@
-pub use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::{Message, Bytes, handshake::client::generate_key, http::Request}, connect_async_tls_with_config, Connector};
+pub use tokio_tungstenite::{
+    connect_async_tls_with_config,
+    tungstenite::{handshake::client::generate_key, http::Request, Bytes, Message},
+    Connector, MaybeTlsStream, WebSocketStream,
+};

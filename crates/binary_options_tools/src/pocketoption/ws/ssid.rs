@@ -3,9 +3,8 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use binary_options_tools_core::
-    general::traits::Credentials;
 use crate::pocketoption::error::{PocketOptionError, PocketResult};
+use binary_options_tools_core::general::traits::Credentials;
 
 use super::regions::Regions;
 

@@ -6,7 +6,7 @@ use crate::pocketoption::{error::PocketOptionError, utils::connect::try_connect}
 use binary_options_tools_core::{
     error::BinaryOptionsResult,
     general::traits::Connect,
-    reimports::{MaybeTlsStream, WebSocketStream}
+    reimports::{MaybeTlsStream, WebSocketStream},
 };
 
 use super::ssid::Ssid;

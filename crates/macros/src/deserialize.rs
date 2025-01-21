@@ -1,10 +1,9 @@
 use quote::{quote, ToTokens};
-use syn::{parse::Parse, Expr, Type, Token};
-
+use syn::{parse::Parse, Expr, Token, Type};
 
 pub struct Deserializer {
     res_type: Type,
-    data: Expr
+    data: Expr,
 }
 
 impl Parse for Deserializer {
@@ -16,7 +15,6 @@ impl Parse for Deserializer {
     }
 }
 
-
 impl ToTokens for Deserializer {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let res_type = &self.res_type;
@@ -26,5 +24,3 @@ impl ToTokens for Deserializer {
         });
     }
 }
-
-

@@ -1,18 +1,17 @@
-
 use async_trait::async_trait;
 use serde_json::Value;
 
 use binary_options_tools_core::{
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
     general::{send::SenderMessage, traits::MessageHandler, types::MessageType},
-    reimports::Message
+    reimports::Message,
 };
 
 use crate::pocketoption::{
-        error::PocketResult,
-        parser::message::WebSocketMessage,
-        types::{base::ChangeSymbol, info::MessageInfo},
-    };
+    error::PocketResult,
+    parser::message::WebSocketMessage,
+    types::{base::ChangeSymbol, info::MessageInfo},
+};
 
 use super::ssid::Ssid;
 
@@ -61,7 +60,9 @@ impl Handler {
                 sender.priority_send(Message::text("40")).await?;
             }
             _ if text.starts_with("40") && text.contains("sid") => {
-                sender.priority_send(Message::text(self.ssid.to_string())).await?;
+                sender
+                    .priority_send(Message::text(self.ssid.to_string()))
+                    .await?;
             }
             _ if text == "2" => {
                 sender.priority_send(Message::text("3")).await?;
@@ -70,17 +71,17 @@ impl Handler {
             }
             _ if text.starts_with("451-") => {
                 let msg = text.strip_prefix("451-").unwrap();
-                let (info, _): (MessageInfo, Value) = serde_json::from_str(msg).map_err(BinaryOptionsToolsError::from)?;
+                let (info, _): (MessageInfo, Value) =
+                    serde_json::from_str(msg).map_err(BinaryOptionsToolsError::from)?;
                 if info == MessageInfo::UpdateClosedDeals {
                     sender
-                        .priority_send(
-                            Message::text(
-                                WebSocketMessage::ChangeSymbol(ChangeSymbol {
-                                    asset: "AUDNZD_otc".into(),
-                                    period: 60,
-                                }).to_string()
-                            )
-                        )
+                        .priority_send(Message::text(
+                            WebSocketMessage::ChangeSymbol(ChangeSymbol {
+                                asset: "AUDNZD_otc".into(),
+                                period: 60,
+                            })
+                            .to_string(),
+                        ))
                         .await?;
                 }
                 return Ok(Some(info));

@@ -1,9 +1,8 @@
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, Expr};
 
-
 pub struct Serializer {
-    value: Expr
+    value: Expr,
 }
 
 impl Parse for Serializer {
@@ -15,7 +14,7 @@ impl Parse for Serializer {
 impl ToTokens for Serializer {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let value = &self.value;
-        tokens.extend( quote! {
+        tokens.extend(quote! {
             ::serde_json::to_string(#value)
         });
     }

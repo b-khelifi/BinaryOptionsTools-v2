@@ -1,23 +1,25 @@
 use std::{
-    collections::HashMap, ops::Deref, time::{Duration, Instant}
+    collections::HashMap,
+    ops::Deref,
+    time::{Duration, Instant},
 };
 
 use chrono::{DateTime, Utc};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+use crate::pocketoption::{
+    error::PocketResult,
+    parser::basic::LoadHistoryPeriod,
+    types::order::SuccessCloseOrder,
+    validators::{candle_validator, order_result_validator},
+    ws::ssid::Ssid,
+};
 use binary_options_tools_core::{
     constants::TIMOUT_TIME,
     error::BinaryOptionsToolsError,
-    general::{client::WebSocketClient, types::Data, traits::MessageTransfer}
+    general::{client::WebSocketClient, traits::MessageTransfer, types::Data},
 };
-use crate::    pocketoption::{
-        error::PocketResult,
-        parser::basic::LoadHistoryPeriod,
-        types::order::SuccessCloseOrder,
-        validators::{candle_validator, order_result_validator},
-        ws::ssid::Ssid,
-    };
 
 use super::{
     error::PocketOptionError,
@@ -37,11 +39,13 @@ use super::{
 /// Class to connect automatically to Pocket Option's quick trade passing a valid SSID
 #[derive(Clone)]
 pub struct PocketOption {
-    client: WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>
+    client:
+        WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>,
 }
 
 impl Deref for PocketOption {
-    type Target = WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>;
+    type Target =
+        WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>;
 
     fn deref(&self) -> &Self::Target {
         &self.client
@@ -62,7 +66,7 @@ impl PocketOption {
             handler,
             timeout,
             Some(callback),
-            Some(5)
+            Some(5),
         )
         .await?;
         // println!("Initialized!");
@@ -97,7 +101,9 @@ impl PocketOption {
             debug!("Successfully opened buy trade!");
             return Ok((order.id, order));
         }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+            res.info(),
+        ))
     }
 
     pub async fn buy(
@@ -160,7 +166,8 @@ impl PocketOption {
         if let Some(timestamp) = self.get_deal_end_time(trade_id).await {
             let exp = timestamp
                 .signed_duration_since(Utc::now()) // TODO: Change this since the current time depends on the timezone.
-                .to_std().map_err(BinaryOptionsToolsError::from)?;
+                .to_std()
+                .map_err(BinaryOptionsToolsError::from)?;
             debug!(target: "CheckResult", "Expiration time in {exp:?} seconds.");
             let start = Instant::now();
             // println!("Expiration time in {exp:?} seconds.");
@@ -199,12 +206,13 @@ impl PocketOption {
                     .iter()
                     .find(|d| d.id == trade_id)
                     .cloned()
-                    .ok_or(
-                        PocketOptionError::UnreachableError("Error finding correct trade".into())
-                            .into(),
-                    );
+                    .ok_or(PocketOptionError::UnreachableError(
+                        "Error finding correct trade".into(),
+                    ));
             }
-            return Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()).into());
+            return Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+                res.info(),
+            ));
         }
         warn!("No opened trade with the given uuid please check if you are passing the correct id");
         Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()).into())
@@ -242,7 +250,9 @@ impl PocketOption {
         if let WebSocketMessage::LoadHistoryPeriod(history) = res {
             return Ok(history.candle_data());
         }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+            res.info(),
+        ))
     }
 
     pub async fn history(
@@ -265,7 +275,9 @@ impl PocketOption {
         if let WebSocketMessage::UpdateHistoryNew(history) = res {
             return Ok(history.candle_data());
         }
-        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.info()))
+        Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+            res.info(),
+        ))
     }
 
     pub async fn get_closed_deals(&self) -> Vec<Deal> {
@@ -476,19 +488,19 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    #[should_panic(expected = "CheckResults")]
-    async fn test_timeout() {
-        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
-        let client = PocketOption::new(ssid).await.unwrap();
-        let (id, _) = client.buy("EURUSD_otc", 1.5, 60).await.unwrap();
-        dbg!(&id);
-        let check = client.check_results(id);
-        let res = timeout(Duration::from_secs(30), check, "CheckResults".into())
-            .await
-            .expect("CheckResults");
-        dbg!(res);
-    }
+    // #[tokio::test]
+    // #[should_panic(expected = "CheckResults")]
+    // async fn test_timeout() {
+    //     let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
+    //     let client = PocketOption::new(ssid).await.unwrap();
+    //     let (id, _) = client.buy("EURUSD_otc", 1.5, 60).await.unwrap();
+    //     dbg!(&id);
+    //     let check = client.check_results(id);
+    //     let res = timeout(Duration::from_secs(30), check, "CheckResults".into())
+    //         .await
+    //         .expect("CheckResults");
+    //     dbg!(res);
+    // }
 
     #[tokio::test]
     async fn test_buy_check() -> anyhow::Result<()> {
@@ -555,5 +567,4 @@ mod tests {
         }
         Ok(())
     }
-
 }

@@ -100,7 +100,7 @@ where
             handler,
             timeout,
             reconnect_callback,
-            reconnect_time.unwrap_or_default()
+            reconnect_time.unwrap_or_default(),
         )
         .await?;
         Ok(Self {
@@ -126,7 +126,7 @@ where
         handler: Handler,
         timeout: Duration,
         reconnect_callback: Option<C>,
-        reconnect_time: u64
+        reconnect_time: u64,
     ) -> BinaryOptionsResult<Self> {
         let _connection = connector.connect(credentials.clone()).await?;
         let (_event_loop, sender) = Self::start_loops(
@@ -187,7 +187,7 @@ where
                         &mut write,
                         &reciever,
                         &reciever_priority,
-                        time
+                        time,
                     );
 
                 // let update_loop =
@@ -239,7 +239,7 @@ where
         Ok((task, sender))
     }
 
-    /// Recieves all the messages from the websocket connection and handles it 
+    /// Recieves all the messages from the websocket connection and handles it
     async fn listener_loop(
         mut previous: Option<<<Handler as MessageHandler>::Transfer as MessageTransfer>::Info>,
         data: &Data<T, Transfer>,
@@ -296,15 +296,22 @@ where
         ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
         reciever: &Receiver<Message>,
         reciever_priority: &Receiver<Message>,
-        time: u64
+        time: u64,
     ) -> BinaryOptionsResult<()> {
-        async fn priority_mesages(ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, reciever_priority: &Receiver<Message>) -> BinaryOptionsResult<()> {
+        async fn priority_mesages(
+            ws: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+            reciever_priority: &Receiver<Message>,
+        ) -> BinaryOptionsResult<()> {
             while let Ok(msg) = reciever_priority.recv().await {
-                ws.send(msg).await.inspect_err(|e| warn!("Error sending message to websocket, {e}"))?;
+                ws.send(msg)
+                    .await
+                    .inspect_err(|e| warn!("Error sending message to websocket, {e}"))?;
                 ws.flush().await?;
                 debug!("Sent message to websocket!");
             }
-            Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
+            Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+                RecvError,
+            ))
         }
 
         tokio::select! {
@@ -316,11 +323,15 @@ where
         let mut fused_streams = select_all([stream1.to_stream(), stream2.to_stream()]);
 
         while let Some(Ok(msg)) = fused_streams.next().await {
-            ws.send(msg).await.inspect_err(|e| warn!("Error sending message to websocket, {e}"))?;
+            ws.send(msg)
+                .await
+                .inspect_err(|e| warn!("Error sending message to websocket, {e}"))?;
             ws.flush().await?;
             debug!("Sent message to websocket!");
         }
-        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(RecvError))
+        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+            RecvError,
+        ))
     }
 
     // async fn api_loop(
@@ -338,7 +349,7 @@ where
         data: Data<T, Transfer>,
         sender: SenderMessage,
         reconnect: bool,
-        reconnect_time: u64
+        reconnect_time: u64,
     ) -> BinaryOptionsResult<BinaryOptionsResult<()>> {
         Ok(tokio::spawn(async move {
             sleep(Duration::from_secs(reconnect_time)).await;
@@ -398,9 +409,6 @@ where
     }
 }
 
-
-
-
 // impl<Transfer, Handler, Connector, Creds, T, C> Drop
 //     for WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
 // where
@@ -422,7 +430,11 @@ mod tests {
     use std::time::Duration;
 
     use async_channel::{bounded, Receiver, Sender};
-    use futures_util::{future::try_join, stream::{select_all, unfold}, Stream, StreamExt};
+    use futures_util::{
+        future::try_join,
+        stream::{select_all, unfold},
+        Stream, StreamExt,
+    };
     use rand::{distributions::Alphanumeric, Rng};
     use tokio::time::sleep;
     use tracing::info;
@@ -430,7 +442,7 @@ mod tests {
     use crate::utils::tracing::start_tracing;
 
     struct RecieverStream<T> {
-        inner: Receiver<T>
+        inner: Receiver<T>,
     }
 
     impl<T> RecieverStream<T> {
@@ -446,12 +458,14 @@ mod tests {
             Box::pin(unfold(self, |state| async move {
                 let item = state.receive().await;
                 Some((item, state))
-            }))        
+            }))
         }
-        
     }
 
-    async fn recieve_dif(reciever: Receiver<String>, receiver_priority: Receiver<String>) -> anyhow::Result<()> {
+    async fn recieve_dif(
+        reciever: Receiver<String>,
+        receiver_priority: Receiver<String>,
+    ) -> anyhow::Result<()> {
         async fn receiv(r: &Receiver<String>) -> anyhow::Result<()> {
             while let Ok(t) = r.recv().await {
                 info!(target: "High priority", "Recieved: {}", t);
@@ -468,17 +482,19 @@ mod tests {
         while let Some(value) = fused.next().await {
             info!(target: "Fused", "Recieved: {}", value?);
         }
-    
+
         Ok(())
     }
 
-
-    async fn recieve_dif_err(reciever: Receiver<String>, receiver_priority: Receiver<String>) -> anyhow::Result<()> {
+    async fn recieve_dif_err(
+        reciever: Receiver<String>,
+        receiver_priority: Receiver<String>,
+    ) -> anyhow::Result<()> {
         async fn receiv(r: &Receiver<String>) -> anyhow::Result<()> {
             let mut loops = 0;
             while let Ok(t) = r.recv().await {
                 if loops == 2 {
-                    return Err(anyhow::Error::msg("error receiving message"))
+                    return Err(anyhow::Error::msg("error receiving message"));
                 }
                 loops += 1;
                 info!(target: "High priority", "Recieved: {}", t);
@@ -495,28 +511,30 @@ mod tests {
         while let Some(value) = fused.next().await {
             info!(target: "Fused", "Recieved: {}", value?);
         }
-    
+
         Ok(())
     }
 
-    async fn sender_dif(sender: Sender<String>, sender_priority: Sender<String>) -> anyhow::Result<()> {
+    async fn sender_dif(
+        sender: Sender<String>,
+        sender_priority: Sender<String>,
+    ) -> anyhow::Result<()> {
         loop {
             let s1: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(7)
-            .map(char::from)
-            .collect();
+                .sample_iter(&Alphanumeric)
+                .take(7)
+                .map(char::from)
+                .collect();
             let s2: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(7)
-            .map(char::from)
-            .collect();
+                .sample_iter(&Alphanumeric)
+                .take(7)
+                .map(char::from)
+                .collect();
             sender.send(s1).await?;
             sender_priority.send(s2).await?;
             sleep(Duration::from_secs(1)).await;
         }
     }
-
 
     #[tokio::test]
     async fn test_multi_priority_reciever_ok() -> anyhow::Result<()> {
@@ -533,7 +551,8 @@ mod tests {
         start_tracing(true).unwrap();
         let (s, r) = bounded(8);
         let (sp, rp) = bounded(8);
-        try_join(sender_dif(s, sp), recieve_dif_err(r, rp)).await.unwrap();
+        try_join(sender_dif(s, sp), recieve_dif_err(r, rp))
+            .await
+            .unwrap();
     }
-
 }

@@ -4,28 +4,34 @@ use async_channel::{bounded, Receiver, RecvError, Sender};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::error;
 
-use crate::{error::{BinaryOptionsResult, BinaryOptionsToolsError}, general::validate::validate, utils::time::timeout};
+use crate::{
+    error::{BinaryOptionsResult, BinaryOptionsToolsError},
+    general::validate::validate,
+    utils::time::timeout,
+};
 
-use super::{traits::{DataHandler, MessageTransfer}, types::Data};
-
-
+use super::{
+    traits::{DataHandler, MessageTransfer},
+    types::Data,
+};
 
 #[derive(Clone)]
-pub struct SenderMessage
-{
+pub struct SenderMessage {
     sender: Sender<Message>,
-    sender_priority: Sender<Message>
+    sender_priority: Sender<Message>,
 }
 
-impl SenderMessage
-{
+impl SenderMessage {
     pub fn new(cap: usize) -> (Self, (Receiver<Message>, Receiver<Message>)) {
         let (s, r) = bounded(cap);
         let (sp, rp) = bounded(cap);
 
         (
-            Self { sender: s, sender_priority: sp },
-            (r, rp)
+            Self {
+                sender: s,
+                sender_priority: sp,
+            },
+            (r, rp),
         )
     }
     // pub fn new(sender: Sender<Transfer>) -> Self {
@@ -46,20 +52,18 @@ impl SenderMessage
     }
 
     pub async fn send<Transfer: MessageTransfer>(&self, msg: Transfer) -> BinaryOptionsResult<()> {
-        self.sender.send(msg.into()).await.map_err(|e| {
-            BinaryOptionsToolsError::ChannelRequestSendingError(
-                e.to_string(),
-            )
-        })?;
+        self.sender
+            .send(msg.into())
+            .await
+            .map_err(|e| BinaryOptionsToolsError::ChannelRequestSendingError(e.to_string()))?;
         Ok(())
     }
 
     pub async fn priority_send(&self, msg: Message) -> BinaryOptionsResult<()> {
-        self.sender_priority.send(msg).await.map_err(|e| {
-            BinaryOptionsToolsError::ChannelRequestSendingError(
-                e.to_string(),
-            )
-        })?;
+        self.sender_priority
+            .send(msg)
+            .await
+            .map_err(|e| BinaryOptionsToolsError::ChannelRequestSendingError(e.to_string()))?;
         Ok(())
     }
 
@@ -130,7 +134,10 @@ impl SenderMessage
     //     }
     // }
 
-    pub async fn send_message_with_timout<Transfer: MessageTransfer, T: DataHandler<Transfer = Transfer>>(
+    pub async fn send_message_with_timout<
+        Transfer: MessageTransfer,
+        T: DataHandler<Transfer = Transfer>,
+    >(
         &self,
         time: Duration,
         task: impl ToString,
@@ -160,7 +167,10 @@ impl SenderMessage
         .await
     }
 
-    pub async fn send_message_with_timeout_and_retry<Transfer: MessageTransfer, T: DataHandler<Transfer = Transfer>>(
+    pub async fn send_message_with_timeout_and_retry<
+        Transfer: MessageTransfer,
+        T: DataHandler<Transfer = Transfer>,
+    >(
         &self,
         time: Duration,
         task: impl ToString,

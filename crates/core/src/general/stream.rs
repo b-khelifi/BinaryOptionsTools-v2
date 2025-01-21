@@ -2,7 +2,7 @@ use async_channel::Receiver;
 use futures_util::{stream::unfold, Stream};
 
 pub struct RecieverStream<T> {
-    inner: Receiver<T>
+    inner: Receiver<T>,
 }
 
 impl<T> RecieverStream<T> {
@@ -18,7 +18,6 @@ impl<T> RecieverStream<T> {
         Box::pin(unfold(self, |state| async move {
             let item = state.receive().await;
             Some((item, state))
-        }))        
+        }))
     }
-    
 }

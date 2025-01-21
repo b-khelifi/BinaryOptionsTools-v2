@@ -105,7 +105,6 @@ impl StreamAsset {
     }
 }
 
-
 // impl Stream for StreamAsset {
 //     type Item = Candle;
 

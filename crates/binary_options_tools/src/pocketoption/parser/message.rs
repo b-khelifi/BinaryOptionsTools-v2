@@ -7,28 +7,26 @@ use tracing::warn;
 
 use binary_options_tools_core::{
     general::traits::MessageTransfer,
-    reimports::{Bytes, Message}
+    reimports::{Bytes, Message},
 };
 
-use crate::
-    pocketoption::{
-        error::{PocketOptionError, PocketResult},
-        types::{
-            base::{ChangeSymbol, SubscribeSymbol},
-            info::MessageInfo,
-            order::{
-                Deal, FailOpenOrder, FailOpenPendingOrder, OpenOrder, OpenPendingOrder,
-                PocketMessageFail, SuccessCloseOrder, SuccessOpenPendingOrder, UpdateClosedDeals,
-                UpdateOpenedDeals,
-            },
-            success::SuccessAuth,
-            update::{
-                LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew,
-                UpdateStream,
-            },
+use crate::pocketoption::{
+    error::{PocketOptionError, PocketResult},
+    types::{
+        base::{ChangeSymbol, SubscribeSymbol},
+        info::MessageInfo,
+        order::{
+            Deal, FailOpenOrder, FailOpenPendingOrder, OpenOrder, OpenPendingOrder,
+            PocketMessageFail, SuccessCloseOrder, SuccessOpenPendingOrder, UpdateClosedDeals,
+            UpdateOpenedDeals,
         },
-        ws::ssid::Ssid,
-    };
+        success::SuccessAuth,
+        update::{
+            LoadHistoryPeriodResult, UpdateAssets, UpdateBalance, UpdateHistoryNew, UpdateStream,
+        },
+    },
+    ws::ssid::Ssid,
+};
 
 use super::basic::LoadHistoryPeriod;
 
@@ -270,7 +268,7 @@ impl fmt::Display for WebSocketMessage {
             }
             WebSocketMessage::SubscribeSymbol(subscribe_symbol) => {
                 write!(f, "{:?}", subscribe_symbol)
-            },
+            }
             WebSocketMessage::Raw(text) => text.fmt(f),
 
             WebSocketMessage::UpdateStream(update_stream) => write!(f, "{:?}", update_stream),

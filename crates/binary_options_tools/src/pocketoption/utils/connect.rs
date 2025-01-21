@@ -1,7 +1,11 @@
+use binary_options_tools_core::{
+    error::BinaryOptionsToolsError,
+    reimports::{
+        connect_async_tls_with_config, generate_key, Connector, MaybeTlsStream, Request,
+        WebSocketStream,
+    },
+};
 use tokio::net::TcpStream;
-use binary_options_tools_core::{error::BinaryOptionsToolsError, reimports::{
-    connect_async_tls_with_config, generate_key, Connector, MaybeTlsStream, Request, WebSocketStream
-}};
 use url::Url;
 
 use crate::pocketoption::{
@@ -35,8 +39,11 @@ pub async fn try_connect(
         .header("Sec-Websocket-Key", generate_key())
         .header("Sec-Websocket-Version", "13")
         .header("Host", host)
-        .body(()).map_err(BinaryOptionsToolsError::from)?;
+        .body(())
+        .map_err(BinaryOptionsToolsError::from)?;
 
-    let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector)).await.map_err(BinaryOptionsToolsError::from)?;
+    let (ws, _) = connect_async_tls_with_config(request, None, false, Some(connector))
+        .await
+        .map_err(BinaryOptionsToolsError::from)?;
     Ok(ws)
 }

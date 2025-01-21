@@ -64,6 +64,9 @@ impl Error for PocketMessageFail {}
 
 impl From<PocketOptionError> for BinaryOptionsToolsError {
     fn from(value: PocketOptionError) -> Self {
-        BinaryOptionsToolsError::BinaryOptionsTradingError { platform: "Pocket Option".to_string(), error: value.to_string() }
+        BinaryOptionsToolsError::BinaryOptionsTradingError {
+            platform: "Pocket Option".to_string(),
+            error: value.to_string(),
+        }
     }
 }

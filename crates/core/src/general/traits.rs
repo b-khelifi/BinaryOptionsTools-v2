@@ -1,5 +1,5 @@
-use core::{error, fmt, hash};
 use async_trait::async_trait;
+use core::{error, fmt, hash};
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
@@ -49,7 +49,9 @@ pub trait MessageTransfer:
 }
 
 pub trait MessageInformation:
-    Serialize + DeserializeOwned + Clone + Send + Sync + Eq + hash::Hash + fmt::Debug + fmt::Display {}
+    Serialize + DeserializeOwned + Clone + Send + Sync + Eq + hash::Hash + fmt::Debug + fmt::Display
+{
+}
 
 #[async_trait]
 /// Every struct that implements MessageHandler will recieve a message and should return

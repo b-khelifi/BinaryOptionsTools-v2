@@ -12,15 +12,12 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use binary_options_tools_core::{
-    constants::MAX_CHANNEL_CAPACITY,
-    error::BinaryOptionsResult,
-    general::traits::DataHandler
+    constants::MAX_CHANNEL_CAPACITY, error::BinaryOptionsResult, general::traits::DataHandler,
 };
 
-use crate::
-    pocketoption::{
-        error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
-    };
+use crate::pocketoption::{
+    error::PocketResult, parser::message::WebSocketMessage, ws::stream::StreamAsset,
+};
 
 use super::{
     order::Deal,

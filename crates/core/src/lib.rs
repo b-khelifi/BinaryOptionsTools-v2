@@ -1,8 +1,8 @@
+pub mod constants;
 pub mod error;
 pub mod general;
-pub mod utils;
-pub mod constants;
 pub mod reimports;
+pub mod utils;
 
 pub mod macros;
 
@@ -18,12 +18,14 @@ mod tests {
     use crate::utils::tracing::start_tracing;
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct Test {
-        name: String
+        name: String,
     }
-    
+
     #[test]
     fn test_deserialize_macro() {
-        let test = Test { name: "Test".to_string() };
+        let test = Test {
+            name: "Test".to_string(),
+        };
         let test_str = serialize!(&test).unwrap();
         let test2 = deserialize!(Test, &test_str).unwrap();
         assert_eq!(test, test2)
@@ -34,7 +36,7 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_macro() -> anyhow::Result<()> {
         start_tracing(true).unwrap();
-        
+
         #[timeout(1, tracing(level = "info", skip(_tester)))]
         async fn this_is_a_test(_tester: Tester) -> anyhow::Result<()> {
             debug!("Test");

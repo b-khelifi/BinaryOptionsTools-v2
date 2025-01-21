@@ -2,19 +2,18 @@ use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, Expr, FnArg, ItemFn, Pat, PatIdent, Token};
 
-
 pub struct Timeout {
     args: TimeoutArgs,
-    body: TimeoutBody
+    body: TimeoutBody,
 }
 
 pub struct TimeoutArgs {
     time_args: TimeoutInnerArgs,
-    tracing_args: Option<TracingArgs>
+    tracing_args: Option<TracingArgs>,
 }
 
 pub struct TimeoutBody {
-    body: ItemFn
+    body: ItemFn,
 }
 
 pub struct TimeoutInnerArgs(Expr);
@@ -33,7 +32,10 @@ impl Parse for TimeoutArgs {
                 tracing_args = Some(input.parse()?);
             }
         }
-        Ok(Self { time_args, tracing_args })
+        Ok(Self {
+            time_args,
+            tracing_args,
+        })
     }
 }
 
@@ -42,7 +44,10 @@ impl Parse for TracingArgs {
         let _ = input.parse::<kw::tracing>();
         let content;
         let _ = syn::parenthesized!(content in input);
-        let args = content.parse_terminated(Expr::parse, Token![,])?.into_iter().collect();
+        let args = content
+            .parse_terminated(Expr::parse, Token![,])?
+            .into_iter()
+            .collect();
 
         Ok(Self(args))
     }
@@ -59,8 +64,10 @@ impl Parse for TimeoutBody {
         let body: ItemFn = input.parse()?;
         match body.sig.asyncness {
             Some(_) => Ok(Self { body }),
-            None => Err(syn::Error::new(Span::call_site(), "Expected function to be async"))
-
+            None => Err(syn::Error::new(
+                Span::call_site(),
+                "Expected function to be async",
+            )),
         }
     }
 }
@@ -70,12 +77,11 @@ impl ToTokens for TracingArgs {
         let args = &self.0;
         if let Some(first) = args.first() {
             let args = &args[1..];
-            tokens.extend( quote! {
+            tokens.extend(quote! {
                 #[tracing::instrument(#first #(, #args)*)]
             });
-
         } else {
-            tokens.extend( quote! {
+            tokens.extend(quote! {
                 #[tracing::instrument]
             });
         }
@@ -86,7 +92,7 @@ impl ToTokens for TimeoutInnerArgs {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let time = &self.0;
 
-        tokens.extend( quote! {
+        tokens.extend(quote! {
             ::std::time::Duration::from_secs(#time)
         });
     }
@@ -107,12 +113,11 @@ impl Timeout {
     }
 }
 
-
 impl ToTokens for Timeout {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let TimeoutArgs {
             time_args,
-            tracing_args
+            tracing_args,
         } = &self.args;
         let TimeoutBody { body } = &self.body;
         let fn_name = &body.sig.ident;
@@ -126,7 +131,6 @@ impl ToTokens for Timeout {
                 } else {
                     None
                 }
-                
             }
         });
         // let output = match &body.sig.output {

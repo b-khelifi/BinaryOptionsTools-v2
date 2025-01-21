@@ -5,16 +5,15 @@ use futures_util::future::try_join;
 use tokio::time::sleep;
 use tracing::{debug, info, instrument};
 
+use crate::pocketoption::{
+    error::PocketOptionError, parser::message::WebSocketMessage, types::info::MessageInfo,
+    validators::history_validator,
+};
 use binary_options_tools_core::{
     constants::TIMOUT_TIME,
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
-    general::{send::SenderMessage, traits::Callback, types::Data}
+    general::{send::SenderMessage, traits::Callback, types::Data},
 };
-use crate::
-    pocketoption::{
-        error::PocketOptionError, parser::message::WebSocketMessage, types::info::MessageInfo,
-        validators::history_validator,
-    };
 
 use super::{base::ChangeSymbol, data::PocketData, order::SuccessCloseOrder};
 
@@ -22,7 +21,10 @@ use super::{base::ChangeSymbol, data::PocketData, order::SuccessCloseOrder};
 pub struct PocketCallback;
 
 impl PocketCallback {
-    async fn update_assets(data: &Data<PocketData, WebSocketMessage>, sender: &SenderMessage) -> BinaryOptionsResult<()> {
+    async fn update_assets(
+        data: &Data<PocketData, WebSocketMessage>,
+        sender: &SenderMessage,
+    ) -> BinaryOptionsResult<()> {
         for asset in data.stream_assets().await {
             sleep(Duration::from_secs(1)).await;
             let history = ChangeSymbol::new(asset.to_string(), 3600);
@@ -39,15 +41,18 @@ impl PocketCallback {
             if let WebSocketMessage::UpdateHistoryNew(_) = res {
                 debug!("Sent 'ChangeSymbol' for asset: {asset}");
             } else {
-                return Err(
-                    PocketOptionError::UnexpectedIncorrectWebSocketMessage(res.information()).into(),
-                );
+                return Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
+                    res.information(),
+                )
+                .into());
             }
         }
         Ok(())
     }
 
-    async fn update_check_results(data: &Data<PocketData, WebSocketMessage>) -> BinaryOptionsResult<()> {
+    async fn update_check_results(
+        data: &Data<PocketData, WebSocketMessage>,
+    ) -> BinaryOptionsResult<()> {
         if let Some(sender) = data.sender(MessageInfo::SuccesscloseOrder).await {
             let deals = data.get_closed_deals().await;
             if !deals.is_empty() {

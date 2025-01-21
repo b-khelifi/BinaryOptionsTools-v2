@@ -3,5 +3,5 @@ pub mod traits;
 pub mod types;
 
 pub mod send;
-pub mod validate;
 pub mod stream;
+pub mod validate;
