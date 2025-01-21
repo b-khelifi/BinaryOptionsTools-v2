@@ -8,7 +8,7 @@ description = "`binary-options-tools` crate and the python library `BinaryOption
 license = "MIT"
 
 [dependencies]
-binary-options-tools-core = { path = "../core" }
+binary-options-tools-core = { path = "../core", version = "0.1.4"}
 
 anyhow = "1.0.95"
 async-channel = "2.3.1"
