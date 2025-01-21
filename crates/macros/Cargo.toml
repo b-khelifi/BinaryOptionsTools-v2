@@ -3,7 +3,7 @@ name = "binary-options-tools-macros"
 version = "0.1.0"
 edition = "2021"
 repository = "https://github.com/ChipaDevTeam/BinaryOptionsTools-v2"
-readme = "../README.md"
+readme = "README.md"
 description = "Macros for the `binary-options-tools` crate"
 license = "MIT"
 

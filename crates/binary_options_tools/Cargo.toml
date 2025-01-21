@@ -3,7 +3,7 @@ name = "binary-option-tools"
 version = "0.1.4"
 edition = "2021"
 repository = "https://github.com/ChipaDevTeam/BinaryOptionsTools-v2"
-readme = "../README.md"
+readme = "README.md"
 description = "`binary-options-tools` crate and the python library `BinaryOptionsToolsV2`."
 license = "MIT"
 
