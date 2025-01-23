@@ -1,4 +1,4 @@
-👉 [Join us on Discord](https://discord.gg/T3FGXcmd)
+👉 [Join us on Discord](https://discord.gg/p7YyFqSmAz)
 # BinaryOptionsTools
 
 **BinaryOptionsTools** is a powerful suite of tools designed to enhance your binary options trading experience. Whether you're looking for analysis, strategy optimization, or execution tools, this project provides a variety of solutions to help you make informed trading decisions.
@@ -21,7 +21,7 @@ pip install binaryoptiontoolsv2
 ```
 
 # Rust
-For the full rust documentation check [here](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/tree/master/rust/Readme.md)
+For the full rust documentation check [here](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/tree/crates/core/Readme.md)
 # Todo
 * *Pocket Option*: Add support for pending trades 
 * *BinaryOptionsToolsV2*: Add support for **rust** (done)
