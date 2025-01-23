@@ -342,7 +342,7 @@ mod tests {
     use rand::{random, seq::SliceRandom, thread_rng};
     use tokio::{task::JoinHandle, time::sleep};
 
-    use binary_options_tools_core::utils::{time::timeout, tracing::start_tracing};
+    use binary_options_tools_core::utils::tracing::start_tracing;
 
     use super::*;
 
@@ -496,7 +496,7 @@ mod tests {
     //     let (id, _) = client.buy("EURUSD_otc", 1.5, 60).await.unwrap();
     //     dbg!(&id);
     //     let check = client.check_results(id);
-    //     let res = timeout(Duration::from_secs(30), check, "CheckResults".into())
+    //     let res = binary_options_tools_core::utils::time::timeout(Duration::from_secs(30), check, "CheckResults".into())
     //         .await
     //         .expect("CheckResults");
     //     dbg!(res);

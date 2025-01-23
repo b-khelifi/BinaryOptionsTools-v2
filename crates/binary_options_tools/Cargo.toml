@@ -7,8 +7,15 @@ readme = "README.md"
 description = "`binary-options-tools` crate and the python library `BinaryOptionsToolsV2`."
 license = "MIT"
 
+# [workspace]
+# members = [
+#     "../macros", "../core"
+# ]
+
+
 [dependencies]
 binary-options-tools-core = { path = "../core", version = "0.1.4"}
+binary-options-tools-macros = { path = "../macros", version = "0.1.0"}
 
 anyhow = "1.0.95"
 async-channel = "2.3.1"

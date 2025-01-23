@@ -88,52 +88,6 @@ impl SenderMessage {
         ))
     }
 
-    // pub async fn send_message_with_timout<T: DataHandler<Transfer = Transfer>>(
-    //     &self,
-    //     timeout: Duration,
-    //     task: impl ToString,
-    //     data: &Data<T, Transfer>,
-    //     msg: Transfer,
-    //     response_type: Transfer::Info,
-    //     validator: impl Fn(&Transfer) -> bool + Send + Sync,
-    // ) -> BinaryOptionsResult<Transfer> {
-    //     let reciever = data.add_request(response_type).await;
-
-    //     self.sender
-    //         .send(msg)
-    //         .await
-    //         .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
-
-    //     let start_time = Instant::now();
-
-    //     loop {
-    //         match reciever.try_recv() {
-    //             Ok(msg) => {
-    //                 println!("Called");
-    //                 if let Some(msg) = validate(&validator, msg)
-    //                     .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
-    //                 {
-    //                     return Ok(msg);
-    //                 }
-    //             }
-    //             Err(err) => match err {
-    //                 TryRecvError::Closed => {
-    //                     return Err(BinaryOptionsToolsError::Unallowed(
-    //                         "Api channel connectionc closed".into(),
-    //                     ))
-    //                 }
-    //                 TryRecvError::Empty => {}
-    //             },
-    //         }
-    //         if Instant::now() - start_time >= timeout {
-    //             return Err(BinaryOptionsToolsError::TimeoutError {
-    //                 task: task.to_string(),
-    //                 duration: timeout,
-    //             });
-    //         }
-    //     }
-    // }
-
     pub async fn send_message_with_timout<
         Transfer: MessageTransfer,
         T: DataHandler<Transfer = Transfer>,
@@ -203,7 +157,7 @@ impl SenderMessage {
         match call1 {
             Ok(res) => Ok(res),
             Err(_) => {
-                println!("Failded 1 trying again");
+                println!("Failded once trying again");
                 let reciever = self.reciever(data, msg, response_type).await?;
                 timeout(
                     time,

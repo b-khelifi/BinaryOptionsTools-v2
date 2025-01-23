@@ -78,11 +78,11 @@ impl ToTokens for TracingArgs {
         if let Some(first) = args.first() {
             let args = &args[1..];
             tokens.extend(quote! {
-                #[tracing::instrument(#first #(, #args)*)]
+                #[::tracing::instrument(#first #(, #args)*)]
             });
         } else {
             tokens.extend(quote! {
-                #[tracing::instrument]
+                #[::tracing::instrument]
             });
         }
     }
@@ -145,7 +145,7 @@ impl ToTokens for Timeout {
                 #body
                 let res = ::tokio::select! {
                     res = #fn_name(#(#input_names ,)*) => Ok(res),
-                    _ = ::tokio::time::sleep(#time_args) => Err(anyhow::Error::msg(format!("Failed to execute '{}' task before the maximum allowed time of '{:?}'", #fn_name_str, #time_args)))
+                    _ = ::tokio::time::sleep(#time_args) => Err(::binary_options_tools_core::error::BinaryOptionsToolsError::TimeoutError { task: ::std::string::ToString::to_string(#fn_name_str), duration: #time_args })
                 };
                 res?
             }

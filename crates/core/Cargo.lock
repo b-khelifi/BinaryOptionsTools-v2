@@ -101,7 +101,6 @@ dependencies = [
  "anyhow",
  "async-channel",
  "async-trait",
- "binary-options-tools-macros",
  "chrono",
  "futures-util",
  "php_serde",
@@ -117,19 +116,6 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "binary-options-tools-macros"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "proc-macro2",
- "quote",
- "serde_json",
- "syn",
- "tokio",
- "tracing",
 ]
 
 [[package]]
