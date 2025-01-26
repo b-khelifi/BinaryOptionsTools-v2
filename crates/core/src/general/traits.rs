@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use core::{fmt, hash};
-use std::error;
+use core::{error, fmt, hash};
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
