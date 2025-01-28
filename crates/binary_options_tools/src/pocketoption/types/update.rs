@@ -209,15 +209,15 @@ impl TryFrom<Vec<DataCandle>> for DataCandle {
         }
         let mut low = f64::INFINITY;
         let mut high = f64::NEG_INFINITY;
-        let first = value
+        let open = value
             .first()
-            .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?;
-        let time = first.time;
-        let open = first.open;
-        let close = value
+            .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?.open;
+        let last = value
             .last()
             .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?
-            .close;
+        ;
+        let close = last.close;
+        let time = last.time;
         value.iter().for_each(|c| {
             high = high.max(c.high);
             low = low.min(c.low);

@@ -1,5 +1,6 @@
 use std::str;
 use std::sync::Arc;
+use std::time::Duration;
 
 use binary_option_tools::pocketoption::error::PocketResult;
 use binary_option_tools::pocketoption::pocket_client::PocketOption;
@@ -202,7 +203,7 @@ impl RawPocketOption {
                 .map_err(BinaryErrorPy::from)?;
 
             // Clone the stream_asset and convert it to a BoxStream
-            let boxed_stream = StreamAsset::to_stream_chuncked_static(Arc::new(stream_asset))
+            let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset))
                 .boxed()
                 .fuse();
 
@@ -212,6 +213,32 @@ impl RawPocketOption {
             Python::with_gil(|py| StreamIterator { stream }.into_py_any(py))
         })
     }
+
+    pub fn subscribe_symbol_timed<'py>(
+        &self,
+        py: Python<'py>,
+        symbol: String,
+        time: Duration,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            let stream_asset = client
+                .subscribe_symbol_timed(symbol, time)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+
+            // Clone the stream_asset and convert it to a BoxStream
+            let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset))
+                .boxed()
+                .fuse();
+
+            // Wrap the BoxStream in an Arc and Mutex
+            let stream = Arc::new(Mutex::new(boxed_stream));
+
+            Python::with_gil(|py| StreamIterator { stream }.into_py_any(py))
+        })
+    }
+
 }
 
 #[pymethods]

@@ -1,6 +1,8 @@
-import json
 from .asyncronous import PocketOptionAsync
+from datetime import timedelta
+
 import asyncio
+import json
 
 
 class SyncSubscription:
@@ -80,9 +82,16 @@ class PocketOption:
         return self.loop.run_until_complete(self._client.history(asset, period))
 
     def subscribe_symbol(self, asset: str) -> SyncSubscription:
-        """Returns an async iterator over the associated asset, it will return real time raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
+        """Returns a sync iterator over the associated asset, it will return real time raw candles and will return new candles while the 'PocketOption' class is loaded if the class is droped then the iterator will fail"""
         return SyncSubscription(self.loop.run_until_complete(self._client._subscribe_symbol_inner(asset)))
 
     def subscribe_symbol_chuncked(self, asset: str, chunck_size: int) -> SyncSubscription:
-        """Returns an async iterator over the associated asset, it will return real time candles formed with the specified amount of raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
+        """Returns a sync iterator over the associated asset, it will return real time candles formed with the specified amount of raw candles and will return new candles while the 'PocketOption' class is loaded if the class is droped then the iterator will fail"""
         return SyncSubscription(self.loop.run_until_complete(self._client._subscribe_symbol_chuncked_inner(asset, chunck_size)))
+    
+    def subscribe_symbol_timed(self, asset: str, time: timedelta) -> SyncSubscription:
+        """
+        Returns a sync iterator over the associated asset, it will return real time candles formed with candles ranging from time `start_time` to `start_time` + `time` allowing users to get the latest candle of `time` duration and will return new candles while the 'PocketOption' class is loaded if the class is droped then the iterator will fail
+        Please keep in mind the iterator won't return a new candle exactly each `time` duration, there could be a small delay and imperfect timestamps
+        """
+        return SyncSubscription(self.loop.run_until_complete(self._client._subscribe_symbol_timed_inner(asset, time)))

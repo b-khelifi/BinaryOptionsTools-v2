@@ -27,3 +27,29 @@ pub fn start_tracing(terminal: bool) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub fn start_tracing_leveled(terminal: bool, level: LevelFilter) -> anyhow::Result<()> {
+    let error_logs = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open("errors.log")?;
+
+    let sub = tracing_subscriber::registry()
+        // .with(filtered_layer)
+        .with(
+            // log-error file, to log the errors that arise
+            fmt::layer()
+                .with_ansi(false)
+                .with_writer(error_logs)
+                .with_filter(LevelFilter::WARN),
+        );
+    if terminal {
+        sub.with(fmt::Layer::default().with_filter(level))
+            .try_init()?;
+    } else {
+        sub.try_init()?;
+    }
+
+    Ok(())
+}
+

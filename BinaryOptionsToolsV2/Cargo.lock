@@ -7,6 +7,7 @@ name = "BinaryOptionsToolsV2"
 version = "0.1.6-alpha.2"
 dependencies = [
  "binary-option-tools",
+ "chrono",
  "futures-util",
  "pyo3",
  "pyo3-async-runtimes",
@@ -1191,6 +1192,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57fe09249128b3173d092de9523eaa75136bf7ba85e0d69eca241c7939c933cc"
 dependencies = [
  "cfg-if",
+ "chrono",
  "indoc",
  "libc",
  "memoffset",

@@ -1,4 +1,5 @@
 from BinaryOptionsToolsV2 import RawPocketOption, Logger
+from datetime import timedelta
 
 import asyncio
 import json
@@ -121,6 +122,9 @@ class PocketOptionAsync:
     async def _subscribe_symbol_chuncked_inner(self, asset: str, chunck_size: int):
         return await self.client.subscribe_symbol_chuncked(asset, chunck_size)
     
+    async def _subscribe_symbol_timed_inner(self, asset: str, time: timedelta):
+        return await self.client.subscribe_symbol_timed(asset, time)
+    
     async def subscribe_symbol(self, asset: str) -> AsyncSubscription:
         """Returns an async iterator over the associated asset, it will return real time raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
         return AsyncSubscription(await self._subscribe_symbol_inner(asset))
@@ -128,3 +132,10 @@ class PocketOptionAsync:
     async def subscribe_symbol_chuncked(self, asset: str, chunck_size: int) -> AsyncSubscription:
         """Returns an async iterator over the associated asset, it will return real time candles formed with the specified amount of raw candles and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail"""
         return AsyncSubscription(await self._subscribe_symbol_chuncked_inner(asset, chunck_size))
+    
+    async def subscribe_symbol_timed(self, asset: str, time: timedelta) -> AsyncSubscription:
+        """
+        Returns an async iterator over the associated asset, it will return real time candles formed with candles ranging from time `start_time` to `start_time` + `time` allowing users to get the latest candle of `time` duration and will return new candles while the 'PocketOptionAsync' class is loaded if the class is droped then the iterator will fail
+        Please keep in mind the iterator won't return a new candle exactly each `time` duration, there could be a small delay and imperfect timestamps
+        """
+        return AsyncSubscription(await self._subscribe_symbol_timed_inner(asset, time))

@@ -326,6 +326,20 @@ impl PocketOption {
             .await)
     }
 
+    pub async fn subscribe_symbol_timed(
+        &self,
+        asset: impl ToString,
+        time: impl Into<Duration>,
+    ) -> PocketResult<StreamAsset> {
+        info!(target: "SubscribeSymbolTimed", "Subscribing to asset '{}'", asset.to_string());
+        let _ = self.history(asset.to_string(), 1).await?;
+        debug!("Created StreamAsset instance.");
+        Ok(self
+            .data
+            .add_stream_timed(asset.to_string(), time.into())
+            .await)
+    }
+
     pub fn kill(self) {
         drop(self)
     }
@@ -342,7 +356,8 @@ mod tests {
     use rand::{random, seq::SliceRandom, thread_rng};
     use tokio::{task::JoinHandle, time::sleep};
 
-    use binary_options_tools_core::utils::tracing::start_tracing;
+    use binary_options_tools_core::utils::tracing::{start_tracing, start_tracing_leveled};
+    use tracing::level_filters::LevelFilter;
 
     use super::*;
 
@@ -381,6 +396,31 @@ mod tests {
         let stream_asset1 = client.subscribe_symbol("EURUSD_otc").await?;
         let stream_asset2 = client.subscribe_symbol("#FB_otc").await?;
         let stream_asset3 = client.subscribe_symbol("YERUSD_otc").await?;
+
+        let f1 = to_future(stream_asset1, 1);
+        let f2 = to_future(stream_asset2, 2);
+        let f3 = to_future(stream_asset3, 3);
+        let _ = try_join3(f1, f2, f3).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_symbol_timed() -> anyhow::Result<()> {
+        start_tracing_leveled(true, LevelFilter::INFO)?;
+        fn to_future(stream: StreamAsset, id: i32) -> JoinHandle<anyhow::Result<()>> {
+            tokio::spawn(async move {
+                while let Some(item) = stream.to_stream().next().await {
+                    info!("StreamAsset n°{}, candle: {}", id, item?);
+                }
+                Ok(())
+            })
+        }
+        // start_tracing()?;
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await?;
+        let stream_asset1 = client.subscribe_symbol_timed("EURUSD_otc", Duration::from_secs(30)).await?;
+        let stream_asset2 = client.subscribe_symbol_timed("#FB_otc", Duration::from_secs(15)).await?;
+        let stream_asset3 = client.subscribe_symbol_timed("YERUSD_otc", Duration::from_secs(60)).await?;
 
         let f1 = to_future(stream_asset1, 1);
         let f2 = to_future(stream_asset2, 2);

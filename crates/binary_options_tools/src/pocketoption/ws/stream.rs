@@ -1,5 +1,8 @@
 use std::sync::Arc;
+use std::time::Duration;
 
+use crate::pocketoption::error::PocketOptionError;
+use chrono::{DateTime, Utc};
 use tracing::debug;
 // use pin_project_lite::pin_project;
 use crate::pocketoption::{
@@ -14,7 +17,45 @@ use futures_util::Stream;
 pub struct StreamAsset {
     reciever: Receiver<WebSocketMessage>,
     asset: String,
-    chunk_size: usize,
+    condition: ConditonnalUpdate,
+}
+
+/// This enum tells the StreamAsset when to send new data
+#[derive(Clone)]
+pub enum ConditonnalUpdate {
+    None,           // No condition, once data is recieved, data is sent
+    Size(usize),    // Data is only returned when length of candles is equal to size
+    Time(Duration), // Only return data when the time between the first and latest candle is equal to the specified duration
+}
+
+impl ConditonnalUpdate {
+    pub fn check_condition(&self, candles: &Vec<DataCandle>) -> PocketResult<bool> {
+        match self {
+            Self::None => Ok(true),
+            Self::Size(batch) => {
+                if candles.len() >= *batch {
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+            Self::Time(time) => {
+                if let Some(first) = candles.first() {
+                    let start_time = first.time;
+                    let end_time: DateTime<Utc> = match candles.last() {
+                        Some(candle) => candle.time,
+                        None => return Ok(false),
+                    };
+                    let duration = (end_time - start_time).to_std().map_err(|_| PocketOptionError::UnreachableError("Well, this is unexpected, somehow the first candle is more recent than the latest one recieved".to_string()))?;
+                    if duration >= *time {
+                        return Ok(true);
+                    }
+                    return Ok(false);
+                }
+                Ok(false)
+            }
+        }
+    }
 }
 
 impl StreamAsset {
@@ -22,7 +63,7 @@ impl StreamAsset {
         Self {
             reciever,
             asset,
-            chunk_size: 1,
+            condition: ConditonnalUpdate::None,
         }
     }
 
@@ -34,34 +75,27 @@ impl StreamAsset {
         Self {
             reciever,
             asset,
-            chunk_size,
+            condition: ConditonnalUpdate::Size(chunk_size),
+        }
+    }
+
+    pub fn new_timed(reciever: Receiver<WebSocketMessage>, asset: String, time: Duration) -> Self {
+        Self {
+            reciever,
+            asset,
+            condition: ConditonnalUpdate::Time(time),
         }
     }
 
     pub async fn recieve(&self) -> PocketResult<DataCandle> {
+        let mut candles = vec![];
         while let Ok(candle) = self.reciever.recv().await {
             debug!(target: "StreamAsset", "Recieved UpdateStream!");
             if let WebSocketMessage::UpdateStream(candle) = candle {
                 if let Some(candle) = candle.0.first().take_if(|x| x.active == self.asset) {
-                    return Ok(candle.into());
-                }
-            }
-        }
-
-        unreachable!(
-            "This should never happen, please contact Rick-29 at https://github.com/Rick-29"
-        )
-    }
-
-    pub async fn recieve_chunked(&self) -> PocketResult<DataCandle> {
-        let mut chunk = vec![];
-        while let Ok(candle) = self.reciever.recv().await {
-            debug!(target: "StreamAsset", "Recieved UpdateStream!");
-            if let WebSocketMessage::UpdateStream(candle) = candle {
-                if let Some(candle) = candle.0.first().take_if(|x| x.active == self.asset) {
-                    chunk.push(candle.into());
-                    if chunk.len() >= self.chunk_size {
-                        return chunk.try_into();
+                    candles.push(candle.into());
+                    if self.condition.check_condition(&candles)? {
+                        return candles.try_into();
                     }
                 }
             }
@@ -72,16 +106,43 @@ impl StreamAsset {
         )
     }
 
+    // pub async fn _recieve(&self) -> PocketResult<DataCandle> {
+    //     while let Ok(candle) = self.reciever.recv().await {
+    //         debug!(target: "StreamAsset", "Recieved UpdateStream!");
+    //         if let WebSocketMessage::UpdateStream(candle) = candle {
+    //             if let Some(candle) = candle.0.first().take_if(|x| x.active == self.asset) {
+    //                 return Ok(candle.into());
+    //             }
+    //         }
+    //     }
+
+    //     unreachable!(
+    //         "This should never happen, please contact Rick-29 at https://github.com/Rick-29"
+    //     )
+    // }
+
+    // pub async fn recieve_chunked(&self) -> PocketResult<DataCandle> {
+    //     let mut chunk = vec![];
+    //     while let Ok(candle) = self.reciever.recv().await {
+    //         debug!(target: "StreamAsset", "Recieved UpdateStream!");
+    //         if let WebSocketMessage::UpdateStream(candle) = candle {
+    //             if let Some(candle) = candle.0.first().take_if(|x| x.active == self.asset) {
+    //                 chunk.push(candle.into());
+    //                 if chunk.len() >= self.chunk_size {
+    //                     return chunk.try_into();
+    //                 }
+    //             }
+    //         }
+    //     }
+
+    //     unreachable!(
+    //         "This should never happen, please contact Rick-29 at https://github.com/Rick-29"
+    //     )
+    // }
+
     pub fn to_stream(&self) -> impl Stream<Item = PocketResult<DataCandle>> + '_ {
         Box::pin(unfold(self, |state| async move {
             let item = state.recieve().await;
-            Some((item, state))
-        }))
-    }
-
-    pub fn to_stream_chuncked(&self) -> impl Stream<Item = PocketResult<DataCandle>> + '_ {
-        Box::pin(unfold(self, |state| async move {
-            let item = state.recieve_chunked().await;
             Some((item, state))
         }))
     }
@@ -91,15 +152,6 @@ impl StreamAsset {
     ) -> impl Stream<Item = PocketResult<DataCandle>> + 'static {
         Box::pin(unfold(self, |state| async move {
             let item = state.recieve().await;
-            Some((item, state))
-        }))
-    }
-
-    pub fn to_stream_chuncked_static(
-        self: Arc<Self>,
-    ) -> impl Stream<Item = PocketResult<DataCandle>> + 'static {
-        Box::pin(unfold(self, |state| async move {
-            let item = state.recieve_chunked().await;
             Some((item, state))
         }))
     }

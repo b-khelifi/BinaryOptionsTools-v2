@@ -150,6 +150,13 @@ impl PocketData {
         StreamAsset::new_chuncked(self.stream_channels.1.clone(), asset, chunck_size)
     }
 
+    pub async fn add_stream_timed(&self, asset: String, time: Duration) -> StreamAsset {
+        info!("Created new channels and StreamAsset instance");
+        let mut assets = self.stream_assets.lock().await;
+        assets.push(asset.clone());
+        StreamAsset::new_timed(self.stream_channels.1.clone(), asset, time)
+    }
+
     pub async fn stream_assets(&self) -> Vec<String> {
         self.stream_assets.lock().await.clone()
     }
