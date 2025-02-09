@@ -1,6 +1,47 @@
 👉 [Join us on Discord](https://discord.gg/T3FGXcmd)
 # BinaryOptionsToolsV2
+Path to the github repository for this version of the project: 
 
+## How to install
+Install it with PyPi using the following command:
+```bash
+pip install binaryoptionstoolsv2==0.1.6a2
+```
+
+## Supported Os
+Currently only suppot for Windows is available.
+
+## Supported Python versions
+Currently only python 3.9 to 3.12 is suported.
+
+## Compile from souce (Not recommended)
+* Make sure you have `rust` and `cargo` installed ([Check here](https://www.rust-lang.org/tools/install))
+
+* Install `[maturin](https://www.maturin.rs/installation)` in order to compile the library
+
+* Once the source dowloaded (using `git clone https://github.com/ChipaDevTeam/BinaryOptionsTools-v2.git`) execute the following commands:
+To create the `.whl` file
+```bash
+// Inside the root folder
+cd BinaryOptionsToolsV2
+maturin build -r 
+
+// Once the command is executed it should print a path to a .whl file, copy it and then run
+pip install path/to/file.whl
+```
+
+To install the library in a local virtual environment
+```bash
+// Inside the root folder
+cd BinaryOptionsToolsV2
+
+// Activate the virtual environment if not done alreade 
+
+// Execute the following command and it shoult automatically install the library in the VM
+maturin develop
+```
+
+## Docs
 Comprehensive Documentation for BinaryOptionsToolsV2 
 
 1. `__init__.py` 
