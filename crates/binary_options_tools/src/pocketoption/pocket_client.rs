@@ -353,7 +353,7 @@ mod tests {
         future::{try_join3, try_join_all},
         StreamExt,
     };
-    use rand::{random, seq::SliceRandom, thread_rng};
+    use rand::{random, seq::IndexedRandom, rng};
     use tokio::{task::JoinHandle, time::sleep};
 
     use binary_options_tools_core::utils::tracing::{start_tracing, start_tracing_leveled};
@@ -549,7 +549,7 @@ mod tests {
         let client = PocketOption::new(ssid).await.unwrap();
         let time_frames = [5, 15, 30, 60, 300];
         let assets = ["EURUSD_otc"];
-        let mut rng = thread_rng();
+        let mut rng = rng();
         loop {
             let amount = (random::<f64>() * 10.0).max(1.0);
             let asset = assets.choose(&mut rng).ok_or(anyhow::anyhow!("Error"))?;

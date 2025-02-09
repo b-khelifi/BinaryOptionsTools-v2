@@ -29,7 +29,7 @@ pub enum ConditonnalUpdate {
 }
 
 impl ConditonnalUpdate {
-    pub fn check_condition(&self, candles: &Vec<DataCandle>) -> PocketResult<bool> {
+    pub fn check_condition(&self, candles: &[DataCandle]) -> PocketResult<bool> {
         match self {
             Self::None => Ok(true),
             Self::Size(batch) => {
