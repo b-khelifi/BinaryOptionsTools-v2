@@ -1,6 +1,6 @@
 👉 [Join us on Discord](https://discord.gg/p7YyFqSmAz)
 # BinaryOptionsTools
-
+**Check [here](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/commit/5ef8aa83bcf3f9b8a55f0d9d5e69a1a48397ed7f) to check the repo at the time of the release**
 **BinaryOptionsTools** is a powerful suite of tools designed to enhance your binary options trading experience. Whether you're looking for analysis, strategy optimization, or execution tools, this project provides a variety of solutions to help you make informed trading decisions.
 
 # Features
