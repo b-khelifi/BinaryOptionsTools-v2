@@ -1,6 +1,6 @@
 👉 [Join us on Discord](https://discord.gg/T3FGXcmd)
 # BinaryOptionsToolsV2
-Path to the github repository for this version of the project: https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/commit/5ef8aa83bcf3f9b8a55f0d9d5e69a1a48397ed7f
+Path to the github repository for this version of the project: https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/tree/5ef8aa83bcf3f9b8a55f0d9d5e69a1a48397ed7f
 
 ## How to install
 Install it with PyPi using the following command:
