@@ -150,8 +150,6 @@ impl PocketOption {
     }
 
     pub async fn check_results(&self, trade_id: Uuid) -> PocketResult<Deal> {
-        // TODO: Add verification so it doesn't try to wait if no trade has been made with that id
-
         info!(target: "CheckResults", "Checking results for trade of id {}", trade_id);
         if let Some(trade) = self
             .data
@@ -350,8 +348,7 @@ mod tests {
     use std::time::Instant;
 
     use futures_util::{
-        future::{try_join3, try_join_all},
-        StreamExt,
+        future::{try_join3, try_join_all, try_join}, StreamExt
     };
     use rand::{random, seq::IndexedRandom, rng};
     use tokio::{task::JoinHandle, time::sleep};
@@ -360,6 +357,15 @@ mod tests {
     use tracing::level_filters::LevelFilter;
 
     use super::*;
+    
+    fn to_future(stream: StreamAsset, id: i32) -> JoinHandle<anyhow::Result<()>> {
+        tokio::spawn(async move {
+            while let Some(item) = stream.to_stream().next().await {
+                info!("StreamAsset n°{}, candle: {}", id, item?);
+            }
+            Ok(())
+        })
+    }
 
     #[tokio::test]
     #[should_panic(expected = "MaxDemoTrades")]
@@ -382,14 +388,6 @@ mod tests {
     #[tokio::test]
     async fn test_subscribe_symbol_v2() -> anyhow::Result<()> {
         start_tracing(true)?;
-        fn to_future(stream: StreamAsset, id: i32) -> JoinHandle<anyhow::Result<()>> {
-            tokio::spawn(async move {
-                while let Some(item) = stream.to_stream().next().await {
-                    info!("StreamAsset n°{}, price: {}", id, item?.close);
-                }
-                Ok(())
-            })
-        }
         // start_tracing()?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let client = PocketOption::new(ssid).await?;
@@ -405,16 +403,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_subscribe_symbol_real_v2() -> anyhow::Result<()> {
+        start_tracing_leveled(true, LevelFilter::INFO)?;
+        // start_tracing()?;
+        let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"7f57151f639ae5c46afe607bc18b8c45\";s:10:\"ip_address\";s:14:\"201.189.135.40\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1739194195;}99082f426830d4692e6b6bf194ed94b2","isDemo":0,"uid":87742848,"platform":2}]	"#;
+        info!("SSID: {}", ssid);
+        let client = PocketOption::new(ssid).await?;
+        let stream_asset1 = client.subscribe_symbol("EURUSD_otc").await?;
+        let stream_asset2 = client.subscribe_symbol("#FB_otc").await?;
+        let stream_asset3 = client.subscribe_symbol("YERUSD_otc").await?;
+
+        let f1 = to_future(stream_asset1, 1);
+        let f2 = to_future(stream_asset2, 2);
+        let f3 = to_future(stream_asset3, 3);
+        let _ = try_join3(f1, f2, f3).await?;
+        Ok(())
+    }
+    #[tokio::test]
+    async fn test_subscribe_symbol_real_timed() -> anyhow::Result<()> {
+        start_tracing_leveled(true, LevelFilter::INFO)?;
+        // start_tracing()?;
+        let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"7f57151f639ae5c46afe607bc18b8c45\";s:10:\"ip_address\";s:14:\"201.189.135.40\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1739194195;}99082f426830d4692e6b6bf194ed94b2","isDemo":0,"uid":87742848,"platform":2}]	"#;
+        info!("SSID: {}", ssid);
+        let client = PocketOption::new(ssid).await?;
+        let stream_asset1 = client.subscribe_symbol_timed("EURUSD_otc", Duration::from_secs(5)).await?;
+        let stream_asset2 = client.subscribe_symbol_timed("#FB_otc", Duration::from_secs(5)).await?;
+        let stream_asset3 = client.subscribe_symbol_timed("YERUSD_otc", Duration::from_secs(5)).await?;
+
+        let f1 = to_future(stream_asset1, 1);
+        let f2 = to_future(stream_asset2, 2);
+        let f3 = to_future(stream_asset3, 3);
+        let _ = try_join3(f1, f2, f3).await?;
+        Ok(())
+    }
+
+
+    #[tokio::test]
     async fn test_subscribe_symbol_timed() -> anyhow::Result<()> {
         start_tracing_leveled(true, LevelFilter::INFO)?;
-        fn to_future(stream: StreamAsset, id: i32) -> JoinHandle<anyhow::Result<()>> {
-            tokio::spawn(async move {
-                while let Some(item) = stream.to_stream().next().await {
-                    info!("StreamAsset n°{}, candle: {}", id, item?);
-                }
-                Ok(())
-            })
-        }
         // start_tracing()?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let client = PocketOption::new(ssid).await?;
@@ -607,4 +633,35 @@ mod tests {
         }
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_multiple_instances_same_ssid() -> anyhow::Result<()> {
+        start_tracing_leveled(true, LevelFilter::INFO)?;
+        let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
+        let client1 = PocketOption::new(ssid).await?;
+        let client2 = PocketOption::new(ssid).await?;
+
+        let stream1 = client1.subscribe_symbol("EURUSD_otc").await?;
+        let stream2 = client2.subscribe_symbol("EURUSD_otc").await?;
+        let fut1 = to_future(stream1, 1);
+        let fut2 = to_future(stream2, 2);
+        let _ = try_join(fut1, fut2).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_multiple_instances_same_real_ssid() -> anyhow::Result<()> {
+        start_tracing_leveled(true, LevelFilter::INFO)?;
+        let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"7f57151f639ae5c46afe607bc18b8c45\";s:10:\"ip_address\";s:14:\"201.189.135.40\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1739194195;}99082f426830d4692e6b6bf194ed94b2","isDemo":0,"uid":87742848,"platform":2}]	"#;
+        let client1 = PocketOption::new(ssid).await?;
+        let client2 = PocketOption::new(ssid).await?;
+
+        let stream1 = client1.subscribe_symbol("EURUSD_otc").await?;
+        let stream2 = client2.subscribe_symbol("EURUSD_otc").await?;
+        let fut1 = to_future(stream1, 1);
+        let fut2 = to_future(stream2, 2);
+        let _ = try_join(fut1, fut2).await?;
+        Ok(())
+    }
+
 }

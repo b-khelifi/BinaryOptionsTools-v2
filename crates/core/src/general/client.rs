@@ -288,7 +288,7 @@ where
                 }
             }
         }
-        todo!()
+        Err(BinaryOptionsToolsError::WebSocketMessageError("Unexpected error encountered while recieving data from websocket connection. Loop terminated unexpectedly".to_string()))
     }
 
     /// Recieves all the messages and sends them to the websocket
@@ -435,7 +435,7 @@ mod tests {
         stream::{select_all, unfold},
         Stream, StreamExt,
     };
-    use rand::{distributions::Alphanumeric, Rng};
+    use rand::{ distr::Alphanumeric, Rng};
     use tokio::time::sleep;
     use tracing::info;
 
@@ -519,13 +519,14 @@ mod tests {
         sender: Sender<String>,
         sender_priority: Sender<String>,
     ) -> anyhow::Result<()> {
+
         loop {
-            let s1: String = rand::thread_rng()
+            let s1: String = rand::rng()
                 .sample_iter(&Alphanumeric)
                 .take(7)
                 .map(char::from)
                 .collect();
-            let s2: String = rand::thread_rng()
+            let s2: String = rand::rng()
                 .sample_iter(&Alphanumeric)
                 .take(7)
                 .map(char::from)
