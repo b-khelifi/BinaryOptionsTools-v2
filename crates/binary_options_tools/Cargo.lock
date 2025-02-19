@@ -96,7 +96,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
 name = "binary-option-tools"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -120,11 +120,12 @@ dependencies = [
 
 [[package]]
 name = "binary-options-tools-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "async-channel",
  "async-trait",
+ "binary-options-tools-macros",
  "chrono",
  "futures-util",
  "php_serde",
@@ -144,10 +145,9 @@ dependencies = [
 
 [[package]]
 name = "binary-options-tools-macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
- "binary-options-tools-core",
  "darling",
  "proc-macro2",
  "quote",
@@ -1725,17 +1725,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-serde"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "704b1aeb7be0d0a84fc9828cae51dab5970fee5088f83d1dd7ee6f6246fc6ff1"
+dependencies = [
+ "serde",
+ "tracing-core",
+]
+
+[[package]]
 name = "tracing-subscriber"
 version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
 dependencies = [
  "nu-ansi-term",
+ "serde",
+ "serde_json",
  "sharded-slab",
  "smallvec",
  "thread_local",
  "tracing-core",
  "tracing-log",
+ "tracing-serde",
 ]
 
 [[package]]
@@ -1790,6 +1803,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

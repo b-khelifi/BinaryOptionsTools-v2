@@ -54,6 +54,8 @@ pub enum PocketOptionError {
     WebsocketMessageSendingError(#[from] PocketMessageFail),
     #[error("Expected the data to be non-empty for type '{0}'")]
     EmptyArrayError(String),
+    #[error("General compiling error: {0}")]
+    CompilingError(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 pub type PocketResult<T> = Result<T, PocketOptionError>;

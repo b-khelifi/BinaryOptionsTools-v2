@@ -10,9 +10,9 @@ use crate::pocketoption::{
     validators::history_validator,
 };
 use binary_options_tools_core::{
-    constants::TIMOUT_TIME,
+    constants::TIMEOUT_TIME,
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
-    general::{send::SenderMessage, traits::Callback, types::Data},
+    general::{send::SenderMessage, traits::WCallback, types::Data},
 };
 
 use super::{base::ChangeSymbol, data::PocketData, order::SuccessCloseOrder};
@@ -30,7 +30,7 @@ impl PocketCallback {
             let history = ChangeSymbol::new(asset.to_string(), 3600);
             let res = sender
                 .send_message_with_timout(
-                    Duration::from_secs(TIMOUT_TIME),
+                    Duration::from_secs(TIMEOUT_TIME),
                     "SubscribeSymbolCallback",
                     data,
                     WebSocketMessage::ChangeSymbol(history),
@@ -70,7 +70,7 @@ impl PocketCallback {
     }
 }
 #[async_trait]
-impl Callback for PocketCallback {
+impl WCallback for PocketCallback {
     type T = PocketData;
     type Transfer = WebSocketMessage;
 

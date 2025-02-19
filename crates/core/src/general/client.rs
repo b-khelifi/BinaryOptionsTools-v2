@@ -18,89 +18,83 @@ use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
 use crate::general::stream::RecieverStream;
 use crate::general::types::MessageType;
 
+use super::config::Config;
 use super::send::SenderMessage;
-use super::traits::{Callback, Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
-use super::types::Data;
+use super::traits::{WCallback, Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
+use super::types::{Callback, Data};
 
-const MAX_ALLOWED_LOOPS: u32 = 8;
-const SLEEP_INTERVAL: u64 = 2;
 
 #[derive(Clone)]
-pub struct WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
+pub struct WebSocketClient<Transfer, Handler, Connector, Creds, T>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
-    C: Callback,
 {
-    inner: Arc<WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, C>>,
+    inner: Arc<WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>>,
 }
 
-pub struct WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, C>
+pub struct WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
-    C: Callback,
 {
     pub credentials: Creds,
     pub connector: Connector,
     pub handler: Handler,
     pub data: Data<T, Transfer>,
     pub sender: SenderMessage,
-    pub reconnect_callback: Option<C>,
-    pub reconnect_time: u64,
+    pub reconnect_callback: Option<Callback<T, Transfer>>,
+    pub config: Config<T, Transfer>,
     _event_loop: JoinHandle<BinaryOptionsResult<()>>,
 }
 
-impl<Transfer, Handler, Connector, Creds, T, C> Deref
-    for WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
+impl<Transfer, Handler, Connector, Creds, T> Deref
+    for WebSocketClient<Transfer, Handler, Connector, Creds, T>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
-    C: Callback,
 {
-    type Target = WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, C>;
+    type Target = WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>;
 
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref()
     }
 }
 
-impl<Transfer, Handler, Connector, Creds, T, C>
-    WebSocketClient<Transfer, Handler, Connector, Creds, T, C>
+
+impl<Transfer, Handler, Connector, Creds, T>
+    WebSocketClient<Transfer, Handler, Connector, Creds, T>
 where
     Transfer: MessageTransfer + 'static,
     Handler: MessageHandler<Transfer = Transfer> + 'static,
     Creds: Credentials + 'static,
     Connector: Connect<Creds = Creds> + 'static,
     T: DataHandler<Transfer = Transfer> + 'static,
-    C: Callback<T = T, Transfer = Transfer> + 'static,
 {
     pub async fn init(
         credentials: Creds,
         connector: Connector,
         data: Data<T, Transfer>,
         handler: Handler,
-        timeout: Duration,
-        reconnect_callback: Option<C>,
-        reconnect_time: Option<u64>,
+        reconnect_callback: Option<Callback<T, Transfer>>,
+        config: Config<T, Transfer>
     ) -> BinaryOptionsResult<Self> {
         let inner = WebSocketInnerClient::init(
             credentials,
             connector,
             data,
             handler,
-            timeout,
             reconnect_callback,
-            reconnect_time.unwrap_or_default(),
+            config,
         )
         .await?;
         Ok(Self {
@@ -109,37 +103,35 @@ where
     }
 }
 
-impl<Transfer, Handler, Connector, Creds, T, C>
-    WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, C>
+impl<Transfer, Handler, Connector, Creds, T>
+    WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>
 where
     Transfer: MessageTransfer + 'static,
     Handler: MessageHandler<Transfer = Transfer> + 'static,
     Creds: Credentials + 'static,
     Connector: Connect<Creds = Creds> + 'static,
     T: DataHandler<Transfer = Transfer> + 'static,
-    C: Callback<T = T, Transfer = Transfer> + 'static,
 {
     pub async fn init(
         credentials: Creds,
         connector: Connector,
         data: Data<T, Transfer>,
         handler: Handler,
-        timeout: Duration,
-        reconnect_callback: Option<C>,
-        reconnect_time: u64,
+        reconnect_callback: Option<Callback<T, Transfer>>,
+        config: Config<T, Transfer>
     ) -> BinaryOptionsResult<Self> {
-        let _connection = connector.connect(credentials.clone()).await?;
+        let _connection = connector.connect(credentials.clone(), &config).await?; // Check if it's possible to connect before building the struct
         let (_event_loop, sender) = Self::start_loops(
             handler.clone(),
             credentials.clone(),
             data.clone(),
             connector.clone(),
             reconnect_callback.clone(),
-            reconnect_time,
+            config.clone(),
         )
         .await?;
         info!("Started WebSocketClient");
-        sleep(timeout).await;
+        sleep(config.get_timeout()?).await;
         Ok(Self {
             credentials,
             connector,
@@ -147,7 +139,7 @@ where
             data,
             sender,
             reconnect_callback,
-            reconnect_time,
+            config,
             _event_loop,
         })
     }
@@ -157,86 +149,92 @@ where
         credentials: Creds,
         data: Data<T, Transfer>,
         connector: Connector,
-        reconnect_callback: Option<C>,
-        time: u64,
+        reconnect_callback: Option<Callback<T, Transfer>>,
+        config: Config<T, Transfer>,
     ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, SenderMessage)> {
-        let (mut write, mut read) = connector.connect(credentials.clone()).await?.split();
+        let (mut write, mut read) = connector.connect(credentials.clone(), &config).await?.split();
         let (sender, (reciever, reciever_priority)) = SenderMessage::new(MAX_CHANNEL_CAPACITY);
         let loop_sender = sender.clone();
         let task = tokio::task::spawn(async move {
-            let previous = None;
-            let mut loops = 0;
+            let previous: Option<<Transfer as MessageTransfer>::Info> = None;
+            let loops = 0;
             let mut reconnected = false;
-            loop {
-                let listener_future = WebSocketInnerClient::<
-                    Transfer,
-                    Handler,
-                    Connector,
-                    Creds,
-                    T,
-                    C,
-                >::listener_loop(
-                    previous.clone(),
-                    &data,
-                    handler.clone(),
-                    &loop_sender,
-                    &mut read,
-                );
-                let sender_future =
-                    WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::sender_loop(
-                        &mut write,
-                        &reciever,
-                        &reciever_priority,
-                        time,
-                    );
-
-                // let update_loop =
-                //     WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::api_loop(
-                //         &mut msg_reciever,
-                //         &sender,
-                //     );
-                let callback = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, C>::reconnect_callback(reconnect_callback.clone(), data.clone(), loop_sender.clone(), reconnected, time);
-
-                match try_join3(listener_future, sender_future, callback).await {
-                    Ok(_) => {
-                        if let Ok(websocket) = connector.connect(credentials.clone()).await {
-                            (write, read) = websocket.split();
-                            info!("Reconnected successfully!");
-                            loops = 0;
-                            reconnected = true;
-                        } else {
-                            loops += 1;
-                            warn!("Error reconnecting... trying again in {SLEEP_INTERVAL} seconds (try {loops} of {MAX_ALLOWED_LOOPS}");
-                            sleep(Duration::from_secs(SLEEP_INTERVAL)).await;
-                            if loops >= MAX_ALLOWED_LOOPS {
-                                panic!("Too many failed connections");
-                            }
-                        }
-                    }
+            loop {   
+                match WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::step(&previous, &data, handler.clone(), &loop_sender, &mut read, &mut write, &reciever, &reciever_priority, &config, &reconnect_callback, reconnected, &connector, &credentials, loops).await {
+                    Ok(res) => {
+                        info!("Reconnected successfully!");
+                        (write, read) = res.split();
+                        reconnected = true;
+                    },
                     Err(e) => {
-                        warn!("Error in event loop, {e}, reconnecting...");
-                        // println!("Reconnecting...");
-                        if let Ok(websocket) = connector.connect(credentials.clone()).await {
-                            (write, read) = websocket.split();
-                            info!("Reconnected successfully!");
-                            // println!("Reconnected successfully!");
-                            loops = 0;
-                            reconnected = true;
-                        } else {
-                            loops += 1;
-                            warn!("Error reconnecting... trying again in {SLEEP_INTERVAL} seconds (try {loops} of {MAX_ALLOWED_LOOPS}");
-                            sleep(Duration::from_secs(SLEEP_INTERVAL)).await;
-                            if loops >= MAX_ALLOWED_LOOPS {
-                                error!("Too many failed connections");
-                                break;
-                            }
+                        if let BinaryOptionsToolsError::MaxReconnectAttemptsReached(_) = e {
+                            panic!("Error: {}", e);
                         }
                     }
                 }
             }
-            Ok(())
         });
         Ok((task, sender))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn step(previous: &Option<<<Handler as MessageHandler>::Transfer as MessageTransfer>::Info>, data: &Data<T, Transfer>, handler: Handler, loop_sender: &SenderMessage, read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, reciever: &Receiver<Message>, reciever_priority: &Receiver<Message>, config: &Config<T, Transfer>, reconnect_callback: &Option<Callback<T, Transfer>>, reconnected: bool, connector: &Connector, credentials: &Creds, mut loops: u32 ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
+        let listener_future = WebSocketInnerClient::<
+            Transfer,
+            Handler,
+            Connector,
+            Creds,
+            T
+        >::listener_loop(
+            previous.clone(),
+            data,
+            handler.clone(),
+            loop_sender,
+            read,
+        );
+        let sender_future =
+            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::sender_loop(
+                write,
+                reciever,
+                reciever_priority,
+                config.get_reconnect_time()?,
+            );
+
+        let callback = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::reconnect_callback(reconnect_callback.clone(), data.clone(), loop_sender.clone(), reconnected, config.get_reconnect_time()? );
+
+        match try_join3(listener_future, sender_future, callback).await {
+            Ok(_) => {
+                if let Ok(websocket) = connector.connect(credentials.clone(), config).await {
+                    return Ok(websocket)
+                } else {
+                    loops += 1;
+                    let sleep_interval = config.get_sleep_interval()?;
+                    let max_loops = config.get_max_allowed_loops()?;
+                    warn!("Error reconnecting... trying again in {sleep_interval} seconds (try {loops} of {max_loops}");
+                    sleep(Duration::from_secs(config.get_sleep_interval()?)).await;
+                    if loops >= max_loops {
+                        return Err(BinaryOptionsToolsError::MaxReconnectAttemptsReached(max_loops))
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Error in event loop, {e}, reconnecting...");
+                // println!("Reconnecting...");
+                if let Ok(websocket) = connector.connect(credentials.clone(), config).await {
+                    return Ok(websocket)
+                } else {
+                    loops += 1;
+                    let sleep_interval = config.get_sleep_interval()?;
+                    let max_loops = config.get_max_allowed_loops()?;
+                    warn!("Error reconnecting... trying again in {sleep_interval} seconds (try {loops} of {max_loops}");
+                    sleep(Duration::from_secs(config.get_sleep_interval()?)).await;
+                    if loops >= max_loops {
+                        return Err(BinaryOptionsToolsError::MaxReconnectAttemptsReached(max_loops))
+                    }
+                }
+            }
+        }
+        unreachable!("Please contact @Rick-29 on github.com this error is completely unexpected and should not happen.")
     }
 
     /// Recieves all the messages from the websocket connection and handles it
@@ -345,7 +343,7 @@ where
     // }
 
     async fn reconnect_callback(
-        reconnect_callback: Option<C>,
+        reconnect_callback: Option<Callback<T, Transfer>>,
         data: Data<T, Transfer>,
         sender: SenderMessage,
         reconnect: bool,

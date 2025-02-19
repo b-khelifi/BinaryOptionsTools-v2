@@ -30,7 +30,7 @@ pub async fn try_connect(
             "Host not found".into(),
         ))?;
     let request = Request::builder()
-        .uri(url)
+        .uri(t_url.to_string())
         .header("Origin", "https://pocketoption.com")
         .header("Cache-Control", "no-cache")
         .header("User-Agent", user_agent)

@@ -4,6 +4,8 @@ from datetime import timedelta
 import asyncio
 import json
 import time 
+import sys 
+
 
 class AsyncSubscription:
     def __init__(self, subscription):
@@ -61,7 +63,7 @@ class PocketOptionAsync:
         duration += 6
         
         self.logger.debug(f"Timeout set to: {duration} (6 extra seconds)")
-        async with asyncio.timeout(duration): # Give 6 extra seconds for network delays or something like that (6 seconds since the rust side gives 5 extra seconds so it should only work if the rust one doesn't)
+        async def check(id):
             trade = await self.client.check_win(id)
             trade = json.loads(trade)
             win = trade["profit"]
@@ -72,6 +74,7 @@ class PocketOptionAsync:
             else:
                 trade["result"] = "loss"
             return trade
+        return await _timeout(check(id), duration)
         
         
     async def get_candles(self, asset: str, period: int, offset: int) -> list[dict]:  
@@ -139,3 +142,11 @@ class PocketOptionAsync:
         Please keep in mind the iterator won't return a new candle exactly each `time` duration, there could be a small delay and imperfect timestamps
         """
         return AsyncSubscription(await self._subscribe_symbol_timed_inner(asset, time))
+    
+    
+async def _timeout(future, timeout: int):
+    if sys.version_info[:3] >= (3,11):
+        async with asyncio.timeout(timeout):
+            return await future
+    else:
+        return await asyncio.wait_for(future, timeout)

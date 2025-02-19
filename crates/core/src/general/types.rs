@@ -3,11 +3,14 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 use async_channel::bounded;
 use async_channel::Receiver;
 use async_channel::Sender;
+use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 use crate::constants::MAX_CHANNEL_CAPACITY;
 use crate::error::BinaryOptionsResult;
 
+use super::send::SenderMessage;
+use super::traits::WCallback;
 use super::traits::{DataHandler, MessageTransfer};
 
 #[derive(Clone)]
@@ -19,9 +22,6 @@ where
     Transfer(Transfer),
 }
 
-pub fn default_validator<Transfer: MessageTransfer>(_val: &Transfer) -> bool {
-    false
-}
 
 #[derive(Default, Clone)]
 pub struct Data<T, Transfer>
@@ -33,6 +33,36 @@ where
     #[allow(clippy::type_complexity)]
     pub pending_requests:
         Arc<Mutex<HashMap<Transfer::Info, (Sender<Transfer>, Receiver<Transfer>)>>>,
+}
+
+
+#[derive(Clone)]
+pub struct Callback<T: DataHandler, Transfer: MessageTransfer> {
+    inner: Arc<dyn WCallback<T = T, Transfer = Transfer>>,
+}
+
+pub fn default_validator<Transfer: MessageTransfer>(_val: &Transfer) -> bool {
+    false
+}
+
+impl<T: DataHandler, Transfer: MessageTransfer> Callback<T, Transfer> {
+    pub fn new(callback: Arc<dyn WCallback<T = T, Transfer = Transfer>>) -> Self {
+        Self { inner: callback }
+    }
+}
+
+#[async_trait]
+impl<T: DataHandler, Transfer: MessageTransfer> WCallback for Callback<T, Transfer> {
+    type T = T;
+    type Transfer = Transfer;
+
+    async fn call(
+        &self,
+        data: Data<Self::T, Self::Transfer>,
+        sender: &SenderMessage,
+    ) -> BinaryOptionsResult<()> {
+        self.inner.call(data, sender).await
+    }
 }
 
 impl<T, Transfer> Data<T, Transfer>

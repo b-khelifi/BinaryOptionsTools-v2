@@ -22,6 +22,8 @@ pub enum BinaryOptionsToolsError {
     WebsocketConnectionError(#[from] TungsteniteError),
     #[error("Failed to send message to websocket sender, {0}")]
     MessageSendingError(#[from] async_channel::SendError<Message>),
+    #[error("Failed to reconnect '{0}' times, maximum allowed number of reconnections was reached, breaking")]
+    MaxReconnectAttemptsReached(u32),
     #[error("Failed to recieve message from separate thread, {0}")]
     OneShotRecieverError(#[from] tokio::sync::oneshot::error::RecvError),
     #[error("Failed to recieve message from request channel, {0}")]
@@ -44,6 +46,8 @@ pub enum BinaryOptionsToolsError {
     TimeoutError { task: String, duration: Duration },
     #[error("Failed to parse duration, error {0}")]
     ChronoDurationParsingError(#[from] chrono::OutOfRangeError),
+    #[error("Unknown error during execution, error {0}")]
+    UnknownError(#[from] anyhow::Error)
 }
 
 pub type BinaryOptionsResult<T> = Result<T, BinaryOptionsToolsError>;

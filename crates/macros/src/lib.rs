@@ -2,13 +2,16 @@ mod deserialize;
 mod impls;
 mod serialize;
 mod timeout;
+mod config;
 
+use config::Config;
+use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 
 use deserialize::Deserializer;
 use quote::quote;
 use serialize::Serializer;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, DeriveInput};
 use timeout::{Timeout, TimeoutArgs, TimeoutBody};
 
 #[proc_macro]
@@ -38,4 +41,11 @@ pub fn timeout(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // println!("{q}");
     q.into()
+}
+
+#[proc_macro_derive(Config)]
+pub fn config(input: TokenStream) -> TokenStream {
+    let parsed = parse_macro_input!(input as DeriveInput);
+    let config = Config::from_derive_input(&parsed).unwrap();
+    quote! { #config }.into()
 }

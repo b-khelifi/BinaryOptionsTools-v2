@@ -7,11 +7,10 @@ use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use crate::error::BinaryOptionsResult;
 
 use super::{
-    send::SenderMessage,
-    types::{Data, MessageType},
+    config::Config, send::SenderMessage, types::{Data, MessageType}
 };
 
-pub trait Credentials: Clone + Send + Sync {}
+pub trait Credentials: Clone + Send + Sync + Serialize + DeserializeOwned {}
 
 #[async_trait]
 pub trait DataHandler: Clone + Send + Sync {
@@ -21,7 +20,7 @@ pub trait DataHandler: Clone + Send + Sync {
 }
 
 #[async_trait]
-pub trait Callback: Clone + Send + Sync {
+pub trait WCallback: Send + Sync {
     type T: DataHandler;
     type Transfer: MessageTransfer;
 
@@ -71,8 +70,9 @@ pub trait Connect: Clone + Send + Sync {
     type Creds: Credentials;
     // type Uris: Iterator<Item = String>;
 
-    async fn connect(
+    async fn connect<T: DataHandler, Transfer: MessageTransfer>(
         &self,
         creds: Self::Creds,
+        config: &Config<T, Transfer>
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 }

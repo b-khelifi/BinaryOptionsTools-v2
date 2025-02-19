@@ -6,6 +6,7 @@ use std::{
 
 use chrono::{DateTime, Utc};
 use tracing::{debug, info, warn};
+use url::Url;
 use uuid::Uuid;
 
 use crate::pocketoption::{
@@ -16,9 +17,14 @@ use crate::pocketoption::{
     ws::ssid::Ssid,
 };
 use binary_options_tools_core::{
-    constants::TIMOUT_TIME,
+    constants::TIMEOUT_TIME,
     error::BinaryOptionsToolsError,
-    general::{client::WebSocketClient, traits::MessageTransfer, types::Data},
+    general::{
+        client::WebSocketClient,
+        config::{Config, _Config},
+        traits::MessageTransfer,
+        types::{Callback, Data},
+    },
 };
 
 use super::{
@@ -39,16 +45,14 @@ use super::{
 /// Class to connect automatically to Pocket Option's quick trade passing a valid SSID
 #[derive(Clone)]
 pub struct PocketOption {
-    client:
-        WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>,
+    client: WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData>,
 }
 
 impl Deref for PocketOption {
-    type Target =
-        WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData, PocketCallback>;
+    type Target = Config<PocketData, WebSocketMessage>;
 
     fn deref(&self) -> &Self::Target {
-        &self.client
+        &self.client.config
     }
 }
 
@@ -59,20 +63,47 @@ impl PocketOption {
         let handler = Handler::new(ssid.clone());
         let timeout = Duration::from_millis(500);
         let callback = PocketCallback;
+        let config = _Config::new(timeout, vec![])
+            .builder()
+            .reconnect_time(5)
+            .build()?;
         let client = WebSocketClient::init(
             ssid,
             PocketConnect {},
             data,
             handler,
-            timeout,
-            Some(callback),
-            Some(5),
+            Some(Callback::new(std::sync::Arc::new(callback))),
+            config,
         )
         .await?;
         // println!("Initialized!");
         Ok(Self { client })
     }
 
+    pub async fn new_with_url(ssid: impl ToString, url: Url) -> PocketResult<Self> {
+        let ssid = Ssid::parse(ssid)?;
+        let data = Data::new(PocketData::default());
+        let handler = Handler::new(ssid.clone());
+        let timeout = Duration::from_millis(500);
+        let callback = PocketCallback;
+        let config = _Config::new(timeout, vec![])
+            .builder()
+            .reconnect_time(5)
+            .default_connection_url(Some(url))
+            .build()?;
+        let client = WebSocketClient::init(
+            ssid,
+            PocketConnect {},
+            data,
+            handler,
+            Some(Callback::new(std::sync::Arc::new(callback))),
+            config,
+        )
+        .await?;
+        // println!("Initialized!");
+        Ok(Self { client })
+
+    }   
     pub async fn trade(
         &self,
         asset: impl ToString,
@@ -85,12 +116,12 @@ impl PocketOption {
             asset.to_string(),
             action,
             time,
-            self.credentials.demo() as u32,
+            self.client.credentials.demo() as u32,
         )?;
         let request_id = order.request_id;
-        let res = self
+        let res = self.client
             .send_message_with_timout(
-                Duration::from_secs(TIMOUT_TIME),
+                Duration::from_secs(TIMEOUT_TIME),
                 "Trade",
                 WebSocketMessage::OpenOrder(order),
                 MessageInfo::SuccessopenOrder,
@@ -127,7 +158,7 @@ impl PocketOption {
     }
 
     pub async fn get_deal_end_time(&self, id: Uuid) -> Option<DateTime<Utc>> {
-        if let Some(trade) = self
+        if let Some(trade) = self.client
             .data
             .get_opened_deals()
             .await
@@ -137,7 +168,7 @@ impl PocketOption {
             return Some(trade.close_timestamp - Duration::from_secs(2 * 3600)); // Pocket Option server seems 2 hours advanced
         }
 
-        if let Some(trade) = self
+        if let Some(trade) = self.client
             .data
             .get_opened_deals()
             .await
@@ -151,7 +182,7 @@ impl PocketOption {
 
     pub async fn check_results(&self, trade_id: Uuid) -> PocketResult<Deal> {
         info!(target: "CheckResults", "Checking results for trade of id {}", trade_id);
-        if let Some(trade) = self
+        if let Some(trade) = self.client
             .data
             .get_closed_deals()
             .await
@@ -169,9 +200,9 @@ impl PocketOption {
             debug!(target: "CheckResult", "Expiration time in {exp:?} seconds.");
             let start = Instant::now();
             // println!("Expiration time in {exp:?} seconds.");
-            let res: WebSocketMessage = match self
+            let res: WebSocketMessage = match self.client
                 .send_message_with_timeout_and_retry(
-                    exp + Duration::from_secs(TIMOUT_TIME),
+                    exp + Duration::from_secs(TIMEOUT_TIME),
                     "CheckResult",
                     WebSocketMessage::None,
                     MessageInfo::SuccesscloseOrder,
@@ -223,7 +254,7 @@ impl PocketOption {
         offset: i64,
     ) -> PocketResult<Vec<DataCandle>> {
         info!(target: "GetCandles", "Retrieving candles for asset '{}' with period of '{}' and offset of '{}'", asset.to_string(), period, offset);
-        let time = self.data.get_server_time().await.div_euclid(period) * period;
+        let time = self.client.data.get_server_time().await.div_euclid(period) * period;
         if time == 0 {
             return Err(PocketOptionError::GeneralParsingError(
                 "Server time is invalid.".to_string(),
@@ -236,9 +267,9 @@ impl PocketOption {
             WebSocketMessage::GetCandles(request).to_string()
         );
         let request = LoadHistoryPeriod::new(asset.to_string(), time, period, offset)?;
-        let res = self
+        let res = self.client
             .send_message_with_timeout_and_retry(
-                Duration::from_secs(TIMOUT_TIME),
+                Duration::from_secs(TIMEOUT_TIME),
                 "GetCandles",
                 WebSocketMessage::GetCandles(request),
                 MessageInfo::LoadHistoryPeriod,
@@ -261,9 +292,9 @@ impl PocketOption {
         info!(target: "History", "Retrieving candles for asset '{}' with period of '{}'", asset.to_string(), period);
 
         let request = ChangeSymbol::new(asset.to_string(), period);
-        let res = self
+        let res = self.client
             .send_message_with_timeout_and_retry(
-                Duration::from_secs(TIMOUT_TIME),
+                Duration::from_secs(TIMEOUT_TIME),
                 "History",
                 WebSocketMessage::ChangeSymbol(request),
                 MessageInfo::UpdateHistoryNew,
@@ -280,34 +311,34 @@ impl PocketOption {
 
     pub async fn get_closed_deals(&self) -> Vec<Deal> {
         info!(target: "GetClosedDeals", "Retrieving list of closed deals");
-        self.data.get_closed_deals().await
+        self.client.data.get_closed_deals().await
     }
 
     pub async fn clear_closed_deals(&self) {
         info!(target: "ClearClosedDeals", "Clearing list of closed deals");
-        self.data.clean_closed_deals().await
+        self.client.data.clean_closed_deals().await
     }
 
     pub async fn get_opened_deals(&self) -> Vec<Deal> {
         info!(target: "GetOpenDeals", "Retrieving list of open deals");
-        self.data.get_opened_deals().await
+        self.client.data.get_opened_deals().await
     }
 
     pub async fn get_balance(&self) -> UpdateBalance {
         info!(target: "GetBalance", "Retrieving account balance");
-        self.data.get_balance().await
+        self.client.data.get_balance().await
     }
 
     pub async fn get_payout(&self) -> HashMap<String, i32> {
         info!(target: "GetPayout", "Retrieving payout for all the assets");
-        self.data.get_full_payout().await
+        self.client.data.get_full_payout().await
     }
 
     pub async fn subscribe_symbol(&self, asset: impl ToString) -> PocketResult<StreamAsset> {
         info!(target: "SubscribeSymbol", "Subscribing to asset '{}'", asset.to_string());
         let _ = self.history(asset.to_string(), 1).await?;
         debug!("Created StreamAsset instance.");
-        Ok(self.data.add_stream(asset.to_string()).await)
+        Ok(self.client.data.add_stream(asset.to_string()).await)
     }
 
     pub async fn subscribe_symbol_chuncked(
@@ -318,7 +349,7 @@ impl PocketOption {
         info!(target: "SubscribeSymbolChuncked", "Subscribing to asset '{}'", asset.to_string());
         let _ = self.history(asset.to_string(), 1).await?;
         debug!("Created StreamAsset instance.");
-        Ok(self
+        Ok(self.client
             .data
             .add_stream_chuncked(asset.to_string(), chunck_size.into())
             .await)
@@ -332,7 +363,7 @@ impl PocketOption {
         info!(target: "SubscribeSymbolTimed", "Subscribing to asset '{}'", asset.to_string());
         let _ = self.history(asset.to_string(), 1).await?;
         debug!("Created StreamAsset instance.");
-        Ok(self
+        Ok(self.client
             .data
             .add_stream_timed(asset.to_string(), time.into())
             .await)
@@ -343,21 +374,24 @@ impl PocketOption {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use std::time::Instant;
 
     use futures_util::{
-        future::{try_join3, try_join_all, try_join}, StreamExt
+        future::{try_join, try_join3, try_join_all},
+        StreamExt,
     };
-    use rand::{random, seq::IndexedRandom, rng};
+    use rand::{random, rng, seq::IndexedRandom};
     use tokio::{task::JoinHandle, time::sleep};
 
     use binary_options_tools_core::utils::tracing::{start_tracing, start_tracing_leveled};
     use tracing::level_filters::LevelFilter;
+    use url::Url;
 
     use super::*;
-    
+
     fn to_future(stream: StreamAsset, id: i32) -> JoinHandle<anyhow::Result<()>> {
         tokio::spawn(async move {
             while let Some(item) = stream.to_stream().next().await {
@@ -426,9 +460,15 @@ mod tests {
         let ssid = r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"7f57151f639ae5c46afe607bc18b8c45\";s:10:\"ip_address\";s:14:\"201.189.135.40\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1739194195;}99082f426830d4692e6b6bf194ed94b2","isDemo":0,"uid":87742848,"platform":2}]	"#;
         info!("SSID: {}", ssid);
         let client = PocketOption::new(ssid).await?;
-        let stream_asset1 = client.subscribe_symbol_timed("EURUSD_otc", Duration::from_secs(5)).await?;
-        let stream_asset2 = client.subscribe_symbol_timed("#FB_otc", Duration::from_secs(5)).await?;
-        let stream_asset3 = client.subscribe_symbol_timed("YERUSD_otc", Duration::from_secs(5)).await?;
+        let stream_asset1 = client
+            .subscribe_symbol_timed("EURUSD_otc", Duration::from_secs(5))
+            .await?;
+        let stream_asset2 = client
+            .subscribe_symbol_timed("#FB_otc", Duration::from_secs(5))
+            .await?;
+        let stream_asset3 = client
+            .subscribe_symbol_timed("YERUSD_otc", Duration::from_secs(5))
+            .await?;
 
         let f1 = to_future(stream_asset1, 1);
         let f2 = to_future(stream_asset2, 2);
@@ -437,16 +477,21 @@ mod tests {
         Ok(())
     }
 
-
     #[tokio::test]
     async fn test_subscribe_symbol_timed() -> anyhow::Result<()> {
         start_tracing_leveled(true, LevelFilter::INFO)?;
         // start_tracing()?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let client = PocketOption::new(ssid).await?;
-        let stream_asset1 = client.subscribe_symbol_timed("EURUSD_otc", Duration::from_secs(30)).await?;
-        let stream_asset2 = client.subscribe_symbol_timed("#FB_otc", Duration::from_secs(15)).await?;
-        let stream_asset3 = client.subscribe_symbol_timed("YERUSD_otc", Duration::from_secs(60)).await?;
+        let stream_asset1 = client
+            .subscribe_symbol_timed("EURUSD_otc", Duration::from_secs(30))
+            .await?;
+        let stream_asset2 = client
+            .subscribe_symbol_timed("#FB_otc", Duration::from_secs(15))
+            .await?;
+        let stream_asset3 = client
+            .subscribe_symbol_timed("YERUSD_otc", Duration::from_secs(60))
+            .await?;
 
         let f1 = to_future(stream_asset1, 1);
         let f2 = to_future(stream_asset2, 2);
@@ -460,10 +505,23 @@ mod tests {
         start_tracing(true)?;
         let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
         let api = PocketOption::new(ssid).await?;
+
         tokio::time::sleep(Duration::from_secs(6)).await;
         dbg!(api.get_payout().await);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_use_default_url() -> anyhow::Result<()> {
+        start_tracing(true)?;
+        let ssid = r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#;
+        let api = PocketOption::new_with_url(ssid, Url::parse("wss://demo-api-eu.po.market/socket.io/?EIO=4&transport=websocket")?).await?;
+
+        tokio::time::sleep(Duration::from_secs(6)).await;
+        dbg!(api.get_payout().await);
+        Ok(())
+    }
+
 
     #[tokio::test]
     async fn test_check_win_v1() -> anyhow::Result<()> {
@@ -663,5 +721,4 @@ mod tests {
         let _ = try_join(fut1, fut2).await?;
         Ok(())
     }
-
 }

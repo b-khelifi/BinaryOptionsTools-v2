@@ -1,11 +1,14 @@
 use async_trait::async_trait;
 use tokio::net::TcpStream;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::pocketoption::{error::PocketOptionError, utils::connect::try_connect};
 use binary_options_tools_core::{
     error::BinaryOptionsResult,
-    general::traits::Connect,
+    general::{
+        config::Config,
+        traits::{Connect, DataHandler, MessageTransfer},
+    },
     reimports::{MaybeTlsStream, WebSocketStream},
 };
 
@@ -18,10 +21,17 @@ pub struct PocketConnect;
 impl Connect for PocketConnect {
     type Creds = Ssid;
 
-    async fn connect(
+    async fn connect<T: DataHandler, Transfer: MessageTransfer>(
         &self,
         creds: Self::Creds,
+        config: &Config<T, Transfer>,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
+        if let Some(url) = config.get_default_connection_url()? {
+            info!("Using default connection url...");
+            if let Ok(connect) = try_connect(creds.clone(), url.to_string()).await {
+                return Ok(connect);
+            }
+        }
         let urls = creds.servers().await?;
         let mut error = None;
         for url in urls.clone() {

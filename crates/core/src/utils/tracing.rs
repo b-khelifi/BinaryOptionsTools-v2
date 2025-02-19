@@ -3,6 +3,8 @@ use std::fs::OpenOptions;
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
+use crate::{constants::MAX_LOGGING_CHANNEL_CAPACITY, general::stream::RecieverStream};
+
 pub fn start_tracing(terminal: bool) -> anyhow::Result<()> {
     let error_logs = OpenOptions::new()
         .append(true)
@@ -53,3 +55,11 @@ pub fn start_tracing_leveled(terminal: bool, level: LevelFilter) -> anyhow::Resu
     Ok(())
 }
 
+#[allow(unused)]
+pub fn make_stream(level: LevelFilter) -> anyhow::Result<()> {
+    let (sender, reciever) = async_channel::bounded(MAX_LOGGING_CHANNEL_CAPACITY);
+    let reciever: RecieverStream<u8> = RecieverStream::new(reciever);
+
+
+    Ok(())
+}

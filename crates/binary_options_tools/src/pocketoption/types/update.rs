@@ -211,11 +211,11 @@ impl TryFrom<Vec<DataCandle>> for DataCandle {
         let mut high = f64::NEG_INFINITY;
         let open = value
             .first()
-            .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?.open;
+            .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?
+            .open;
         let last = value
             .last()
-            .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?
-        ;
+            .ok_or(PocketOptionError::EmptyArrayError("DataCandle".into()))?;
         let close = last.close;
         let time = last.time;
         value.iter().for_each(|c| {
