@@ -1,10 +1,12 @@
-use binary_option_tools::pocketoption::error::PocketOptionError;
+use binary_option_tools::{error::BinaryOptionsToolsError, pocketoption::error::PocketOptionError};
 use pyo3::{exceptions::PyValueError, PyErr};
 use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Error, Debug)]
 pub enum BinaryErrorPy {
+    #[error("BinaryOptionsError, {0}")]
+    BinaryOptionsError(#[from] BinaryOptionsToolsError),
     #[error("PocketOptionError, {0}")]
     PocketOptionError(#[from] PocketOptionError),
     #[error("Uninitialized, {0}")]
@@ -15,6 +17,8 @@ pub enum BinaryErrorPy {
     UuidParsingError(#[from] uuid::Error),
     #[error("Trade not found, haven't found trade for id '{0}'")]
     TradeNotFound(Uuid),
+    #[error("Operation not allowed")]
+    NotAllowed(String),
 }
 
 impl From<BinaryErrorPy> for PyErr {

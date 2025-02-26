@@ -1,25 +1,24 @@
 👉 [Join us on Discord](https://discord.gg/T3FGXcmd)
-# BinaryOptionsToolsV2
-Path to the github repository for this version of the project: https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/tree/5ef8aa83bcf3f9b8a55f0d9d5e69a1a48397ed7f
+# [BinaryOptionsToolsV2](https://github.com/ChipaDevTeam/BinaryOptionsTools-v2/tree/0.1.6a4)
 
 ## How to install
 Install it with PyPi using the following command:
 ```bash
-pip install binaryoptionstoolsv2==0.1.6a2
+pip install binaryoptionstoolsv2==0.1.6a4
 ```
 
-## Supported Os
-Currently only suppot for Windows is available.
+## Supported OS
+Currently, only support for Windows is available.
 
 ## Supported Python versions
-Currently only python 3.9 to 3.12 is suported.
+Currently, only Python 3.9 to 3.12 is supported.
 
-## Compile from souce (Not recommended)
-* Make sure you have `rust` and `cargo` installed ([Check here](https://www.rust-lang.org/tools/install))
+## Compile from source (Not recommended)
+* Make sure you have `rust` and `cargo` installed (Check here)
 
-* Install `[maturin](https://www.maturin.rs/installation)` in order to compile the library
+* Install [`maturin`](https://www.maturin.rs/installation) in order to compile the library
 
-* Once the source dowloaded (using `git clone https://github.com/ChipaDevTeam/BinaryOptionsTools-v2.git`) execute the following commands:
+* Once the source is downloaded (using `git clone https://github.com/ChipaDevTeam/BinaryOptionsTools-v2.git`) execute the following commands:
 To create the `.whl` file
 ```bash
 // Inside the root folder
@@ -35,9 +34,9 @@ To install the library in a local virtual environment
 // Inside the root folder
 cd BinaryOptionsToolsV2
 
-// Activate the virtual environment if not done alreade 
+// Activate the virtual environment if not done already 
 
-// Execute the following command and it shoult automatically install the library in the VM
+// Execute the following command and it should automatically install the library in the VM
 maturin develop
 ```
 
@@ -58,7 +57,7 @@ Purpose
 Serves as the entry point for the package, exposing all essential components of the library. 
 
 ### Inside the `pocketoption` folder there are 2 main files
-2. `asyncronous.py` 
+2. `asynchronous.py` 
 
 This file implements the `PocketOptionAsync` class, which provides an asynchronous interface to interact with Pocket Option. 
 
@@ -78,6 +77,8 @@ Key Features of PocketOptionAsync
   - `payout()`: Returns payout percentages. 
 - **Real-Time Data**: 
   - `subscribe_symbol()`: Provides an asynchronous iterator for real-time candle updates. 
+  - `subscribe_symbol_timed()`: Provides an asynchronous iterator for timed real-time candle updates.
+  - `subscribe_symbol_chunked()`: Provides an asynchronous iterator for chunked real-time candle updates.
 
 Helper Class - `AsyncSubscription` 
 
@@ -96,10 +97,9 @@ async def main():
     print("Account Balance:", balance) 
  
 asyncio.run(main()) 
-
 ``` 
 
-3. `syncronous.py` 
+3. `synchronous.py` 
 
 This file implements the `PocketOption` class, a synchronous wrapper around the asynchronous interface provided by `PocketOptionAsync`. 
 
@@ -119,6 +119,8 @@ Key Features of PocketOption
   - `payout()`: Returns payout percentages. 
 - **Real-Time Data**: 
   - `subscribe_symbol()`: Provides a synchronous iterator for live data updates. 
+  - `subscribe_symbol_timed()`: Provides a synchronous iterator for timed real-time candle updates.
+  - `subscribe_symbol_chunked()`: Provides a synchronous iterator for chunked real-time candle updates.
 
 Helper Class - `SyncSubscription` 
 
@@ -126,7 +128,6 @@ Allows synchronous iteration over real-time data streams for compatibility with 
 
 Example Usage 
 
- 
 ```python
 from BinaryOptionsToolsV2.pocketoption import PocketOption 
 import time
@@ -135,10 +136,7 @@ client = PocketOption(ssid="your-session-id")
 time.sleep(5)
 balance = client.balance() 
 print("Account Balance:", balance) 
-
 ```
- 
- 
 
 4. Differences Between PocketOption and PocketOptionAsync 
 
@@ -147,3 +145,27 @@ print("Account Balance:", balance)
 | **Execution Type**     | Blocking                  | Non-blocking                    | 
 | **Use Case**           | Simpler scripts           | High-frequency or real-time tasks | 
 | **Performance**        | Slower for concurrent tasks | Scales well with concurrent operations | 
+
+### Tracing
+
+The `tracing` module provides functionality to initialize and manage logging for the application.
+
+Key Functions of Tracing
+
+- **start_logs()**:
+  - Initializes the logging system for the application.
+  - **Arguments**:
+    - `path` (str): Path where log files will be stored.
+    - `level` (str): Logging level (default is "DEBUG").
+    - `terminal` (bool): Whether to display logs in the terminal (default is True).
+  - **Returns**: None
+  - **Raises**: Exception if there's an error starting the logging system.
+
+Example Usage
+
+```python
+from BinaryOptionsToolsV2.tracing import start_logs
+
+# Initialize logging
+start_logs(path="logs/", level="INFO", terminal=True)
+```

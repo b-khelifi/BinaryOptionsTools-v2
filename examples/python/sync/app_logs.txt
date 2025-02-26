@@ -1,0 +1,14 @@
+2025-02-26T17:17:43.267398Z  INFO info: BinaryOptionsToolsV2::logs: This is an info message
+2025-02-26T17:17:43.267718Z  WARN warn: BinaryOptionsToolsV2::logs: This is a warning message
+2025-02-26T17:17:43.267916Z ERROR error: BinaryOptionsToolsV2::logs: This is an error message
+2025-02-26T17:17:43.268087Z  INFO info: BinaryOptionsToolsV2::logs: Bought 100 units of EURUSD
+2025-02-26T17:18:14.501632Z  INFO info: BinaryOptionsToolsV2::logs: This is an info message
+2025-02-26T17:18:14.501886Z  WARN warn: BinaryOptionsToolsV2::logs: This is a warning message
+2025-02-26T17:18:14.502091Z ERROR error: BinaryOptionsToolsV2::logs: This is an error message
+2025-02-26T17:18:14.502328Z  INFO info: BinaryOptionsToolsV2::logs: Bought 100 units of EURUSD
+2025-02-26T17:18:19.505879Z  INFO info: BinaryOptionsToolsV2::logs: Sync operation completed
+2025-02-26T17:18:35.291373Z  INFO info: BinaryOptionsToolsV2::logs: This is an info message
+2025-02-26T17:18:35.291635Z  WARN warn: BinaryOptionsToolsV2::logs: This is a warning message
+2025-02-26T17:18:35.291823Z ERROR error: BinaryOptionsToolsV2::logs: This is an error message
+2025-02-26T17:18:35.291984Z  INFO info: BinaryOptionsToolsV2::logs: Bought 100 units of EURUSD
+2025-02-26T17:18:40.304458Z  INFO info: BinaryOptionsToolsV2::logs: Sync operation completed

@@ -8,13 +8,13 @@ use binary_option_tools::pocketoption::types::update::DataCandle;
 use binary_option_tools::pocketoption::ws::stream::StreamAsset;
 use futures_util::stream::{BoxStream, Fuse};
 use futures_util::StreamExt;
-use pyo3::exceptions::PyStopIteration;
 use pyo3::{pyclass, pymethods, Bound, IntoPyObjectExt, Py, PyAny, PyResult, Python};
 use pyo3_async_runtimes::tokio::future_into_py;
 use uuid::Uuid;
 
 use crate::error::BinaryErrorPy;
 use crate::runtime::get_runtime;
+use crate::stream::next_stream;
 use tokio::sync::Mutex;
 
 #[pyclass]
@@ -238,7 +238,6 @@ impl RawPocketOption {
             Python::with_gil(|py| StreamIterator { stream }.into_py_any(py))
         })
     }
-
 }
 
 #[pymethods]
@@ -253,25 +252,19 @@ impl StreamIterator {
 
     fn __anext__<'py>(&'py mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let stream = self.stream.clone();
-        future_into_py(py, next_stream(stream))
+        future_into_py(py, async move {
+            let res = next_stream(stream, false).await;
+            res.map(|res| res.to_string())
+        })
     }
 
     fn __next__<'py>(&'py self, py: Python<'py>) -> PyResult<String> {
         let runtime = get_runtime(py)?;
         let stream = self.stream.clone();
-        runtime.block_on(next_stream(stream))
+        runtime.block_on(async move {
+            let res = next_stream(stream, true).await;
+            res.map(|res| res.to_string())
+        })
     }
 }
 
-async fn next_stream(
-    stream: Arc<Mutex<Fuse<BoxStream<'static, PocketResult<DataCandle>>>>>,
-) -> PyResult<String> {
-    let mut stream = stream.lock().await;
-    match stream.next().await {
-        Some(item) => match item {
-            Ok(itm) => Ok(itm.to_string()),
-            Err(e) => Err(PyStopIteration::new_err(e.to_string())),
-        },
-        None => Err(PyStopIteration::new_err("stream exhausted")),
-    }
-}
