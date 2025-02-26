@@ -43,7 +43,7 @@ pub fn timeout(attr: TokenStream, item: TokenStream) -> TokenStream {
     q.into()
 }
 
-#[proc_macro_derive(Config)]
+#[proc_macro_derive(Config, attributes(config))]
 pub fn config(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as DeriveInput);
     let config = Config::from_derive_input(&parsed).unwrap();

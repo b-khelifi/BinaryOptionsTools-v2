@@ -1,23 +1,32 @@
 use proc_macro2::TokenStream as TokenStream2;
 
-use darling::{ast, util, FromDeriveInput, FromField};
+use darling::{ast, util, FromDeriveInput, FromField, FromMeta};
 use quote::{quote, ToTokens};
 use syn::{Generics, Ident, Type};
 
+#[derive(Debug, FromMeta)]
+enum FieldConfig {
+    #[darling(rename = "optional")]
+    Optional,
+    #[darling(rename = "iterator")]
+    Iterator(Type)
+}
+
 
 #[derive(Debug, FromField)]
-#[darling(attributes(lorem))]
+#[darling(attributes(config))]
 struct ConfigField {
     ident: Option<Ident>,
     ty: Type,
+    extra: Option<FieldConfig>
 }
 
 #[derive(Debug, FromDeriveInput)]
-#[darling(attributes(lorem), supports(struct_named))]
+#[darling(attributes(config), supports(struct_named))]
 pub struct Config {
     ident: Ident,
     data: ast::Data<util::Ignored, ConfigField>,
-    generics: Generics
+    generics: Generics,
 }
 
 impl ToTokens for Config {
@@ -26,12 +35,10 @@ impl ToTokens for Config {
         let name = &self.ident;
         let new_name = match format!("{}", name) {
             n if n.starts_with("_") => Ident::new(&n[1..], name.span()),
-            n => Ident::new(&format!("{}Config", n), name.span())
+            n => Ident::new(&format!("{}Config", n), name.span()),
         };
-        let inner_name = Ident::new(&format!("{}Inner", new_name), new_name.span());
         let builder_name = Ident::new(&format!("{}Builder", new_name), new_name.span());
 
-        let fields_iter = fields.iter().map(|f| f.field());
         let fields_builders = fields.iter().map(|f| f.builder());
         let fn_iter = fields.iter();
         let field_names = fields.iter().filter_map(|f| f.ident.as_ref());
@@ -39,24 +46,21 @@ impl ToTokens for Config {
         let field_names3 = field_names.clone();
         let field_names4 = field_names.clone();
         let field_names5 = field_names.clone();
+        let ok_or_error = fields.iter().map(|f| f.ok_panic_default());
         let field_none = fields.iter().map(|f| f.field_none());
-        let field_names_string = field_names.clone().map(|f| format!("{}", &f));
         let field_type = fields.iter().map(|f| &f.ty);
+        let field_type2 = field_type.clone();
         let generics = &self.generics;
-        
+
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
         tokens.extend(quote! {
             #[derive(Clone)]
             pub struct #new_name #generics {
-                inner: ::std::sync::Arc<::std::sync::Mutex<#inner_name #ty_generics>> 
-            }
-
-            pub struct #inner_name #generics {
-                #(#fields_iter),*
+                #(#field_names: ::std::sync::Arc<::std::sync::Mutex<#field_type>>),*
             }
 
             pub struct #builder_name #generics {
-                #(#field_names: ::std::option::Option<#field_type>),*
+                #(#field_names2: ::std::option::Option<#field_type2>),*
             }
 
             impl #impl_generics #name #ty_generics #where_clause {
@@ -79,18 +83,21 @@ impl ToTokens for Config {
                     }
                 }
 
-                pub fn build(self) -> ::std::result::Result<#new_name #ty_generics, ::std::boxed::Box<dyn ::core::error::Error + ::core::marker::Send + ::core::marker::Sync>> {
+                pub fn build(self) -> ::anyhow::Result<#new_name #ty_generics> {
                     #new_name::try_from(self)
                 }
             }
 
-            impl #impl_generics From<#name #ty_generics> for #new_name #ty_generics #where_clause{
+            impl #impl_generics ::std::default::Default for #builder_name #ty_generics #where_clause {
+                fn default() -> Self {
+                    Self::new()
+                }
+            }
+
+            impl #impl_generics From<#name #ty_generics> for #new_name #ty_generics #where_clause {
                 fn from(value: #name #ty_generics) -> Self {
-                    let inner = #inner_name {
-                        #(#field_names2: value.#field_names2),*
-                    };
                     Self {
-                        inner: ::std::sync::Arc::new(::std::sync::Mutex::new(inner))
+                        #(#field_names3: ::std::sync::Arc::new(::std::sync::Mutex::new(value.#field_names3))),*
                     }
                 }
             }
@@ -98,34 +105,30 @@ impl ToTokens for Config {
             impl #impl_generics From<#name #ty_generics> for #builder_name #ty_generics #where_clause {
                 fn from(value: #name #ty_generics) -> Self {
                     Self {
-                        #(#field_names3: ::std::option::Option::Some(value.#field_names3)),*
+                        #(#field_names4: ::std::option::Option::Some(value.#field_names4)),*
                     }
                 }
             }
 
-            impl #impl_generics TryFrom<#new_name #ty_generics> for #name #ty_generics #where_clause{
+            impl #impl_generics TryFrom<#new_name #ty_generics> for #name #ty_generics #where_clause {
                 type Error = ::anyhow::Error;
 
                 fn try_from(value: #new_name #ty_generics) -> ::std::result::Result<Self, Self::Error> {
-                    let inner = value.inner.lock().map_err(|e| ::anyhow::anyhow!("Poison error {e}"))?;
                     Ok(
                         Self {
-                            #(#field_names4: inner.#field_names4.clone()),*
+                            #(#field_names5: value.#field_names5.lock().map_err(|e| ::anyhow::anyhow!("Poison error {e}"))?.clone()),*
                         }
                     )
                 }
             }
 
-            impl #impl_generics TryFrom<#builder_name #ty_generics> for #new_name #ty_generics #where_clause{
-                type Error = ::std::boxed::Box<dyn ::core::error::Error + ::core::marker::Send + ::core::marker::Sync>;
+            impl #impl_generics TryFrom<#builder_name #ty_generics> for #new_name #ty_generics #where_clause {
+                type Error = ::anyhow::Error;
 
                 fn try_from(value: #builder_name #ty_generics) -> ::std::result::Result<Self, Self::Error> {
-                    let inner = #inner_name {
-                        #(#field_names5: value.#field_names5.ok_or(::std::io::Error::new(::std::io::ErrorKind::InvalidInput, format!("Option for field '{}' was None", #field_names_string)))?),*
-                    };
                     Ok(
                         Self {
-                            inner: ::std::sync::Arc::new(::std::sync::Mutex::new(inner))
+                            #(#ok_or_error),*
                         }
                     )
                 }
@@ -133,35 +136,43 @@ impl ToTokens for Config {
         });
     }
 }
+
 impl ToTokens for ConfigField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = self.ident.as_ref().expect("Only fields with intent allowed");
+        let name = self.ident.as_ref().expect("Only fields with ident allowed");
         let dtype = &self.ty;
         let set_name = Ident::new(&format!("set_{}", name), name.span());
         let get_name = Ident::new(&format!("get_{}", name), name.span());
+        let extra = if let Some(FieldConfig::Iterator(add_type)) = &self.extra {
+            let add_name = Ident::new(&format!("add_{}", name), name.span());
+            quote! {
+                pub fn #add_name(&self, value: #add_type) -> ::anyhow::Result<()> {
+                    let mut field = self.#name.lock().map_err(|e| ::anyhow::anyhow!("Poison error {e}"))?;
+                    field.push(value);
+                    Ok(())
+    
+                }
+            }
+        } else {
+            quote! {}
+        };
         tokens.extend(quote! {
-            pub fn #set_name(&self, value: #dtype) ->  ::anyhow::Result<()> {
-                let mut inner = self.inner.lock().map_err(|e| ::anyhow::anyhow!("Poison error {e}"))?;
-                inner.#name = value;
+            #extra
+
+            pub fn #set_name(&self, value: #dtype) -> ::anyhow::Result<()> {
+                let mut field = self.#name.lock().map_err(|e| ::anyhow::anyhow!("Poison error {e}"))?;
+                *field = value;
                 Ok(())
             }
 
             pub fn #get_name(&self) -> ::anyhow::Result<#dtype> {
-                Ok(self.inner.lock().map_err(|e| ::anyhow::anyhow!("Poison error {e}"))?.#name.clone())
+                Ok(self.#name.lock().map_err(|e| ::anyhow::anyhow!("Poison error {e}"))?.clone())
             }
         });
     }
 }
 
 impl ConfigField {
-    fn field(&self) -> TokenStream2 {
-        let name = self.ident.as_ref().expect("should have a name");
-        let dtype = &self.ty;
-        quote! {
-            #name: #dtype
-        }
-    }
-
     fn builder(&self) -> TokenStream2 {
         let name = self.ident.as_ref().expect("should have a name");
         let dtype = &self.ty;
@@ -180,4 +191,27 @@ impl ConfigField {
             #name: ::std::option::Option::None::<#dtype>
         }
     }
+
+    fn ok_panic_default(&self) -> TokenStream2 {
+        let name = self.ident.as_ref().expect("should have a name");
+        let name_str = format!("{}", name);
+        if let Some(extra) = &self.extra {
+            match extra {
+                FieldConfig::Iterator(_) => {
+                    quote! {
+                        #name: ::std::sync::Arc::new(::std::sync::Mutex::new(value.#name.unwrap_or_else(::std::default::Default::default)))
+                    }
+                },
+                FieldConfig::Optional => {
+                    quote! {
+                        #name: ::std::sync::Arc::new(::std::sync::Mutex::new(value.#name.unwrap_or(::std::option::Option::None)))
+                    }
+                }
+            }
+        } else {
+            quote! {
+                #name: ::std::sync::Arc::new(::std::sync::Mutex::new(value.#name.ok_or(::anyhow::anyhow!("Option for field '{}' was None", #name_str))?))
+            }
+        }
+    }  
 }

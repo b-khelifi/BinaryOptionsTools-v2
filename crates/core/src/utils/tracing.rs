@@ -1,7 +1,9 @@
-use std::fs::OpenOptions;
+use std::{fs::OpenOptions, io::Write, time::Duration};
 
+use async_channel::{bounded, Sender};
+use serde_json::Value;
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use tracing_subscriber::{fmt::{self, MakeWriter}, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
 
 use crate::{constants::MAX_LOGGING_CHANNEL_CAPACITY, general::stream::RecieverStream};
 
@@ -55,11 +57,37 @@ pub fn start_tracing_leveled(terminal: bool, level: LevelFilter) -> anyhow::Resu
     Ok(())
 }
 
-#[allow(unused)]
-pub fn make_stream(level: LevelFilter) -> anyhow::Result<()> {
-    let (sender, reciever) = async_channel::bounded(MAX_LOGGING_CHANNEL_CAPACITY);
-    let reciever: RecieverStream<u8> = RecieverStream::new(reciever);
+#[derive(Clone)]
+pub struct StreamWriter {
+    sender: Sender<String>,
+}
+
+impl Write for StreamWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Ok(item) = serde_json::from_slice::<Value>(buf) {
+            self.sender.send_blocking(item.to_string()).map_err(std::io::Error::other)?;
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> MakeWriter<'a> for StreamWriter
+{
+    type Writer = StreamWriter;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
 
 
-    Ok(())
+pub fn stream_logs_layer(level: LevelFilter, timout: Option<Duration>) -> (Box<dyn Layer<Registry> + Send + Sync>, RecieverStream<String>) {
+    let (sender, receiver) = bounded(MAX_LOGGING_CHANNEL_CAPACITY);
+    let receiver = RecieverStream::new_timed(receiver, timout);
+    let writer = StreamWriter { sender };
+    let layer = tracing_subscriber::fmt::layer::<Registry>().json().flatten_event(true).with_writer(writer).with_filter(level).boxed();
+    (layer, receiver)
 }

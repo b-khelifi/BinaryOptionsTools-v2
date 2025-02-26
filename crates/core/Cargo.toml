@@ -12,7 +12,7 @@ license = "MIT"
 [dependencies]
 binary-options-tools-macros ={ path = "../macros", version = "0.1.2"}
 
-anyhow = "1.0.95"
+anyhow = "1.0.96"
 async-channel = "2.3.1"
 async-trait = "0.1.85"
 chrono = { version = "0.4.39", features = ["serde"] }
@@ -25,9 +25,10 @@ serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.137", features = [] }
 thiserror = "2.0.11"
 tokio = { version = "1.42.0", features = ["macros", "io-util", "rt", "sync"] }
-tokio-tungstenite = { version = "0.26.1", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.26.2", features = ["native-tls"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["json"] }
 url = { version = "2.5.4", features = ["serde"] }
-uuid = { version = "1.12.1", features = ["serde"] }
+uuid = { version = "1.14.0", features = ["serde"] }
+tracing-appender = "0.2.3"
 

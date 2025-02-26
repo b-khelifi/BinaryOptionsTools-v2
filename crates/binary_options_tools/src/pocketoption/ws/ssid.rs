@@ -161,6 +161,7 @@ mod tests {
             r#"42["auth",{"session":"looc69ct294h546o368s0lct7d","isDemo":1,"uid":87742848,"platform":2}]	"#,
             r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"ae3aa847add89c341ec18d8ae5bf8527\";s:10:\"ip_address\";s:15:\"191.113.157.139\";s:10:\"user_agent\";s:120:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 OPR/114.\";s:13:\"last_activity\";i:1732926685;}31666d2dc07fdd866353937b97901e2b","isDemo":0,"uid":87742848,"platform":2}]	"#,
             r#"42["auth",{"session":"vtftn12e6f5f5008moitsd6skl","isDemo":1,"uid":27658142,"platform":2}]"#,
+            r#"42["auth",{"session":"a:4:{s:10:\"session_id\";s:32:\"f10395d38f61039ea0a20ba26222895a\";s:10:\"ip_address\";s:12:\"79.177.168.1\";s:10:\"user_agent\";s:111:\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36\";s:13:\"last_activity\";i:1740261136;}9bef184e52d025d1f07068eeaf555637","isDemo":0,"uid":89028022,"platform":2}]"#,
         ];
         for ssid in ssids {
             let valid = Ssid::parse(ssid)?;

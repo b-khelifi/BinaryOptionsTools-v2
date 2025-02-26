@@ -1,5 +1,14 @@
 pub mod pocketoption;
 
+pub mod stream {
+    pub use binary_options_tools_core::utils::tracing::stream_logs_layer;
+    pub use binary_options_tools_core::general::stream::RecieverStream;
+}
+
+pub mod error {
+    pub use binary_options_tools_core::error::{BinaryOptionsResult, BinaryOptionsToolsError};
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;

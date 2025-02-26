@@ -13,9 +13,11 @@ use binary_options_tools_macros::Config;
 pub struct _Config<T: DataHandler, Transfer: MessageTransfer> {
     pub max_allowed_loops: u32,
     pub sleep_interval: u64,
+    #[config(extra(optional))]
     pub default_connection_url: Option<Url>,
     pub reconnect_time: u64,
     #[serde(skip)]
+    #[config(extra(iterator = "Callback<T, Transfer>"))]
     pub callbacks: Vec<Callback<T, Transfer>>,
     pub timeout: Duration,
     // #[serde(skip)]
