@@ -8,6 +8,7 @@ use tokio::sync::Mutex;
 
 use crate::constants::MAX_CHANNEL_CAPACITY;
 use crate::error::BinaryOptionsResult;
+use crate::error::BinaryOptionsToolsError;
 
 use super::send::SenderMessage;
 use super::traits::WCallback;
@@ -125,6 +126,18 @@ where
             .map(|(s, _)| vec![s.to_owned()])
     }
 
+    pub async fn raw_send(&self, msg: Transfer::Raw) -> BinaryOptionsResult<()> {
+        let sender = &self.raw_requests.0;
+        if sender.receiver_count() > 1 {
+            sender.send(msg).await.map_err(|e| {
+                BinaryOptionsToolsError::ChannelRequestSendingError(
+                    e.to_string(),
+                )
+            })?;
+        }
+        Ok(())
+    } 
+
     pub async fn update_data(
         &self,
         message: Transfer,
@@ -132,6 +145,8 @@ where
         self.inner.update(&message).await?;
         Ok(self.get_sender(&message).await)
     }
+
+
 }
 
 impl<T, Transfer> Deref for Data<T, Transfer>

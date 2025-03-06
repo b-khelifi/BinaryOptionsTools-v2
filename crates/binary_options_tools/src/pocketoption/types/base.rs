@@ -24,12 +24,6 @@ pub struct RawWebsocketMessage {
     value: String,
 }
 
-impl RawWebsocketMessage {
-    pub fn from_string(value: String) -> Self {
-        Self { value }
-    }
-}
-
 impl fmt::Display for RawWebsocketMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.value.fmt(f)
@@ -51,6 +45,12 @@ impl<'de> Deserialize<'de> for RawWebsocketMessage {
         D: serde::Deserializer<'de>,
     {
         String::deserialize(deserializer).map(|s| Self { value: s })
+    }
+}
+
+impl From<String> for RawWebsocketMessage {
+    fn from(value: String) -> Self {
+        Self { value }
     }
 }
 

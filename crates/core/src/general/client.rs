@@ -20,9 +20,9 @@ use crate::general::types::MessageType;
 
 use super::config::Config;
 use super::send::SenderMessage;
+use super::stream::FilteredRecieverStream;
 use super::traits::{
-    Connect, Credentials, DataHandler, MessageHandler, MessageTransfer, RawValidator, Validator,
-    WCallback,
+    Connect, Credentials, DataHandler, MessageHandler, MessageTransfer, RawValidator, Validator, ValidatorTrait, WCallback
 };
 use super::types::{Callback, Data};
 
@@ -329,12 +329,7 @@ where
                             }
                             MessageType::Raw(raw) => {
                                 debug!("Recieved raw message: {:?}", raw);
-                                let sender = data.raw_sender();
-                                sender.send(raw).await.map_err(|e| {
-                                    BinaryOptionsToolsError::ChannelRequestSendingError(
-                                        e.to_string(),
-                                    )
-                                })?;
+                                data.raw_send(raw).await?;
                             }
                         }
                     }
@@ -505,10 +500,10 @@ where
     pub async fn send_raw_message_iterator(
         &self,
         msg: Transfer::Raw,
-        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
         timeout: Option<Duration>,
-    ) -> BinaryOptionsResult<()> {
-        unimplemented!()
+    ) -> BinaryOptionsResult<FilteredRecieverStream<Transfer::Raw>> {
+        self.sender.send_raw_message_iterator(timeout, &self.data, msg, validator).await
     }
 }
 

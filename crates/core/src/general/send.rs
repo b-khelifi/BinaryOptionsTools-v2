@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use async_channel::{Receiver, RecvError, Sender, bounded};
 use tokio_tungstenite::tungstenite::Message;
-use tracing::error;
+use tracing::{info, warn};
 
 use crate::{
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
@@ -11,8 +11,7 @@ use crate::{
 };
 
 use super::{
-    traits::{DataHandler, MessageTransfer, RawMessage, RawValidator, Validator},
-    types::Data,
+    stream::FilteredRecieverStream, traits::{DataHandler, MessageTransfer, RawMessage, RawValidator, Validator, ValidatorTrait}, types::Data
 };
 
 #[derive(Clone)]
@@ -101,7 +100,7 @@ impl SenderMessage {
 
         while let Ok(msg) = reciever.recv().await {
             if let Some(msg) =
-                validate(&validator, msg).inspect_err(|e| error!("Failed to place trade {e}"))?
+                validate(&validator, msg).inspect_err(|e| warn!("Failed to place trade {e}"))?
             {
                 return Ok(msg);
             }
@@ -151,7 +150,7 @@ impl SenderMessage {
             async {
                 while let Ok(msg) = reciever.recv().await {
                     if let Some(msg) = validate(&validator, msg)
-                        .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+                        .inspect_err(|e| warn!("Failed to place trade {e}"))?
                     {
                         return Ok(msg);
                     }
@@ -215,7 +214,7 @@ impl SenderMessage {
             async {
                 while let Ok(msg) = reciever.recv().await {
                     if let Some(msg) = validate(&validator, msg)
-                        .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+                        .inspect_err(|e| warn!("Failed to place trade {e}"))?
                     {
                         return Ok(msg);
                     }
@@ -230,14 +229,14 @@ impl SenderMessage {
         match call1 {
             Ok(res) => Ok(res),
             Err(_) => {
-                println!("Failded once trying again");
+                info!("Failded once trying again");
                 let reciever = self.reciever(data, msg, response_type).await?;
                 timeout(
                     time,
                     async {
                         while let Ok(msg) = reciever.recv().await {
                             if let Some(msg) = validate(&validator, msg)
-                                .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
+                                .inspect_err(|e| warn!("Failed to place trade {e}"))?
                             {
                                 return Ok(msg);
                             }
@@ -284,7 +283,7 @@ impl SenderMessage {
         match call1 {
             Ok(res) => Ok(res),
             Err(_) => {
-                println!("Failded once trying again");
+                info!("Failded once trying again");
                 let reciever = self.raw_reciever(data, msg).await?;
                 timeout(
                     time,
@@ -303,5 +302,18 @@ impl SenderMessage {
                 .await
             }
         }
+    }
+
+    pub async fn send_raw_message_iterator<        Transfer: MessageTransfer,
+    T: DataHandler<Transfer = Transfer>,
+>(        &self,
+    timeout: Option<Duration>,
+    data: &Data<T, Transfer>,
+    msg: Transfer::Raw,
+    validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
+) -> BinaryOptionsResult<FilteredRecieverStream<Transfer::Raw>> {
+        let reciever = self.raw_reciever(data, msg).await?;
+        info!("Created new RawStreamIterator");
+        Ok(FilteredRecieverStream::new(reciever, timeout, validator))
     }
 }

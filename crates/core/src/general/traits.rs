@@ -92,6 +92,10 @@ pub trait Connect: Clone + Send + Sync {
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 }
 
+pub trait ValidatorTrait<T> {
+    fn validate(&self, message: &T) -> bool;
+}
+
 pub trait Validator<Transfer: MessageTransfer> {
     fn validate(&self, message: &Transfer) -> bool;
 }
@@ -114,6 +118,15 @@ where
     F: Fn(&Transfer::Raw) -> bool + Send + Sync,
 {
     fn validate(&self, message: &Transfer::Raw) -> bool {
+        self(message)
+    }
+}
+
+impl<F, T> ValidatorTrait<T> for F
+where 
+    F: Fn(&T) -> bool + Send + Sync,
+{
+    fn validate(&self, message: &T) -> bool {
         self(message)
     }
 }

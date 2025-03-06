@@ -200,7 +200,7 @@ impl WebSocketMessage {
                 }
             }
             MessageInfo::Raw(content) => {
-                return WebSocketMessage::Raw(RawWebsocketMessage::from_string(content.to_owned()));
+                return WebSocketMessage::Raw(RawWebsocketMessage::from(content.to_owned()));
             }
             MessageInfo::None => {
                 if let Ok(message) = WebSocketMessage::parse(data.clone()) {
@@ -209,7 +209,7 @@ impl WebSocketMessage {
             }
         }
         warn!("Failed to parse message of type '{previous}':\n {data}, parsing it as raw data");
-        WebSocketMessage::Raw(RawWebsocketMessage::from_string(data))
+        WebSocketMessage::Raw(RawWebsocketMessage::from(data))
     }
 
     pub fn information(&self) -> MessageInfo {

@@ -20,10 +20,7 @@ use binary_options_tools_core::{
     constants::TIMEOUT_TIME,
     error::BinaryOptionsToolsError,
     general::{
-        client::WebSocketClient,
-        config::{_Config, Config},
-        traits::{MessageTransfer, RawValidator},
-        types::{Callback, Data},
+        client::WebSocketClient, config::{Config, _Config}, stream::FilteredRecieverStream, traits::{MessageTransfer, RawValidator, ValidatorTrait}, types::{Callback, Data}
     },
 };
 
@@ -31,7 +28,7 @@ use super::{
     error::PocketOptionError,
     parser::message::WebSocketMessage,
     types::{
-        base::ChangeSymbol,
+        base::{ChangeSymbol, RawWebsocketMessage},
         callback::PocketCallback,
         data::PocketData,
         info::MessageInfo,
@@ -378,16 +375,34 @@ impl PocketOption {
             .await)
     }
 
-    pub async fn create_raw_order<Transfer: MessageTransfer>(
+    pub async fn send_raw_message(&self, message: impl ToString) -> PocketResult<()> {
+        self.client.raw_send(RawWebsocketMessage::from(message.to_string())).await?;
+        Ok(())
+    }
+
+    pub async fn create_raw_order(
         &self,
-        message: impl ToString,
-        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
-    ) {
+        message: impl Into<RawWebsocketMessage>,
+        validator: Box<dyn RawValidator<WebSocketMessage> + Send + Sync>,
+    ) -> PocketResult<RawWebsocketMessage>{
         // TODO: Complete this function + add the following functionality
         //  * create_raw_order_with_timeout
         //  * create_raw_order_iterator: return a stream like the StreamAsset
         //  * send_raw_message: send message without validator
         //  * OTHER: Create a callback related function to add new options for the callback + add support for struct or functions in it (like the Validator) so future me will have it easy
+        Ok(self.client.send_raw_message(message.into(), validator).await?)
+    }
+
+    pub async fn create_raw_order_with_timeout(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn RawValidator<WebSocketMessage> + Send + Sync>, timeout: Duration) -> PocketResult<RawWebsocketMessage> {
+        Ok(self.client.send_raw_message_with_timout(timeout, "CreateRawOrder".to_string(), message.into(), validator).await?)
+    }
+
+    pub async fn create_raw_order_with_timeout_and_retry(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn RawValidator<WebSocketMessage> + Send + Sync>, timeout: Duration) -> PocketResult<RawWebsocketMessage> {
+        Ok(self.client.send_raw_message_with_timeout_and_retry(timeout, "CreateRawOrderWithRetry".to_string(), message.into(), validator).await?)
+    }
+
+    pub async fn create_raw_iterator(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>, timeout: Option<Duration>) -> PocketResult<FilteredRecieverStream<RawWebsocketMessage>> {
+        Ok(self.client.send_raw_message_iterator(message.into(), validator, timeout).await?)
     }
 
     pub fn kill(self) {
