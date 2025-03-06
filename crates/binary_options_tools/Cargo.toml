@@ -1,7 +1,7 @@
 [package]
 name = "binary-option-tools"
 version = "0.1.6"
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/ChipaDevTeam/BinaryOptionsTools-v2"
 readme = "README.md"
 description = "`binary-options-tools` crate and the python library `BinaryOptionsToolsV2`."
@@ -34,3 +34,4 @@ tracing = "0.1.41"
 # url = { version = "2.5.4", features = ["serde"] }
 uuid = { version = "1.12.1", features = ["serde"] }
 url = "2.5.4"
+serde-enum-str = "0.4.0"

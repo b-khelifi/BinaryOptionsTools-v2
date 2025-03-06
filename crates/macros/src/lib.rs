@@ -1,18 +1,20 @@
+mod config;
 mod deserialize;
 mod impls;
+mod region;
 mod serialize;
 mod timeout;
-mod config;
 
 use config::Config;
+use deserialize::Deserializer;
+use region::RegionImpl;
+use timeout::{Timeout, TimeoutArgs, TimeoutBody};
+
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
-
-use deserialize::Deserializer;
 use quote::quote;
 use serialize::Serializer;
 use syn::{parse_macro_input, DeriveInput};
-use timeout::{Timeout, TimeoutArgs, TimeoutBody};
 
 #[proc_macro]
 pub fn deserialize(input: TokenStream) -> TokenStream {
@@ -48,4 +50,11 @@ pub fn config(input: TokenStream) -> TokenStream {
     let parsed = parse_macro_input!(input as DeriveInput);
     let config = Config::from_derive_input(&parsed).unwrap();
     quote! { #config }.into()
+}
+
+#[proc_macro_derive(RegionImpl, attributes(region))]
+pub fn region(input: TokenStream) -> TokenStream {
+    let parsed = parse_macro_input!(input as DeriveInput);
+    let region = RegionImpl::from_derive_input(&parsed).unwrap();
+    quote! { #region }.into()
 }

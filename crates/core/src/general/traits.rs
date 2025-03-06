@@ -1,17 +1,21 @@
 use async_trait::async_trait;
 use core::{error, fmt, hash};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use tokio::net::TcpStream;
-use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 
 use crate::error::BinaryOptionsResult;
 
 use super::{
-    config::Config, send::SenderMessage, types::{Data, MessageType}
+    config::Config,
+    send::SenderMessage,
+    types::{Data, MessageType},
 };
 
+/// This trait makes sure that the struct passed to the `WebsocketClient` can be cloned, sended through multiple threads, and serialized and deserialized using serde
 pub trait Credentials: Clone + Send + Sync + Serialize + DeserializeOwned {}
 
+/// This trait allows users to pass their own way of storing and updating recieved data from the `websocket` connection
 #[async_trait]
 pub trait DataHandler: Clone + Send + Sync {
     type Transfer: MessageTransfer;
@@ -19,6 +23,7 @@ pub trait DataHandler: Clone + Send + Sync {
     async fn update(&self, message: &Self::Transfer) -> BinaryOptionsResult<()>;
 }
 
+/// Allows users to add a callback that will be called when the websocket connection is established after being disconnected, you will have access to the `Data` struct providing access to any required information stored during execution
 #[async_trait]
 pub trait WCallback: Send + Sync {
     type T: DataHandler;
@@ -31,12 +36,14 @@ pub trait WCallback: Send + Sync {
     ) -> BinaryOptionsResult<()>;
 }
 
+/// Main entry point for the `WebsocketClient` struct, this trait is used by the client to handle incoming messages, return data to user and a lot more things
 pub trait MessageTransfer:
     DeserializeOwned + Clone + Into<Message> + Send + Sync + error::Error + fmt::Debug + fmt::Display
 {
     type Error: Into<Self> + Clone + error::Error;
     type TransferError: error::Error;
     type Info: MessageInformation;
+    type Raw: RawMessage;
 
     fn info(&self) -> Self::Info;
 
@@ -50,6 +57,14 @@ pub trait MessageTransfer:
 pub trait MessageInformation:
     Serialize + DeserializeOwned + Clone + Send + Sync + Eq + hash::Hash + fmt::Debug + fmt::Display
 {
+}
+
+pub trait RawMessage:
+    Serialize + DeserializeOwned + Clone + Send + Sync + fmt::Debug + fmt::Display
+{
+    fn message(&self) -> Message {
+        Message::text(self.to_string())
+    }
 }
 
 #[async_trait]
@@ -73,6 +88,32 @@ pub trait Connect: Clone + Send + Sync {
     async fn connect<T: DataHandler, Transfer: MessageTransfer>(
         &self,
         creds: Self::Creds,
-        config: &Config<T, Transfer>
+        config: &Config<T, Transfer>,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;
+}
+
+pub trait Validator<Transfer: MessageTransfer> {
+    fn validate(&self, message: &Transfer) -> bool;
+}
+
+pub trait RawValidator<Transfer: MessageTransfer> {
+    fn validate(&self, message: &Transfer::Raw) -> bool;
+}
+
+impl<F, Transfer: MessageTransfer> Validator<Transfer> for F
+where
+    F: Fn(&Transfer) -> bool + Send + Sync,
+{
+    fn validate(&self, message: &Transfer) -> bool {
+        self(message)
+    }
+}
+
+impl<F, Transfer: MessageTransfer> RawValidator<Transfer> for F
+where
+    F: Fn(&Transfer::Raw) -> bool + Send + Sync,
+{
+    fn validate(&self, message: &Transfer::Raw) -> bool {
+        self(message)
+    }
 }

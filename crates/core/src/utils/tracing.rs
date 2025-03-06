@@ -1,9 +1,14 @@
 use std::{fs::OpenOptions, io::Write, time::Duration};
 
-use async_channel::{bounded, Sender};
+use async_channel::{Sender, bounded};
 use serde_json::Value;
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{fmt::{self, MakeWriter}, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry};
+use tracing_subscriber::{
+    Layer, Registry,
+    fmt::{self, MakeWriter},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+};
 
 use crate::{constants::MAX_LOGGING_CHANNEL_CAPACITY, general::stream::RecieverStream};
 
@@ -65,7 +70,9 @@ pub struct StreamWriter {
 impl Write for StreamWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if let Ok(item) = serde_json::from_slice::<Value>(buf) {
-            self.sender.send_blocking(item.to_string()).map_err(std::io::Error::other)?;
+            self.sender
+                .send_blocking(item.to_string())
+                .map_err(std::io::Error::other)?;
         }
         Ok(buf.len())
     }
@@ -75,19 +82,28 @@ impl Write for StreamWriter {
     }
 }
 
-impl<'a> MakeWriter<'a> for StreamWriter
-{
+impl<'a> MakeWriter<'a> for StreamWriter {
     type Writer = StreamWriter;
     fn make_writer(&'a self) -> Self::Writer {
         self.clone()
     }
 }
 
-
-pub fn stream_logs_layer(level: LevelFilter, timout: Option<Duration>) -> (Box<dyn Layer<Registry> + Send + Sync>, RecieverStream<String>) {
+pub fn stream_logs_layer(
+    level: LevelFilter,
+    timout: Option<Duration>,
+) -> (
+    Box<dyn Layer<Registry> + Send + Sync>,
+    RecieverStream<String>,
+) {
     let (sender, receiver) = bounded(MAX_LOGGING_CHANNEL_CAPACITY);
     let receiver = RecieverStream::new_timed(receiver, timout);
     let writer = StreamWriter { sender };
-    let layer = tracing_subscriber::fmt::layer::<Registry>().json().flatten_event(true).with_writer(writer).with_filter(level).boxed();
+    let layer = tracing_subscriber::fmt::layer::<Registry>()
+        .json()
+        .flatten_event(true)
+        .with_writer(writer)
+        .with_filter(level)
+        .boxed();
     (layer, receiver)
 }

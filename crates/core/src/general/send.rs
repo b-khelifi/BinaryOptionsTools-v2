@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use async_channel::{bounded, Receiver, RecvError, Sender};
+use async_channel::{Receiver, RecvError, Sender, bounded};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::error;
 
@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    traits::{DataHandler, MessageTransfer},
+    traits::{DataHandler, MessageTransfer, RawMessage, RawValidator, Validator},
     types::Data,
 };
 
@@ -47,16 +47,39 @@ impl SenderMessage {
 
         self.send(msg)
             .await
-            .map_err(|e| BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string()))?;
+            .map_err(|e| BinaryOptionsToolsError::GeneralMessageSendingError(e.to_string()))?;
         Ok(reciever)
+    }
+
+    async fn raw_reciever<Transfer: MessageTransfer, T: DataHandler<Transfer = Transfer>>(
+        &self,
+        data: &Data<T, Transfer>,
+        msg: Transfer::Raw,
+    ) -> BinaryOptionsResult<Receiver<Transfer::Raw>> {
+        let reciever = data.raw_reciever();
+
+        self.raw_send::<Transfer>(msg)
+            .await
+            .map_err(|e| BinaryOptionsToolsError::GeneralMessageSendingError(e.to_string()))?;
+
+        Ok(reciever)
+    }
+
+    pub async fn raw_send<Transfer: MessageTransfer>(
+        &self,
+        msg: Transfer::Raw,
+    ) -> BinaryOptionsResult<()> {
+        self.sender
+            .send(msg.message())
+            .await
+            .map_err(|e| BinaryOptionsToolsError::ChannelRequestSendingError(e.to_string()))
     }
 
     pub async fn send<Transfer: MessageTransfer>(&self, msg: Transfer) -> BinaryOptionsResult<()> {
         self.sender
             .send(msg.into())
             .await
-            .map_err(|e| BinaryOptionsToolsError::ChannelRequestSendingError(e.to_string()))?;
-        Ok(())
+            .map_err(|e| BinaryOptionsToolsError::ChannelRequestSendingError(e.to_string()))
     }
 
     pub async fn priority_send(&self, msg: Message) -> BinaryOptionsResult<()> {
@@ -72,7 +95,7 @@ impl SenderMessage {
         data: &Data<T, Transfer>,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+        validator: Box<dyn Validator<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         let reciever = self.reciever(data, msg, response_type).await?;
 
@@ -80,6 +103,27 @@ impl SenderMessage {
             if let Some(msg) =
                 validate(&validator, msg).inspect_err(|e| error!("Failed to place trade {e}"))?
             {
+                return Ok(msg);
+            }
+        }
+        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+            RecvError,
+        ))
+    }
+
+    pub async fn send_raw_message<
+        Transfer: MessageTransfer,
+        T: DataHandler<Transfer = Transfer>,
+    >(
+        &self,
+        data: &Data<T, Transfer>,
+        msg: Transfer::Raw,
+        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+    ) -> BinaryOptionsResult<Transfer::Raw> {
+        let reciever = self.raw_reciever(data, msg).await?;
+
+        while let Ok(msg) = reciever.recv().await {
+            if validator.validate(&msg) {
                 return Ok(msg);
             }
         }
@@ -98,7 +142,7 @@ impl SenderMessage {
         data: &Data<T, Transfer>,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+        validator: Box<dyn Validator<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         let reciever = self.reciever(data, msg, response_type).await?;
 
@@ -109,6 +153,35 @@ impl SenderMessage {
                     if let Some(msg) = validate(&validator, msg)
                         .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
                     {
+                        return Ok(msg);
+                    }
+                }
+                Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+                    RecvError,
+                ))
+            },
+            task.to_string(),
+        )
+        .await
+    }
+    pub async fn send_raw_message_with_timout<
+        Transfer: MessageTransfer,
+        T: DataHandler<Transfer = Transfer>,
+    >(
+        &self,
+        time: Duration,
+        task: impl ToString,
+        data: &Data<T, Transfer>,
+        msg: Transfer::Raw,
+        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+    ) -> BinaryOptionsResult<Transfer::Raw> {
+        let reciever = self.raw_reciever(data, msg).await?;
+
+        timeout(
+            time,
+            async {
+                while let Ok(msg) = reciever.recv().await {
+                    if validator.validate(&msg) {
                         return Ok(msg);
                     }
                 }
@@ -131,7 +204,7 @@ impl SenderMessage {
         data: &Data<T, Transfer>,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+        validator: Box<dyn Validator<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         let reciever = self
             .reciever(data, msg.clone(), response_type.clone())
@@ -166,6 +239,58 @@ impl SenderMessage {
                             if let Some(msg) = validate(&validator, msg)
                                 .inspect_err(|e| eprintln!("Failed to place trade {e}"))?
                             {
+                                return Ok(msg);
+                            }
+                        }
+                        Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+                            RecvError,
+                        ))
+                    },
+                    task.to_string(),
+                )
+                .await
+            }
+        }
+    }
+
+    pub async fn send_raw_message_with_timeout_and_retry<
+        Transfer: MessageTransfer,
+        T: DataHandler<Transfer = Transfer>,
+    >(
+        &self,
+        time: Duration,
+        task: impl ToString,
+        data: &Data<T, Transfer>,
+        msg: Transfer::Raw,
+        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+    ) -> BinaryOptionsResult<Transfer::Raw> {
+        let reciever = self.raw_reciever(data, msg.clone()).await?;
+
+        let call1 = timeout(
+            time,
+            async {
+                while let Ok(msg) = reciever.recv().await {
+                    if validator.validate(&msg) {
+                        return Ok(msg);
+                    }
+                }
+                Err(BinaryOptionsToolsError::ChannelRequestRecievingError(
+                    RecvError,
+                ))
+            },
+            task.to_string(),
+        )
+        .await;
+        match call1 {
+            Ok(res) => Ok(res),
+            Err(_) => {
+                println!("Failded once trying again");
+                let reciever = self.raw_reciever(data, msg).await?;
+                timeout(
+                    time,
+                    async {
+                        while let Ok(msg) = reciever.recv().await {
+                            if validator.validate(&msg) {
                                 return Ok(msg);
                             }
                         }

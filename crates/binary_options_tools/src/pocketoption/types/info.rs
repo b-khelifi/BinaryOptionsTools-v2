@@ -1,11 +1,8 @@
-use core::fmt;
-use std::fmt::Display;
-
-use serde::{Deserialize, Serialize};
+use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 
 use binary_options_tools_core::general::traits::MessageInformation;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize_enum_str, Serialize_enum_str, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum MessageInfo {
     OpenOrder,
@@ -22,7 +19,7 @@ pub enum MessageInfo {
     UpdateOpenedDeals,
     UpdateClosedDeals,
     SuccessopenOrder,
-    UpdateCharts,
+    // UpdateCharts,
     SubscribeSymbol,
     LoadHistoryPeriod,
     FailopenOrder,
@@ -31,13 +28,9 @@ pub enum MessageInfo {
     SuccessopenPendingOrder,
     FailopenPendingOrder,
     None,
-}
 
-impl Display for MessageInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let msg = serde_json::to_string(&self).map_err(|_| fmt::Error)?;
-        write!(f, "{msg}")
-    }
+    #[serde(other)]
+    Raw(String),
 }
 
 impl MessageInformation for MessageInfo {}

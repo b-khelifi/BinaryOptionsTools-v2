@@ -2,7 +2,7 @@ use core::fmt;
 use std::vec;
 
 use serde::Deserialize;
-use serde_json::{from_str, Value};
+use serde_json::{Value, from_str};
 use tracing::warn;
 
 use binary_options_tools_core::{
@@ -11,9 +11,9 @@ use binary_options_tools_core::{
 };
 
 use crate::pocketoption::{
-    error::{PocketOptionError, PocketResult},
+    error::PocketResult,
     types::{
-        base::{ChangeSymbol, SubscribeSymbol},
+        base::{ChangeSymbol, RawWebsocketMessage, SubscribeSymbol},
         info::MessageInfo,
         order::{
             Deal, FailOpenOrder, FailOpenPendingOrder, OpenOrder, OpenPendingOrder,
@@ -56,7 +56,7 @@ pub enum WebSocketMessage {
     OpenPendingOrder(OpenPendingOrder),
     SuccessOpenPendingOrder(SuccessOpenPendingOrder),
 
-    Raw(String),
+    Raw(RawWebsocketMessage),
     None,
 }
 
@@ -84,128 +84,132 @@ impl WebSocketMessage {
         }
     }
 
-    pub fn parse_with_context(data: impl ToString, previous: &MessageInfo) -> PocketResult<Self> {
+    pub fn parse_with_context(data: impl ToString, previous: &MessageInfo) -> Self {
         let data = data.to_string();
         match previous {
             MessageInfo::OpenOrder => {
                 if let Ok(order) = from_str::<OpenOrder>(&data) {
-                    return Ok(Self::OpenOrder(order));
+                    return Self::OpenOrder(order);
                 }
             }
             MessageInfo::UpdateStream => {
                 if let Ok(stream) = from_str::<UpdateStream>(&data) {
-                    return Ok(Self::UpdateStream(stream));
+                    return Self::UpdateStream(stream);
                 }
             }
             MessageInfo::UpdateHistoryNew => {
                 if let Ok(history) = from_str::<UpdateHistoryNew>(&data) {
-                    return Ok(Self::UpdateHistoryNew(history));
+                    return Self::UpdateHistoryNew(history);
                 }
             }
             MessageInfo::UpdateAssets => {
                 if let Ok(assets) = from_str::<UpdateAssets>(&data) {
-                    return Ok(Self::UpdateAssets(assets));
+                    return Self::UpdateAssets(assets);
                 }
             }
             MessageInfo::UpdateBalance => {
                 if let Ok(balance) = from_str::<UpdateBalance>(&data) {
-                    return Ok(Self::UpdateBalance(balance));
+                    return Self::UpdateBalance(balance);
                 }
             }
             MessageInfo::SuccesscloseOrder => {
                 if let Ok(order) = from_str::<SuccessCloseOrder>(&data) {
-                    return Ok(Self::SuccesscloseOrder(order));
+                    return Self::SuccesscloseOrder(order);
                 }
             }
             MessageInfo::Auth => {
                 if let Ok(auth) = from_str::<Ssid>(&data) {
-                    return Ok(Self::Auth(auth));
+                    return Self::Auth(auth);
                 }
             }
             MessageInfo::ChangeSymbol => {
                 if let Ok(symbol) = from_str::<ChangeSymbol>(&data) {
-                    return Ok(Self::ChangeSymbol(symbol));
+                    return Self::ChangeSymbol(symbol);
                 }
             }
             MessageInfo::SuccessupdateBalance => {
                 if let Ok(balance) = from_str::<UpdateBalance>(&data) {
-                    return Ok(Self::SuccessupdateBalance(balance));
+                    return Self::SuccessupdateBalance(balance);
                 }
             }
             MessageInfo::SuccessupdatePending => {
                 if let Ok(pending) = from_str::<Value>(&data) {
-                    return Ok(Self::SuccessupdatePending(pending));
+                    return Self::SuccessupdatePending(pending);
                 }
             }
             MessageInfo::SubscribeSymbol => {
                 if let Ok(symbol) = from_str::<SubscribeSymbol>(&data) {
-                    return Ok(Self::SubscribeSymbol(symbol));
+                    return Self::SubscribeSymbol(symbol);
                 }
             }
             MessageInfo::Successauth => {
                 if let Ok(auth) = from_str::<SuccessAuth>(&data) {
-                    return Ok(Self::SuccessAuth(auth));
+                    return Self::SuccessAuth(auth);
                 }
             }
             MessageInfo::UpdateOpenedDeals => {
                 if let Ok(deals) = from_str::<UpdateOpenedDeals>(&data) {
-                    return Ok(Self::UpdateOpenedDeals(deals));
+                    return Self::UpdateOpenedDeals(deals);
                 }
             }
             MessageInfo::UpdateClosedDeals => {
                 if let Ok(deals) = from_str::<UpdateClosedDeals>(&data) {
-                    return Ok(Self::UpdateClosedDeals(deals));
+                    return Self::UpdateClosedDeals(deals);
                 }
             }
             MessageInfo::SuccessopenOrder => {
                 if let Ok(order) = from_str::<Deal>(&data) {
-                    return Ok(Self::SuccessopenOrder(order));
+                    return Self::SuccessopenOrder(order);
                 }
             }
             MessageInfo::LoadHistoryPeriod => {
                 if let Ok(history) = from_str::<LoadHistoryPeriodResult>(&data) {
-                    return Ok(Self::LoadHistoryPeriod(history));
+                    return Self::LoadHistoryPeriod(history);
                 }
             }
-            MessageInfo::UpdateCharts => {
-                return Err(PocketOptionError::GeneralParsingError(
-                    "This is expected, there is no parser for the 'updateCharts' message"
-                        .to_string(),
-                ));
-                // TODO: Add this
-            }
+            // MessageInfo::UpdateCharts => {
+            //     return Err(PocketOptionError::GeneralParsingError(
+            //         "This is expected, there is no parser for the 'updateCharts' message"
+            //             .to_string(),
+            //     ));
+            //     // TODO: Add this
+            // }
             MessageInfo::GetCandles => {
                 if let Ok(candles) = from_str::<LoadHistoryPeriod>(&data) {
-                    return Ok(Self::GetCandles(candles));
+                    return Self::GetCandles(candles);
                 }
             }
             MessageInfo::FailopenOrder => {
                 if let Ok(fail) = from_str::<FailOpenOrder>(&data) {
-                    return Ok(Self::FailOpenOrder(fail));
+                    return Self::FailOpenOrder(fail);
                 }
             }
             MessageInfo::FailopenPendingOrder => {
                 if let Ok(fail) = from_str::<FailOpenPendingOrder>(&data) {
-                    return Ok(Self::FailOpenPendingOrder(fail));
+                    return Self::FailOpenPendingOrder(fail);
                 }
             }
             MessageInfo::OpenPendingOrder => {
                 if let Ok(order) = from_str::<OpenPendingOrder>(&data) {
-                    return Ok(Self::OpenPendingOrder(order));
+                    return Self::OpenPendingOrder(order);
                 }
             }
             MessageInfo::SuccessopenPendingOrder => {
                 if let Ok(order) = from_str::<SuccessOpenPendingOrder>(&data) {
-                    return Ok(Self::SuccessOpenPendingOrder(order));
+                    return Self::SuccessOpenPendingOrder(order);
                 }
             }
-            MessageInfo::None => return WebSocketMessage::parse(data.clone()),
+            MessageInfo::Raw(content) => {
+                return WebSocketMessage::Raw(RawWebsocketMessage::from_string(content.to_owned()));
+            }
+            MessageInfo::None => {
+                if let Ok(message) = WebSocketMessage::parse(data.clone()) {
+                    return message;
+                }
+            }
         }
-        warn!("Failed to parse message of type '{previous}':\n {data}");
-        Err(PocketOptionError::GeneralParsingError(format!(
-            "Error parsing message for message type '{}'",
-            previous
-        )))
+        warn!("Failed to parse message of type '{previous}':\n {data}, parsing it as raw data");
+        WebSocketMessage::Raw(RawWebsocketMessage::from_string(data))
     }
 
     pub fn information(&self) -> MessageInfo {
@@ -335,6 +339,8 @@ impl MessageTransfer for WebSocketMessage {
     type TransferError = PocketMessageFail;
 
     type Info = MessageInfo;
+
+    type Raw = RawWebsocketMessage;
 
     fn info(&self) -> Self::Info {
         self.information()

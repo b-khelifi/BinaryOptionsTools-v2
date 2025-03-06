@@ -75,14 +75,17 @@ impl Ssid {
 
     pub async fn server(&self) -> PocketResult<String> {
         match self {
-            Self::Demo(_) => Ok(Regions::DEMO.to_string()),
+            Self::Demo(_) => Ok(Regions::DEMO.0.to_string()),
             Self::Real(_) => Regions.get_server().await.map(|s| s.to_string()),
         }
     }
 
     pub async fn servers(&self) -> PocketResult<Vec<String>> {
         match self {
-            Self::Demo(_) => Ok(vec![Regions::DEMO.to_string()]),
+            Self::Demo(_) => Ok(Regions::demo_regions_str()
+                .iter()
+                .map(|r| r.to_string())
+                .collect()),
             Self::Real(_) => Ok(Regions
                 .get_servers()
                 .await?

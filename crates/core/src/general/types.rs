@@ -1,8 +1,8 @@
 use std::{collections::HashMap, ops::Deref, sync::Arc};
 
-use async_channel::bounded;
 use async_channel::Receiver;
 use async_channel::Sender;
+use async_channel::bounded;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
@@ -20,22 +20,32 @@ where
 {
     Info(Transfer::Info),
     Transfer(Transfer),
+    Raw(Transfer::Raw),
 }
 
-
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Data<T, Transfer>
 where
     Transfer: MessageTransfer,
     T: DataHandler,
 {
     inner: Arc<T>,
-    #[allow(clippy::type_complexity)]
+    // #[allow(clippy::type_complexity)]
     pub pending_requests:
         Arc<Mutex<HashMap<Transfer::Info, (Sender<Transfer>, Receiver<Transfer>)>>>,
+    pub raw_requests: (Sender<Transfer::Raw>, Receiver<Transfer::Raw>),
 }
 
-
+impl<T: DataHandler + Default, Transfer: MessageTransfer> Default for Data<T, Transfer> {
+    fn default() -> Self {
+        let raw_requests = bounded(MAX_CHANNEL_CAPACITY);
+        Self {
+            raw_requests,
+            inner: Default::default(),
+            pending_requests: Default::default(),
+        }
+    }
+}
 #[derive(Clone)]
 pub struct Callback<T: DataHandler, Transfer: MessageTransfer> {
     inner: Arc<dyn WCallback<T = T, Transfer = Transfer>>,
@@ -71,10 +81,20 @@ where
     T: DataHandler<Transfer = Transfer>,
 {
     pub fn new(inner: T) -> Self {
+        let raw_requests = bounded(MAX_CHANNEL_CAPACITY);
         Self {
             inner: Arc::new(inner),
             pending_requests: Arc::new(Mutex::new(HashMap::new())),
+            raw_requests,
         }
+    }
+
+    pub fn raw_reciever(&self) -> Receiver<Transfer::Raw> {
+        self.raw_requests.1.clone()
+    }
+
+    pub fn raw_sender(&self) -> Sender<Transfer::Raw> {
+        self.raw_requests.0.clone()
     }
 
     pub async fn add_request(&self, info: Transfer::Info) -> Receiver<Transfer> {

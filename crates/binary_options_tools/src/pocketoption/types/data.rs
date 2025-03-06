@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use async_channel::{bounded, Receiver, Sender};
+use async_channel::{Receiver, Sender, bounded};
 use async_trait::async_trait;
 use chrono::Utc;
 use tokio::sync::Mutex;

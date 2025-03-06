@@ -1,8 +1,8 @@
 pub mod pocketoption;
 
 pub mod stream {
-    pub use binary_options_tools_core::utils::tracing::stream_logs_layer;
     pub use binary_options_tools_core::general::stream::RecieverStream;
+    pub use binary_options_tools_core::utils::tracing::stream_logs_layer;
 }
 
 pub mod error {

@@ -273,7 +273,7 @@ pub mod float_time {
 
 pub mod string_time {
     use chrono::{DateTime, NaiveDateTime, Utc};
-    use serde::{de, Deserialize, Deserializer, Serializer};
+    use serde::{Deserialize, Deserializer, Serializer, de};
     pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

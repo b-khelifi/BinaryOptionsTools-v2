@@ -1,8 +1,8 @@
 use binary_options_tools_core::{
     error::BinaryOptionsToolsError,
     reimports::{
-        connect_async_tls_with_config, generate_key, Connector, MaybeTlsStream, Request,
-        WebSocketStream,
+        Connector, MaybeTlsStream, Request, WebSocketStream, connect_async_tls_with_config,
+        generate_key,
     },
 };
 use tokio::net::TcpStream;

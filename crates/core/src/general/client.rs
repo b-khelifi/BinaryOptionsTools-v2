@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use async_channel::{Receiver, RecvError};
 use futures_util::future::try_join3;
-use futures_util::stream::{select_all, SplitSink, SplitStream};
+use futures_util::stream::{SplitSink, SplitStream, select_all};
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
@@ -20,9 +20,11 @@ use crate::general::types::MessageType;
 
 use super::config::Config;
 use super::send::SenderMessage;
-use super::traits::{WCallback, Connect, Credentials, DataHandler, MessageHandler, MessageTransfer};
+use super::traits::{
+    Connect, Credentials, DataHandler, MessageHandler, MessageTransfer, RawValidator, Validator,
+    WCallback,
+};
 use super::types::{Callback, Data};
-
 
 #[derive(Clone)]
 pub struct WebSocketClient<Transfer, Handler, Connector, Creds, T>
@@ -70,9 +72,7 @@ where
     }
 }
 
-
-impl<Transfer, Handler, Connector, Creds, T>
-    WebSocketClient<Transfer, Handler, Connector, Creds, T>
+impl<Transfer, Handler, Connector, Creds, T> WebSocketClient<Transfer, Handler, Connector, Creds, T>
 where
     Transfer: MessageTransfer + 'static,
     Handler: MessageHandler<Transfer = Transfer> + 'static,
@@ -86,7 +86,7 @@ where
         data: Data<T, Transfer>,
         handler: Handler,
         reconnect_callback: Option<Callback<T, Transfer>>,
-        config: Config<T, Transfer>
+        config: Config<T, Transfer>,
     ) -> BinaryOptionsResult<Self> {
         let inner = WebSocketInnerClient::init(
             credentials,
@@ -118,7 +118,7 @@ where
         data: Data<T, Transfer>,
         handler: Handler,
         reconnect_callback: Option<Callback<T, Transfer>>,
-        config: Config<T, Transfer>
+        config: Config<T, Transfer>,
     ) -> BinaryOptionsResult<Self> {
         let _connection = connector.connect(credentials.clone(), &config).await?; // Check if it's possible to connect before building the struct
         let (_event_loop, sender) = Self::start_loops(
@@ -131,7 +131,7 @@ where
         )
         .await?;
         info!("Started WebSocketClient");
-        sleep(config.get_timeout()?).await;
+        sleep(config.get_connection_initialization_timeout()?).await;
         Ok(Self {
             credentials,
             connector,
@@ -152,20 +152,40 @@ where
         reconnect_callback: Option<Callback<T, Transfer>>,
         config: Config<T, Transfer>,
     ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, SenderMessage)> {
-        let (mut write, mut read) = connector.connect(credentials.clone(), &config).await?.split();
+        let (mut write, mut read) = connector
+            .connect(credentials.clone(), &config)
+            .await?
+            .split();
         let (sender, (reciever, reciever_priority)) = SenderMessage::new(MAX_CHANNEL_CAPACITY);
         let loop_sender = sender.clone();
         let task = tokio::task::spawn(async move {
             let previous: Option<<Transfer as MessageTransfer>::Info> = None;
             let loops = 0;
             let mut reconnected = false;
-            loop {   
-                match WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::step(&previous, &data, handler.clone(), &loop_sender, &mut read, &mut write, &reciever, &reciever_priority, &config, &reconnect_callback, reconnected, &connector, &credentials, loops).await {
+            loop {
+                match WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::step(
+                    &previous,
+                    &data,
+                    handler.clone(),
+                    &loop_sender,
+                    &mut read,
+                    &mut write,
+                    &reciever,
+                    &reciever_priority,
+                    &config,
+                    &reconnect_callback,
+                    reconnected,
+                    &connector,
+                    &credentials,
+                    loops,
+                )
+                .await
+                {
                     Ok(res) => {
                         info!("Reconnected successfully!");
                         (write, read) = res.split();
                         reconnected = true;
-                    },
+                    }
                     Err(e) => {
                         if let BinaryOptionsToolsError::MaxReconnectAttemptsReached(_) = e {
                             panic!("Error: {}", e);
@@ -178,20 +198,30 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn step(previous: &Option<<<Handler as MessageHandler>::Transfer as MessageTransfer>::Info>, data: &Data<T, Transfer>, handler: Handler, loop_sender: &SenderMessage, read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, reciever: &Receiver<Message>, reciever_priority: &Receiver<Message>, config: &Config<T, Transfer>, reconnect_callback: &Option<Callback<T, Transfer>>, reconnected: bool, connector: &Connector, credentials: &Creds, mut loops: u32 ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
-        let listener_future = WebSocketInnerClient::<
-            Transfer,
-            Handler,
-            Connector,
-            Creds,
-            T
-        >::listener_loop(
-            previous.clone(),
-            data,
-            handler.clone(),
-            loop_sender,
-            read,
-        );
+    async fn step(
+        previous: &Option<<<Handler as MessageHandler>::Transfer as MessageTransfer>::Info>,
+        data: &Data<T, Transfer>,
+        handler: Handler,
+        loop_sender: &SenderMessage,
+        read: &mut SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+        write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
+        reciever: &Receiver<Message>,
+        reciever_priority: &Receiver<Message>,
+        config: &Config<T, Transfer>,
+        reconnect_callback: &Option<Callback<T, Transfer>>,
+        reconnected: bool,
+        connector: &Connector,
+        credentials: &Creds,
+        mut loops: u32,
+    ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
+        let listener_future =
+            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::listener_loop(
+                previous.clone(),
+                data,
+                handler.clone(),
+                loop_sender,
+                read,
+            );
         let sender_future =
             WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::sender_loop(
                 write,
@@ -200,20 +230,31 @@ where
                 config.get_reconnect_time()?,
             );
 
-        let callback = WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::reconnect_callback(reconnect_callback.clone(), data.clone(), loop_sender.clone(), reconnected, config.get_reconnect_time()? );
+        let callback =
+            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::reconnect_callback(
+                reconnect_callback.clone(),
+                data.clone(),
+                loop_sender.clone(),
+                reconnected,
+                config.get_reconnect_time()?,
+            );
 
         match try_join3(listener_future, sender_future, callback).await {
             Ok(_) => {
                 if let Ok(websocket) = connector.connect(credentials.clone(), config).await {
-                    return Ok(websocket)
+                    return Ok(websocket);
                 } else {
                     loops += 1;
                     let sleep_interval = config.get_sleep_interval()?;
                     let max_loops = config.get_max_allowed_loops()?;
-                    warn!("Error reconnecting... trying again in {sleep_interval} seconds (try {loops} of {max_loops}");
+                    warn!(
+                        "Error reconnecting... trying again in {sleep_interval} seconds (try {loops} of {max_loops}"
+                    );
                     sleep(Duration::from_secs(config.get_sleep_interval()?)).await;
                     if loops >= max_loops {
-                        return Err(BinaryOptionsToolsError::MaxReconnectAttemptsReached(max_loops))
+                        return Err(BinaryOptionsToolsError::MaxReconnectAttemptsReached(
+                            max_loops,
+                        ));
                     }
                 }
             }
@@ -221,20 +262,28 @@ where
                 warn!("Error in event loop, {e}, reconnecting...");
                 // println!("Reconnecting...");
                 if let Ok(websocket) = connector.connect(credentials.clone(), config).await {
-                    return Ok(websocket)
+                    return Ok(websocket);
                 } else {
                     loops += 1;
                     let sleep_interval = config.get_sleep_interval()?;
                     let max_loops = config.get_max_allowed_loops()?;
-                    warn!("Error reconnecting... trying again in {sleep_interval} seconds (try {loops} of {max_loops}");
+                    warn!(
+                        "Error reconnecting... trying again in {sleep_interval} seconds (try {loops} of {max_loops}"
+                    );
                     sleep(Duration::from_secs(config.get_sleep_interval()?)).await;
                     if loops >= max_loops {
-                        return Err(BinaryOptionsToolsError::MaxReconnectAttemptsReached(max_loops))
+                        return Err(BinaryOptionsToolsError::MaxReconnectAttemptsReached(
+                            max_loops,
+                        ));
                     }
                 }
             }
         }
-        unreachable!("Please contact @Rick-29 on github.com this error is completely unexpected and should not happen.")
+        Err(BinaryOptionsToolsError::ReconnectionAttemptFailure {
+            number: loops,
+            max: config.get_max_allowed_loops()?,
+        })
+        // unreachable!("Please contact @Rick-29 on github.com this error is completely unexpected and should not happen.")
     }
 
     /// Recieves all the messages from the websocket connection and handles it
@@ -277,6 +326,15 @@ where
                                         })?;
                                     }
                                 }
+                            }
+                            MessageType::Raw(raw) => {
+                                debug!("Recieved raw message: {:?}", raw);
+                                let sender = data.raw_sender();
+                                sender.send(raw).await.map_err(|e| {
+                                    BinaryOptionsToolsError::ChannelRequestSendingError(
+                                        e.to_string(),
+                                    )
+                                })?;
                             }
                         }
                     }
@@ -366,10 +424,24 @@ where
         &self,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+        validator: Box<dyn Validator<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         self.sender
             .send_message(&self.data, msg, response_type, validator)
+            .await
+    }
+
+    pub async fn raw_send(&self, msg: Transfer::Raw) -> BinaryOptionsResult<()> {
+        self.sender.raw_send::<Transfer>(msg).await
+    }
+
+    pub async fn send_raw_message(
+        &self,
+        msg: Transfer::Raw,
+        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+    ) -> BinaryOptionsResult<Transfer::Raw> {
+        self.sender
+            .send_raw_message(&self.data, msg, validator)
             .await
     }
 
@@ -379,10 +451,22 @@ where
         task: impl ToString,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+        validator: Box<dyn Validator<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         self.sender
             .send_message_with_timout(timeout, task, &self.data, msg, response_type, validator)
+            .await
+    }
+
+    pub async fn send_raw_message_with_timout(
+        &self,
+        timeout: Duration,
+        task: impl ToString,
+        msg: Transfer::Raw,
+        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+    ) -> BinaryOptionsResult<Transfer::Raw> {
+        self.sender
+            .send_raw_message_with_timout(timeout, task, &self.data, msg, validator)
             .await
     }
 
@@ -392,7 +476,7 @@ where
         task: impl ToString,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: impl Fn(&Transfer) -> bool + Send + Sync,
+        validator: Box<dyn Validator<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         self.sender
             .send_message_with_timeout_and_retry(
@@ -404,6 +488,27 @@ where
                 validator,
             )
             .await
+    }
+
+    pub async fn send_raw_message_with_timeout_and_retry(
+        &self,
+        timeout: Duration,
+        task: impl ToString,
+        msg: Transfer::Raw,
+        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+    ) -> BinaryOptionsResult<Transfer::Raw> {
+        self.sender
+            .send_raw_message_with_timeout_and_retry(timeout, task, &self.data, msg, validator)
+            .await
+    }
+
+    pub async fn send_raw_message_iterator(
+        &self,
+        msg: Transfer::Raw,
+        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+        timeout: Option<Duration>,
+    ) -> BinaryOptionsResult<()> {
+        unimplemented!()
     }
 }
 
@@ -427,13 +532,13 @@ where
 mod tests {
     use std::time::Duration;
 
-    use async_channel::{bounded, Receiver, Sender};
+    use async_channel::{Receiver, Sender, bounded};
     use futures_util::{
+        Stream, StreamExt,
         future::try_join,
         stream::{select_all, unfold},
-        Stream, StreamExt,
     };
-    use rand::{ distr::Alphanumeric, Rng};
+    use rand::{Rng, distr::Alphanumeric};
     use tokio::time::sleep;
     use tracing::info;
 
@@ -517,7 +622,6 @@ mod tests {
         sender: Sender<String>,
         sender_priority: Sender<String>,
     ) -> anyhow::Result<()> {
-
         loop {
             let s1: String = rand::rng()
                 .sample_iter(&Alphanumeric)

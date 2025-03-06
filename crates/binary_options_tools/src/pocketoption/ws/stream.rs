@@ -10,8 +10,8 @@ use crate::pocketoption::{
 };
 
 use async_channel::Receiver;
-use futures_util::stream::unfold;
 use futures_util::Stream;
+use futures_util::stream::unfold;
 
 #[derive(Clone)]
 pub struct StreamAsset {

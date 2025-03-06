@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use rand::{rng, Rng};
+use rand::{Rng, rng};
 
 use crate::pocketoption::error::{PocketOptionError, PocketResult};
 

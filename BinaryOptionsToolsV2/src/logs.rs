@@ -9,9 +9,7 @@ use futures_util::{
     stream::{BoxStream, Fuse},
     StreamExt,
 };
-use pyo3::{
-    pyclass, pyfunction, pymethods, Bound, Py, PyAny, PyResult, Python,
-};
+use pyo3::{pyclass, pyfunction, pymethods, Bound, Py, PyAny, PyResult, Python};
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Mutex;
 use tracing::{debug, instrument, level_filters::LevelFilter, warn, Level};
@@ -131,7 +129,6 @@ impl StreamLogsIterator {
         runtime.block_on(next_stream(stream, true))
     }
 }
-
 
 #[pyclass]
 #[derive(Default)]

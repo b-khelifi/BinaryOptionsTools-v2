@@ -9,16 +9,15 @@ enum FieldConfig {
     #[darling(rename = "optional")]
     Optional,
     #[darling(rename = "iterator")]
-    Iterator(Type)
+    Iterator { dtype: Type, add_fn: Option<String> },
 }
-
 
 #[derive(Debug, FromField)]
 #[darling(attributes(config))]
 struct ConfigField {
     ident: Option<Ident>,
     ty: Type,
-    extra: Option<FieldConfig>
+    extra: Option<FieldConfig>,
 }
 
 #[derive(Debug, FromDeriveInput)]
@@ -31,7 +30,11 @@ pub struct Config {
 
 impl ToTokens for Config {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let fields = &self.data.as_ref().take_struct().expect("Only available for structs");
+        let fields = &self
+            .data
+            .as_ref()
+            .take_struct()
+            .expect("Only available for structs");
         let name = &self.ident;
         let new_name = match format!("{}", name) {
             n if n.starts_with("_") => Ident::new(&n[1..], name.span()),
@@ -143,14 +146,19 @@ impl ToTokens for ConfigField {
         let dtype = &self.ty;
         let set_name = Ident::new(&format!("set_{}", name), name.span());
         let get_name = Ident::new(&format!("get_{}", name), name.span());
-        let extra = if let Some(FieldConfig::Iterator(add_type)) = &self.extra {
+        let extra = if let Some(FieldConfig::Iterator { dtype, add_fn }) = &self.extra {
             let add_name = Ident::new(&format!("add_{}", name), name.span());
+            let add_fn = if let Some(add) = add_fn {
+                Ident::new(add, name.span())
+            } else {
+                Ident::new("push", name.span())
+            };
             quote! {
-                pub fn #add_name(&self, value: #add_type) -> ::anyhow::Result<()> {
+                pub fn #add_name(&self, value: #dtype) -> ::anyhow::Result<()> {
                     let mut field = self.#name.lock().map_err(|e| ::anyhow::anyhow!("Poison error {e}"))?;
-                    field.push(value);
+                    field.#add_fn(value);
                     Ok(())
-    
+
                 }
             }
         } else {
@@ -197,11 +205,11 @@ impl ConfigField {
         let name_str = format!("{}", name);
         if let Some(extra) = &self.extra {
             match extra {
-                FieldConfig::Iterator(_) => {
+                FieldConfig::Iterator { .. } => {
                     quote! {
                         #name: ::std::sync::Arc::new(::std::sync::Mutex::new(value.#name.unwrap_or_else(::std::default::Default::default)))
                     }
-                },
+                }
                 FieldConfig::Optional => {
                     quote! {
                         #name: ::std::sync::Arc::new(::std::sync::Mutex::new(value.#name.unwrap_or(::std::option::Option::None)))
@@ -213,5 +221,5 @@ impl ConfigField {
                 #name: ::std::sync::Arc::new(::std::sync::Mutex::new(value.#name.ok_or(::anyhow::anyhow!("Option for field '{}' was None", #name_str))?))
             }
         }
-    }  
+    }
 }

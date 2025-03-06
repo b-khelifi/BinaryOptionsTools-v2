@@ -247,7 +247,7 @@ where
 mod tests {
     use std::{
         error::Error,
-        fs::{read_to_string, File},
+        fs::{File, read_to_string},
         io::BufReader,
     };
 
@@ -263,7 +263,7 @@ mod tests {
         let deals2 = WebSocketMessage::parse_with_context(
             read_to_string("tests/update_closed_deals.json")?,
             &MessageInfo::UpdateClosedDeals,
-        )?;
+        );
         if let WebSocketMessage::UpdateClosedDeals(d) = deals2 {
             assert_eq!(d, deals);
         } else {
@@ -280,7 +280,7 @@ mod tests {
         let deals2 = WebSocketMessage::parse_with_context(
             read_to_string("tests/update_close_order.json")?,
             &MessageInfo::SuccesscloseOrder,
-        )?;
+        );
         if let WebSocketMessage::SuccesscloseOrder(d) = deals2 {
             assert_eq!(d, deals);
         } else {

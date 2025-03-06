@@ -35,7 +35,7 @@ impl PocketCallback {
                     data,
                     WebSocketMessage::ChangeSymbol(history),
                     MessageInfo::UpdateHistoryNew,
-                    history_validator(asset.to_string(), 3600),
+                    Box::new(history_validator(asset.to_string(), 3600)),
                 )
                 .await?;
             if let WebSocketMessage::UpdateHistoryNew(_) = res {
@@ -62,7 +62,7 @@ impl PocketCallback {
                     .send(WebSocketMessage::SuccesscloseOrder(close_order))
                     .await
                     .map_err(|e| {
-                        BinaryOptionsToolsError::ThreadMessageSendingErrorMPCS(e.to_string())
+                        BinaryOptionsToolsError::GeneralMessageSendingError(e.to_string())
                     })?;
             }
         }

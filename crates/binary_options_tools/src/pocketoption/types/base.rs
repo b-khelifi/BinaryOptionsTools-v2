@@ -1,3 +1,6 @@
+use core::fmt;
+
+use binary_options_tools_core::general::traits::RawMessage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -15,3 +18,40 @@ impl ChangeSymbol {
         Self { asset, period }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct RawWebsocketMessage {
+    value: String,
+}
+
+impl RawWebsocketMessage {
+    pub fn from_string(value: String) -> Self {
+        Self { value }
+    }
+}
+
+impl fmt::Display for RawWebsocketMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value.fmt(f)
+    }
+}
+
+impl Serialize for RawWebsocketMessage {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.value)
+    }
+}
+
+impl<'de> Deserialize<'de> for RawWebsocketMessage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(|s| Self { value: s })
+    }
+}
+
+impl RawMessage for RawWebsocketMessage {}

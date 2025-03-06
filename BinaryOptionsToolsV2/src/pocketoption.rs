@@ -2,6 +2,7 @@ use std::str;
 use std::sync::Arc;
 use std::time::Duration;
 
+use binary_option_tools::error::BinaryOptionsToolsError;
 use binary_option_tools::pocketoption::error::PocketResult;
 use binary_option_tools::pocketoption::pocket_client::PocketOption;
 use binary_option_tools::pocketoption::types::update::DataCandle;
@@ -10,6 +11,7 @@ use futures_util::stream::{BoxStream, Fuse};
 use futures_util::StreamExt;
 use pyo3::{pyclass, pymethods, Bound, IntoPyObjectExt, Py, PyAny, PyResult, Python};
 use pyo3_async_runtimes::tokio::future_into_py;
+use url::Url;
 use uuid::Uuid;
 
 use crate::error::BinaryErrorPy;
@@ -35,6 +37,21 @@ impl RawPocketOption {
         let runtime = get_runtime(py)?;
         runtime.block_on(async move {
             let client = PocketOption::new(ssid).await.map_err(BinaryErrorPy::from)?;
+            Ok(Self { client })
+        })
+    }
+
+    #[staticmethod]
+    pub fn new_with_url(ssid: String, url: String, py: Python<'_>) -> PyResult<Self> {
+        let runtime = get_runtime(py)?;
+        runtime.block_on(async move {
+            let client = PocketOption::new_with_url(
+                ssid,
+                Url::parse(&url)
+                    .map_err(|e| BinaryErrorPy::from(BinaryOptionsToolsError::from(e)))?,
+            )
+            .await
+            .map_err(BinaryErrorPy::from)?;
             Ok(Self { client })
         })
     }
@@ -267,4 +284,3 @@ impl StreamIterator {
         })
     }
 }
-

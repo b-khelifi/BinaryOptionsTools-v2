@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use tokio_tungstenite::tungstenite::{http, Error as TungsteniteError, Message};
+use tokio_tungstenite::tungstenite::{Error as TungsteniteError, Message, http};
 
 use crate::general::traits::MessageTransfer;
 
@@ -10,6 +10,8 @@ use crate::general::traits::MessageTransfer;
 pub enum BinaryOptionsToolsError {
     #[error("Failed to parse recieved data: {0}")]
     SerdeGeneralParsingError(#[from] serde_json::Error),
+    #[error("Url parsing failed: {0}")]
+    UrlParsingError(#[from] url::ParseError),
     #[error("{platform} Error, {error}")]
     BinaryOptionsTradingError { platform: String, error: String },
     #[error("Error sending request, {0}")]
@@ -22,16 +24,22 @@ pub enum BinaryOptionsToolsError {
     WebsocketConnectionError(#[from] TungsteniteError),
     #[error("Failed to send message to websocket sender, {0}")]
     MessageSendingError(#[from] async_channel::SendError<Message>),
-    #[error("Failed to reconnect '{0}' times, maximum allowed number of reconnections was reached, breaking")]
+    #[error("Failed to send message using asyncronous channel, {0}")]
+    GeneralMessageSendingError(String),
+    #[error(
+        "Failed to reconnect '{0}' times, maximum allowed number of reconnections was reached, breaking"
+    )]
     MaxReconnectAttemptsReached(u32),
+    #[error(
+        "Failed to reconnect '{number}' times, maximum allowed number of reconnections is `{max}`"
+    )]
+    ReconnectionAttemptFailure { number: u32, max: u32 },
     #[error("Failed to recieve message from separate thread, {0}")]
     OneShotRecieverError(#[from] tokio::sync::oneshot::error::RecvError),
     #[error("Failed to recieve message from request channel, {0}")]
     ChannelRequestRecievingError(#[from] async_channel::RecvError),
     #[error("Failed to send message to request channel, {0}")]
     ChannelRequestSendingError(String),
-    #[error("Failed to send message to websocket sender mspc, {0}")]
-    ThreadMessageSendingErrorMPCS(String),
     #[error("Error recieving response from server, {0}")]
     WebSocketMessageError(String),
     #[error("Failed to parse data: {0}")]
@@ -47,7 +55,7 @@ pub enum BinaryOptionsToolsError {
     #[error("Failed to parse duration, error {0}")]
     ChronoDurationParsingError(#[from] chrono::OutOfRangeError),
     #[error("Unknown error during execution, error {0}")]
-    UnknownError(#[from] anyhow::Error)
+    UnknownError(#[from] anyhow::Error),
 }
 
 pub type BinaryOptionsResult<T> = Result<T, BinaryOptionsToolsError>;

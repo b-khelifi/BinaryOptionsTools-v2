@@ -1,9 +1,9 @@
 use crate::error::{BinaryOptionsResult, BinaryOptionsToolsError};
 
-use super::traits::MessageTransfer;
+use super::traits::{MessageTransfer, Validator};
 
 pub fn validate<Transfer>(
-    validator: impl Fn(&Transfer) -> bool + Send + Sync,
+    validator: &Box<dyn Validator<Transfer> + Send + Sync>,
     message: Transfer,
 ) -> BinaryOptionsResult<Option<Transfer>>
 where
@@ -13,7 +13,7 @@ where
         Err(BinaryOptionsToolsError::WebSocketMessageError(
             e.to_string(),
         ))
-    } else if validator(&message) {
+    } else if validator.validate(&message) {
         Ok(Some(message))
     } else {
         Ok(None)

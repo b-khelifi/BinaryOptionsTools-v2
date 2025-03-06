@@ -3,7 +3,11 @@ use serde_json::Value;
 
 use binary_options_tools_core::{
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
-    general::{send::SenderMessage, traits::MessageHandler, types::MessageType},
+    general::{
+        send::SenderMessage,
+        traits::{MessageHandler, MessageTransfer},
+        types::MessageType,
+    },
     reimports::Message,
 };
 
@@ -32,7 +36,7 @@ impl Handler {
     ) -> PocketResult<WebSocketMessage> {
         let msg = String::from_utf8(bytes.to_owned())?;
         let message = match previous {
-            Some(previous) => WebSocketMessage::parse_with_context(msg, previous)?,
+            Some(previous) => WebSocketMessage::parse_with_context(msg, previous),
             None => {
                 let message: WebSocketMessage = serde_json::from_str(&msg)?;
                 message
@@ -41,16 +45,8 @@ impl Handler {
 
         Ok(message)
     }
-    pub fn temp_bin(
-        &self,
-        bytes: &Vec<u8>,
-        previous: &MessageInfo,
-    ) -> PocketResult<WebSocketMessage> {
-        let msg = String::from_utf8(bytes.to_owned())?;
-        WebSocketMessage::parse_with_context(msg, previous)
-    }
 
-    pub async fn handle_text_msg(
+    pub async fn handle_text_msg<Transfer: MessageTransfer>(
         &self,
         text: &str,
         sender: &SenderMessage,
@@ -109,11 +105,15 @@ impl MessageHandler for Handler {
                 return Ok((Some(MessageType::Transfer(msg)), false));
             }
             Message::Text(text) => {
-                let res = self.handle_text_msg(&text.to_string(), sender).await?;
+                let res = self
+                    .handle_text_msg::<WebSocketMessage>(&text.to_string(), sender)
+                    .await?;
                 return Ok((res.map(MessageType::Info), false));
             }
             Message::Frame(_) => {} // TODO:
-            Message::Ping(_) => {}  // TODO:
+            Message::Ping(b) => {
+                sender.priority_send(Message::Pong(b.to_owned())).await?;
+            } // TODO:
             Message::Pong(_) => {}  // TODO:
             Message::Close(_) => return Ok((None, true)),
         }

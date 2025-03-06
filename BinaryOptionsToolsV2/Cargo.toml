@@ -27,3 +27,4 @@ tokio = "1.42.0"
 futures-util = "0.3.31"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 chrono = "0.4.40"
+url = "2.5.4"
