@@ -2,6 +2,8 @@ use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 
 use binary_options_tools_core::general::traits::MessageInformation;
 
+use super::base::RawWebsocketMessage;
+
 #[derive(Debug, Deserialize_enum_str, Serialize_enum_str, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum MessageInfo {
@@ -20,6 +22,7 @@ pub enum MessageInfo {
     UpdateClosedDeals,
     SuccessopenOrder,
     // UpdateCharts,
+    
     SubscribeSymbol,
     LoadHistoryPeriod,
     FailopenOrder,
@@ -31,6 +34,16 @@ pub enum MessageInfo {
 
     #[serde(other)]
     Raw(String),
+}
+
+impl MessageInfo {
+    pub fn get_raw(&self) -> Option<RawWebsocketMessage> {
+        if let Self::Raw(raw) = self {
+            Some(RawWebsocketMessage::from(raw.to_owned()))
+        } else {
+            None
+        }
+    }
 }
 
 impl MessageInformation for MessageInfo {}

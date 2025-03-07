@@ -239,6 +239,14 @@ impl WebSocketMessage {
             Self::None => MessageInfo::None,
         }
     }
+
+    pub fn get_raw(&self) -> Option<RawWebsocketMessage> {
+        if let Self::Raw(raw) = self {
+            Some(raw.clone())
+        } else {
+            None
+        }
+    }
 }
 
 impl fmt::Display for WebSocketMessage {

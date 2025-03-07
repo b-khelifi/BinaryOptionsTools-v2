@@ -69,6 +69,9 @@ impl Handler {
                 let msg = text.strip_prefix("451-").unwrap();
                 let (info, _): (MessageInfo, Value) =
                     serde_json::from_str(msg).map_err(BinaryOptionsToolsError::from)?;
+                if let MessageInfo::Raw(_) = info {
+                    return Ok(Some(MessageInfo::Raw(format!("451-{}", msg))))
+                }
                 if info == MessageInfo::UpdateClosedDeals {
                     sender
                         .priority_send(Message::text(
@@ -102,13 +105,22 @@ impl MessageHandler for Handler {
         match message {
             Message::Binary(binary) => {
                 let msg = self.handle_binary_msg(&binary.to_vec(), previous)?;
+                if let Some(raw) = msg.get_raw() {
+                    return Ok((Some(MessageType::Raw(raw)), false))
+                }
                 return Ok((Some(MessageType::Transfer(msg)), false));
             }
             Message::Text(text) => {
                 let res = self
-                    .handle_text_msg::<WebSocketMessage>(&text.to_string(), sender)
+                    .handle_text_msg::<WebSocketMessage>(text.as_ref(), sender)
                     .await?;
-                return Ok((res.map(MessageType::Info), false));
+                return Ok((res.map(|r| {
+                    if let Some(raw) = r.get_raw() {
+                        MessageType::Raw(raw)
+                    } else {
+                        MessageType::Info(r)
+                    }
+                }), false));
             }
             Message::Frame(_) => {} // TODO:
             Message::Ping(b) => {

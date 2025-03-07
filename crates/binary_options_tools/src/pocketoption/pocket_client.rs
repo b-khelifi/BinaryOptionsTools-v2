@@ -761,4 +761,59 @@ mod tests {
         let _ = try_join(fut1, fut2).await?;
         Ok(())
     }
+
+    fn raw_validator() -> impl Fn(&RawWebsocketMessage) -> bool + Send + Sync {
+        move |msg| {
+            let msg = msg.to_string();
+            msg.starts_with(r#"451-["signals/load""#)
+        }
+    }
+
+    fn raw_iterator() -> impl Fn(&RawWebsocketMessage) -> bool + Send + Sync {
+        move |msg| {
+            let msg = msg.to_string();
+            msg.starts_with(r#"{"signals":"#)
+        }
+    }
+    #[tokio::test]
+    async fn test_send_raw_message() -> anyhow::Result<()> {
+        start_tracing_leveled(true, LevelFilter::INFO)?;
+        let ssid = r#"42["auth",{"session":"mj194bjgehatidr1ml82453ajg","isDemo":1,"uid":87888871,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await?;
+        sleep(Duration::from_secs(5)).await;
+        let res = client.create_raw_order(r#"42["signals/subscribe"]"#, Box::new(raw_validator())).await?;
+        info!("{res}");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_send_raw_iterator() -> anyhow::Result<()> {
+        start_tracing_leveled(true, LevelFilter::INFO)?;
+        let ssid = r#"42["auth",{"session":"mj194bjgehatidr1ml82453ajg","isDemo":1,"uid":87888871,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await?;
+        sleep(Duration::from_secs(5)).await;
+        let res = client.create_raw_iterator(r#"42["signals/subscribe"]"#, Box::new(raw_iterator()), None).await?;
+        let mut stream = res.to_stream();
+        while let Some(Ok(e)) = stream.next().await {
+            info!(target: "RecievedStreamItem", "{}", e);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_send_raw_timeout_iterator() {
+        start_tracing_leveled(true, LevelFilter::INFO).unwrap();
+        let ssid = r#"42["auth",{"session":"mj194bjgehatidr1ml82453ajg","isDemo":1,"uid":87888871,"platform":2}]	"#;
+        let client = PocketOption::new(ssid).await.unwrap();
+        sleep(Duration::from_secs(5)).await;
+        let res = client.create_raw_iterator(r#"42["signals/subscribe"]"#, Box::new(raw_iterator()), Some(Duration::from_secs(1))).await.unwrap();
+        let mut stream = res.to_stream();
+        while let Some(e) = stream.next().await {
+            match e {
+                Ok(e) => info!(target: "RecievedStreamItem", "{}", e),
+                Err(e) => panic!("Error, {e}")
+            }
+        }
+    }
 }
