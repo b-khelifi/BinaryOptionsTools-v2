@@ -1,4 +1,5 @@
 from .asyncronous import PocketOptionAsync
+from BinaryOptionsToolsV2 import RawValidator
 from datetime import timedelta
 
 import asyncio
@@ -95,3 +96,18 @@ class PocketOption:
         Please keep in mind the iterator won't return a new candle exactly each `time` duration, there could be a small delay and imperfect timestamps
         """
         return SyncSubscription(self.loop.run_until_complete(self._client._subscribe_symbol_timed_inner(asset, time)))
+    
+    def send_raw_message(self, message: str):
+        self.loop.run_until_complete(self._client.send_raw_message(message))
+        
+    def create_raw_order(self, message: str, validator: RawValidator) -> str:
+        return self.loop.run_until_complete(self._client.create_raw_order(message, validator))
+        
+    def create_raw_order_with_timout(self, message: str, validator: RawValidator, timeout: timedelta) -> str:
+        return self.loop.run_until_complete(self._client.create_raw_order_with_timeout(message, validator, timeout))
+    
+    def create_raw_order_with_timeout_and_retry(self, message: str, validator: RawValidator, timeout: timedelta) -> str:
+        return self.loop.run_until_complete(self._client.create_raw_order_with_timeout_and_retry(message, validator, timeout))
+ 
+    def create_raw_iterator(self, message: str, validator: RawValidator, timeout: timedelta | None = None):
+        return self.loop.run_until_complete(self._client.create_raw_iterator(message, validator, timeout))

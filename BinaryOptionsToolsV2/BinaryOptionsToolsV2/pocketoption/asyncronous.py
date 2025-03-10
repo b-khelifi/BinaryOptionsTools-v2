@@ -1,4 +1,5 @@
 from BinaryOptionsToolsV2 import RawPocketOption, Logger
+from BinaryOptionsToolsV2 import RawValidator
 from datetime import timedelta
 
 import asyncio
@@ -150,10 +151,20 @@ class PocketOptionAsync:
     async def send_raw_message(self, message: str):
         await self.client.send_raw_message(message)
         
+    async def create_raw_order(self, message: str, validator: RawValidator) -> str:
+        return await self.client.create_raw_order(message, validator)
         
+    async def create_raw_order_with_timout(self, message: str, validator: RawValidator, timeout: timedelta) -> str:
+        return await self.client.create_raw_order_with_timeout(message, validator, timeout)
     
+    async def create_raw_order_with_timeout_and_retry(self, message: str, validator: RawValidator, timeout: timedelta) -> str:
+        return await self.client.create_raw_order_with_timeout_and_retry(message, validator, timeout)
+ 
+    async def create_raw_iterator(self, message: str, validator: RawValidator, timeout: timedelta | None = None):
+        return await self.client.create_raw_iterator(message, validator, timeout)
+       
 async def _timeout(future, timeout: int):
-    if sys.version_info[:3] >= (3,11):
+    if sys.version_info[:3] >= (3,11): 
         async with asyncio.timeout(timeout):
             return await future
     else:
