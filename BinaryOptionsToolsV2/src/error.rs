@@ -19,6 +19,8 @@ pub enum BinaryErrorPy {
     TradeNotFound(Uuid),
     #[error("Operation not allowed")]
     NotAllowed(String),
+    #[error("Invalid Regex pattern, {0}")]
+    InvalidRegexError(#[from] regex::Error)
 }
 
 impl From<BinaryErrorPy> for PyErr {

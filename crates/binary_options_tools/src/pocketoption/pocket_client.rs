@@ -20,7 +20,7 @@ use binary_options_tools_core::{
     constants::TIMEOUT_TIME,
     error::BinaryOptionsToolsError,
     general::{
-        client::WebSocketClient, config::{Config, _Config}, stream::FilteredRecieverStream, traits::{MessageTransfer, RawValidator, ValidatorTrait}, types::{Callback, Data}
+        client::WebSocketClient, config::{Config, _Config}, stream::FilteredRecieverStream, traits::{MessageTransfer, ValidatorTrait}, types::{Callback, Data}
     },
 };
 
@@ -383,7 +383,7 @@ impl PocketOption {
     pub async fn create_raw_order(
         &self,
         message: impl Into<RawWebsocketMessage>,
-        validator: Box<dyn RawValidator<WebSocketMessage> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>,
     ) -> PocketResult<RawWebsocketMessage>{
         // TODO: Complete this function + add the following functionality
         //  * create_raw_order_with_timeout
@@ -393,11 +393,11 @@ impl PocketOption {
         Ok(self.client.send_raw_message(message.into(), validator).await?)
     }
 
-    pub async fn create_raw_order_with_timeout(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn RawValidator<WebSocketMessage> + Send + Sync>, timeout: Duration) -> PocketResult<RawWebsocketMessage> {
+    pub async fn create_raw_order_with_timeout(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>, timeout: Duration) -> PocketResult<RawWebsocketMessage> {
         Ok(self.client.send_raw_message_with_timout(timeout, "CreateRawOrder".to_string(), message.into(), validator).await?)
     }
 
-    pub async fn create_raw_order_with_timeout_and_retry(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn RawValidator<WebSocketMessage> + Send + Sync>, timeout: Duration) -> PocketResult<RawWebsocketMessage> {
+    pub async fn create_raw_order_with_timeout_and_retry(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>, timeout: Duration) -> PocketResult<RawWebsocketMessage> {
         Ok(self.client.send_raw_message_with_timeout_and_retry(timeout, "CreateRawOrderWithRetry".to_string(), message.into(), validator).await?)
     }
 

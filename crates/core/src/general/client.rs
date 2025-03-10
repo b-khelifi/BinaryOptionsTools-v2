@@ -22,7 +22,7 @@ use super::config::Config;
 use super::send::SenderMessage;
 use super::stream::FilteredRecieverStream;
 use super::traits::{
-    Connect, Credentials, DataHandler, MessageHandler, MessageTransfer, RawValidator, Validator, ValidatorTrait, WCallback
+    Connect, Credentials, DataHandler, MessageHandler, MessageTransfer, ValidatorTrait, WCallback
 };
 use super::types::{Callback, Data};
 
@@ -419,7 +419,7 @@ where
         &self,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: Box<dyn Validator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         self.sender
             .send_message(&self.data, msg, response_type, validator)
@@ -433,7 +433,7 @@ where
     pub async fn send_raw_message(
         &self,
         msg: Transfer::Raw,
-        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer::Raw> {
         self.sender
             .send_raw_message(&self.data, msg, validator)
@@ -446,7 +446,7 @@ where
         task: impl ToString,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: Box<dyn Validator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         self.sender
             .send_message_with_timout(timeout, task, &self.data, msg, response_type, validator)
@@ -458,7 +458,7 @@ where
         timeout: Duration,
         task: impl ToString,
         msg: Transfer::Raw,
-        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer::Raw> {
         self.sender
             .send_raw_message_with_timout(timeout, task, &self.data, msg, validator)
@@ -471,7 +471,7 @@ where
         task: impl ToString,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: Box<dyn Validator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         self.sender
             .send_message_with_timeout_and_retry(
@@ -490,7 +490,7 @@ where
         timeout: Duration,
         task: impl ToString,
         msg: Transfer::Raw,
-        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer::Raw> {
         self.sender
             .send_raw_message_with_timeout_and_retry(timeout, task, &self.data, msg, validator)

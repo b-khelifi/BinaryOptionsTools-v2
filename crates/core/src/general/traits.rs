@@ -96,32 +96,6 @@ pub trait ValidatorTrait<T> {
     fn validate(&self, message: &T) -> bool;
 }
 
-pub trait Validator<Transfer: MessageTransfer> {
-    fn validate(&self, message: &Transfer) -> bool;
-}
-
-pub trait RawValidator<Transfer: MessageTransfer> {
-    fn validate(&self, message: &Transfer::Raw) -> bool;
-}
-
-impl<F, Transfer: MessageTransfer> Validator<Transfer> for F
-where
-    F: Fn(&Transfer) -> bool + Send + Sync,
-{
-    fn validate(&self, message: &Transfer) -> bool {
-        self(message)
-    }
-}
-
-impl<F, Transfer: MessageTransfer> RawValidator<Transfer> for F
-where
-    F: Fn(&Transfer::Raw) -> bool + Send + Sync,
-{
-    fn validate(&self, message: &Transfer::Raw) -> bool {
-        self(message)
-    }
-}
-
 impl<F, T> ValidatorTrait<T> for F
 where 
     F: Fn(&T) -> bool + Send + Sync,
@@ -130,3 +104,4 @@ where
         self(message)
     }
 }
+

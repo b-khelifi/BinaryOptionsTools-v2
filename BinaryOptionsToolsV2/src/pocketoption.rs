@@ -2,11 +2,13 @@ use std::str;
 use std::sync::Arc;
 use std::time::Duration;
 
-use binary_option_tools::error::BinaryOptionsToolsError;
+use binary_option_tools::error::{BinaryOptionsResult, BinaryOptionsToolsError};
 use binary_option_tools::pocketoption::error::PocketResult;
 use binary_option_tools::pocketoption::pocket_client::PocketOption;
+use binary_option_tools::pocketoption::types::base::RawWebsocketMessage;
 use binary_option_tools::pocketoption::types::update::DataCandle;
 use binary_option_tools::pocketoption::ws::stream::StreamAsset;
+use binary_option_tools::reimports::FilteredRecieverStream;
 use futures_util::stream::{BoxStream, Fuse};
 use futures_util::StreamExt;
 use pyo3::{pyclass, pymethods, Bound, IntoPyObjectExt, Py, PyAny, PyResult, Python};
@@ -17,6 +19,7 @@ use uuid::Uuid;
 use crate::error::BinaryErrorPy;
 use crate::runtime::get_runtime;
 use crate::stream::next_stream;
+use crate::validator::RawValidator;
 use tokio::sync::Mutex;
 
 #[pyclass]
@@ -28,6 +31,11 @@ pub struct RawPocketOption {
 #[pyclass]
 pub struct StreamIterator {
     stream: Arc<Mutex<Fuse<BoxStream<'static, PocketResult<DataCandle>>>>>,
+}
+
+#[pyclass]
+pub struct RawStreamIterator {
+    stream: Arc<Mutex<Fuse<BoxStream<'static, BinaryOptionsResult<RawWebsocketMessage>>>>>
 }
 
 #[pymethods]
@@ -42,7 +50,7 @@ impl RawPocketOption {
     }
 
     #[staticmethod]
-    pub fn new_with_url(ssid: String, url: String, py: Python<'_>) -> PyResult<Self> {
+    pub fn new_with_url(py: Python<'_>, ssid: String, url: String) -> PyResult<Self> {
         let runtime = get_runtime(py)?;
         runtime.block_on(async move {
             let client = PocketOption::new_with_url(
@@ -255,10 +263,103 @@ impl RawPocketOption {
             Python::with_gil(|py| StreamIterator { stream }.into_py_any(py))
         })
     }
+
+    pub fn send_raw_message<'py>(
+        &self,
+        py: Python<'py>,
+        message: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            client
+                .send_raw_message(message)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+            // Clone the stream_asset and convert it to a BoxStream
+            Ok(())
+        })
+    }
+
+    pub fn create_raw_order<'py>(&self, py: Python<'py>, message: String, validator: Bound<'py, RawValidator>) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        let validator = validator.get().clone();
+        future_into_py(py, async move {
+            let res = client.create_raw_order(message, Box::new(validator)).await.map_err(BinaryErrorPy::from)?;
+            Ok(res.to_string())
+        })
+    }
+
+    pub fn create_raw_order_with_timeout<'py>(&self, py: Python<'py>, message: String, validator: Bound<'py, RawValidator>, timeout: Duration) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        let validator = validator.get().clone();
+        future_into_py(py, async move {
+            let res = client.create_raw_order_with_timeout(message, Box::new(validator), timeout).await.map_err(BinaryErrorPy::from)?;
+            Ok(res.to_string())
+        })
+    }
+
+    pub fn create_raw_order_with_timeout_and_retry<'py>(&self, py: Python<'py>, message: String, validator: Bound<'py, RawValidator>, timeout: Duration) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        let validator = validator.get().clone();
+        future_into_py(py, async move {
+            let res = client.create_raw_order_with_timeout_and_retry(message, Box::new(validator), timeout).await.map_err(BinaryErrorPy::from)?;
+            Ok(res.to_string())
+        })
+    }
+
+    #[pyo3(signature = (message, validator, timeout=None))]
+    pub fn create_raw_iterator<'py>(&self, py: Python<'py>, message: String, validator: Bound<'py, RawValidator>, timeout: Option<Duration>) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        let validator = validator.get().clone();
+        future_into_py(py, async move {
+            let raw_stream = client
+                .create_raw_iterator(message, Box::new(validator), timeout)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+
+            // Clone the stream_asset and convert it to a BoxStream
+            let boxed_stream = FilteredRecieverStream::to_stream_static(Arc::new(raw_stream))
+                .boxed()
+                .fuse();
+
+            // Wrap the BoxStream in an Arc and Mutex
+            let stream = Arc::new(Mutex::new(boxed_stream));
+
+            Python::with_gil(|py| RawStreamIterator { stream }.into_py_any(py))
+        })
+    }
 }
 
 #[pymethods]
 impl StreamIterator {
+    fn __aiter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __iter__(slf: Py<Self>) -> Py<Self> {
+        slf
+    }
+
+    fn __anext__<'py>(&'py mut self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let stream = self.stream.clone();
+        future_into_py(py, async move {
+            let res = next_stream(stream, false).await;
+            res.map(|res| res.to_string())
+        })
+    }
+
+    fn __next__<'py>(&'py self, py: Python<'py>) -> PyResult<String> {
+        let runtime = get_runtime(py)?;
+        let stream = self.stream.clone();
+        runtime.block_on(async move {
+            let res = next_stream(stream, true).await;
+            res.map(|res| res.to_string())
+        })
+    }
+}
+
+#[pymethods]
+impl RawStreamIterator {
     fn __aiter__(slf: Py<Self>) -> Py<Self> {
         slf
     }

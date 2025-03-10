@@ -9,6 +9,7 @@ import sys
 
 class AsyncSubscription:
     def __init__(self, subscription):
+        """Asyncronous Iterator over json objects"""
         self.subscription = subscription
         
     def __aiter__(self):
@@ -19,10 +20,13 @@ class AsyncSubscription:
     
 # This file contains all the async code for the PocketOption Module
 class PocketOptionAsync:
-    def __init__(self, ssid: str):
-        self.client = RawPocketOption(ssid)
+    def __init__(self, ssid: str, **kwargs):
+        if kwargs.get("url") is not None:
+            self.client = RawPocketOption.new_with_url(ssid, kwargs.get("url"))
+        else:
+            self.client = RawPocketOption(ssid)
         self.logger = Logger()
-        
+    
     
     async def buy(self, asset: str, amount: float, time: int, check_win: bool = False) -> tuple[str, dict]:
         """
@@ -143,6 +147,10 @@ class PocketOptionAsync:
         """
         return AsyncSubscription(await self._subscribe_symbol_timed_inner(asset, time))
     
+    async def send_raw_message(self, message: str):
+        await self.client.send_raw_message(message)
+        
+        
     
 async def _timeout(future, timeout: int):
     if sys.version_info[:3] >= (3,11):

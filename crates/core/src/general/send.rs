@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    stream::FilteredRecieverStream, traits::{DataHandler, MessageTransfer, RawMessage, RawValidator, Validator, ValidatorTrait}, types::Data
+    stream::FilteredRecieverStream, traits::{DataHandler, MessageTransfer, RawMessage, ValidatorTrait}, types::Data
 };
 
 #[derive(Clone)]
@@ -94,7 +94,7 @@ impl SenderMessage {
         data: &Data<T, Transfer>,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: Box<dyn Validator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         let reciever = self.reciever(data, msg, response_type).await?;
 
@@ -117,7 +117,7 @@ impl SenderMessage {
         &self,
         data: &Data<T, Transfer>,
         msg: Transfer::Raw,
-        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer::Raw> {
         let reciever = self.raw_reciever(data, msg).await?;
 
@@ -141,7 +141,7 @@ impl SenderMessage {
         data: &Data<T, Transfer>,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: Box<dyn Validator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         let reciever = self.reciever(data, msg, response_type).await?;
 
@@ -172,7 +172,7 @@ impl SenderMessage {
         task: impl ToString,
         data: &Data<T, Transfer>,
         msg: Transfer::Raw,
-        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer::Raw> {
         let reciever = self.raw_reciever(data, msg).await?;
 
@@ -203,7 +203,7 @@ impl SenderMessage {
         data: &Data<T, Transfer>,
         msg: Transfer,
         response_type: Transfer::Info,
-        validator: Box<dyn Validator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer> {
         let reciever = self
             .reciever(data, msg.clone(), response_type.clone())
@@ -261,7 +261,7 @@ impl SenderMessage {
         task: impl ToString,
         data: &Data<T, Transfer>,
         msg: Transfer::Raw,
-        validator: Box<dyn RawValidator<Transfer> + Send + Sync>,
+        validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
     ) -> BinaryOptionsResult<Transfer::Raw> {
         let reciever = self.raw_reciever(data, msg.clone()).await?;
 
