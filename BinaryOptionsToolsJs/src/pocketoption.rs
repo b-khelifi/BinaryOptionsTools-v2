@@ -1,6 +1,6 @@
 use binary_option_tools::error::BinaryOptionsResult;
 use binary_option_tools::pocketoption::error::PocketResult;
-use binary_option_tools::pocketoption::pocket_client::PocketOption;
+use binary_option_tools::pocketoption::pocket_client::PocketOption as Pocket;
 use binary_option_tools::pocketoption::types::base::RawWebsocketMessage;
 use binary_option_tools::pocketoption::types::update::DataCandle;
 use binary_option_tools::pocketoption::ws::stream::StreamAsset;
@@ -19,10 +19,6 @@ use crate::error::BinaryErrorJs;
 use crate::runtime::get_runtime;
 use crate::validator::Validator;
 
-#[napi]
-pub struct RawPocketOption {
-    client: PocketOption,
-}
 
 #[napi]
 pub struct StreamIterator {
@@ -34,136 +30,347 @@ pub struct RawStreamIterator {
     stream: Arc<Mutex<Fuse<BoxStream<'static, BinaryOptionsResult<RawWebsocketMessage>>>>>,
 }
 
+/// A client for interacting with the Pocket Option trading platform.
+/// Provides methods for executing trades, managing positions, and streaming market data.
+/// 
+/// # Examples
+/// ```javascript
+/// const client = new PocketOption("your-ssid-here");
+/// 
+/// // Execute a buy order
+/// const [orderId, details] = await client.buy("EUR/USD", 100, 60);
+/// 
+/// // Check trade result
+/// const result = await client.checkWin(orderId);
+/// ```
 #[napi]
-impl RawPocketOption {
+pub struct PocketOption {
+    client: Pocket,
+}
+
+#[napi]
+impl PocketOption {
+    /// Creates a new PocketOption client instance using a session ID.
+    /// 
+    /// # Arguments
+    /// * `ssid` - A valid session ID string from Pocket Option
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const client = new PocketOption("your-ssid-here");
+    /// ```
     #[napi(constructor)]
     pub fn new(ssid: String) -> Result<Self> {
         let runtime = get_runtime()?;
         runtime.block_on(async move {
-            let client = PocketOption::new(ssid).await.map_err(BinaryErrorJs::from)?;
+            let client = Pocket::new(ssid).await.map_err(BinaryErrorJs::from)?;
             Ok(Self { client })
         })
     }
 
+    /// Creates a new PocketOption client instance with a custom WebSocket URL.
+    /// 
+    /// # Arguments
+    /// * `ssid` - A valid session ID string from Pocket Option
+    /// * `url` - Custom WebSocket server URL
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const client = await PocketOption.newWithUrl(
+    ///     "your-ssid-here",
+    ///     "wss://custom-server.com/ws"
+    /// );
+    /// ```
     #[napi(factory)]
     pub async fn new_with_url(ssid: String, url: String) -> Result<Self> {
-        let client = PocketOption::new_with_url(
-        ssid,
-        Url::parse(&url).map_err(|e| Error::from_reason(e.to_string()))?,
+        let client = Pocket::new_with_url(
+            ssid,
+            Url::parse(&url).map_err(|e| Error::from_reason(e.to_string()))?,
         )
         .await
         .map_err(|e| Error::from_reason(e.to_string()))?;
         Ok(Self { client })
     }
 
+    /// Executes a buy (CALL) order for a specified asset.
+    /// 
+    /// # Arguments
+    /// * `asset` - The trading asset/symbol (e.g., "EUR/USD")
+    /// * `amount` - The trade amount in account currency
+    /// * `time` - The option duration in seconds
+    /// 
+    /// # Returns
+    /// A vector containing the order ID and order details as JSON strings
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const [orderId, details] = await client.buy("EUR/USD", 100, 60);
+    /// console.log(`Order placed: ${orderId}`);
+    /// console.log(`Details: ${details}`);
+    /// ```
     #[napi]
     pub async fn buy(&self, asset: String, amount: f64, time: u32) -> Result<Vec<String>> {
         let res = self
-        .client
-        .buy(asset, amount, time)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+            .client
+            .buy(asset, amount, time)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         let deal = serde_json::to_string(&res.1).map_err(|e| Error::from_reason(e.to_string()))?;
         Ok(vec![res.0.to_string(), deal])
     }
 
+    /// Executes a sell (PUT) order for a specified asset.
+    /// 
+    /// # Arguments
+    /// * `asset` - The trading asset/symbol (e.g., "EUR/USD")
+    /// * `amount` - The trade amount in account currency
+    /// * `time` - The option duration in seconds
+    /// 
+    /// # Returns
+    /// A vector containing the order ID and order details as JSON strings
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const [orderId, details] = await client.sell("EUR/USD", 100, 60);
+    /// console.log(`Order placed: ${orderId}`);
+    /// console.log(`Details: ${details}`);
+    /// ```
     #[napi]
     pub async fn sell(&self, asset: String, amount: f64, time: u32) -> Result<Vec<String>> {
         let res = self
-        .client
-        .sell(asset, amount, time)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+            .client
+            .sell(asset, amount, time)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         let deal = serde_json::to_string(&res.1).map_err(|e| Error::from_reason(e.to_string()))?;
         Ok(vec![res.0.to_string(), deal])
     }
 
+    /// Checks the result of a trade by its ID.
+    /// 
+    /// # Arguments
+    /// * `trade_id` - The UUID of the trade to check
+    /// 
+    /// # Returns
+    /// A JSON string containing the trade result details
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const result = await client.checkWin(tradeId);
+    /// const details = JSON.parse(result);
+    /// console.log(`Profit: ${details.profit}`);
+    /// ```
     #[napi]
     pub async fn check_win(&self, trade_id: String) -> Result<String> {
         let res = self
-        .client
-        .check_results(Uuid::parse_str(&trade_id).map_err(|e| Error::from_reason(e.to_string()))?)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+            .client
+            .check_results(Uuid::parse_str(&trade_id).map_err(|e| Error::from_reason(e.to_string()))?)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Gets the expiration timestamp of a trade.
+    /// 
+    /// # Arguments
+    /// * `trade_id` - The UUID of the trade
+    /// 
+    /// # Returns
+    /// The Unix timestamp when the trade will expire, or null if not found
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const endTime = await client.getDealEndTime(tradeId);
+    /// if (endTime) {
+    ///     console.log(`Trade expires at: ${new Date(endTime * 1000)}`);
+    /// }
+    /// ```
     #[napi]
     pub async fn get_deal_end_time(&self, trade_id: String) -> Result<Option<i64>> {
-        Ok(
-        self
+        Ok(self
             .client
             .get_deal_end_time(
-            Uuid::parse_str(&trade_id).map_err(|e| Error::from_reason(e.to_string()))?,
+                Uuid::parse_str(&trade_id).map_err(|e| Error::from_reason(e.to_string()))?,
             )
             .await
-            .map(|t| t.timestamp()),
-        )
+            .map(|t| t.timestamp()))
     }
 
+    /// Retrieves historical candle data for an asset.
+    /// 
+    /// # Arguments
+    /// * `asset` - The trading asset/symbol (e.g., "EUR/USD")
+    /// * `period` - The candle period in seconds
+    /// * `offset` - Time offset for historical data
+    /// 
+    /// # Returns
+    /// A JSON string containing the candle data
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const candles = await client.getCandles("EUR/USD", 60, 0);
+    /// const data = JSON.parse(candles);
+    /// console.log(`Retrieved ${data.length} candles`);
+    /// ```
     #[napi]
     pub async fn get_candles(&self, asset: String, period: i64, offset: i64) -> Result<String> {
         let res = self
-        .client
-        .get_candles(asset, period, offset)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+            .client
+            .get_candles(asset, period, offset)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Retrieves the current account balance.
+    /// 
+    /// # Returns
+    /// A JSON string containing the balance information
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const balanceInfo = await client.balance();
+    /// const data = JSON.parse(balanceInfo);
+    /// console.log(`Current balance: ${data.balance}`);
+    /// ```
     #[napi]
     pub async fn balance(&self) -> Result<String> {
         let res = self.client.get_balance().await;
         serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Retrieves all closed deals/trades.
+    /// 
+    /// # Returns
+    /// A JSON string containing the closed deals information
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const deals = await client.closedDeals();
+    /// const data = JSON.parse(deals);
+    /// console.log(`Total closed deals: ${data.length}`);
+    /// ```
     #[napi]
     pub async fn closed_deals(&self) -> Result<String> {
         let res = self.client.get_closed_deals().await;
         serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Clears the list of closed deals from memory.
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// await client.clearClosedDeals();
+    /// ```
     #[napi]
     pub async fn clear_closed_deals(&self) {
         self.client.clear_closed_deals().await
     }
 
+    /// Retrieves all currently open deals/trades.
+    /// 
+    /// # Returns
+    /// A JSON string containing the open deals information
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const deals = await client.openedDeals();
+    /// const data = JSON.parse(deals);
+    /// console.log(`Total open positions: ${data.length}`);
+    /// ```
     #[napi]
     pub async fn opened_deals(&self) -> Result<String> {
         let res = self.client.get_opened_deals().await;
         serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Retrieves the current payout rates for all assets.
+    /// 
+    /// # Returns
+    /// A JSON string containing the payout information
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const payoutInfo = await client.payout();
+    /// const rates = JSON.parse(payoutInfo);
+    /// console.log(`EUR/USD payout: ${rates["EUR/USD"]}%`);
+    /// ```
     #[napi]
     pub async fn payout(&self) -> Result<String> {
         let res = self.client.get_payout().await;
         serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Retrieves historical data for an asset.
+    /// 
+    /// # Arguments
+    /// * `asset` - The trading asset/symbol (e.g., "EUR/USD")
+    /// * `period` - The historical data period
+    /// 
+    /// # Returns
+    /// A JSON string containing the historical data
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const history = await client.history("EUR/USD", 60);
+    /// const data = JSON.parse(history);
+    /// console.log(`Retrieved ${data.length} historical records`);
+    /// ```
     #[napi]
     pub async fn history(&self, asset: String, period: i64) -> Result<String> {
         let res = self
-        .client
-        .history(asset, period)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+            .client
+            .history(asset, period)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Subscribes to real-time price updates for a symbol.
+    /// 
+    /// # Arguments
+    /// * `symbol` - The trading symbol to subscribe to (e.g., "EUR/USD")
+    /// 
+    /// # Returns
+    /// A StreamIterator for receiving price updates
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const stream = await client.subscribeSymbol("EUR/USD");
+    /// for await (const update of stream) {
+    ///     console.log(`New price: ${update.price}`);
+    /// }
+    /// ```
     #[napi]
     pub async fn subscribe_symbol(&self, symbol: String) -> Result<StreamIterator> {
         let stream_asset = self
-        .client
-        .subscribe_symbol(symbol)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+            .client
+            .subscribe_symbol(symbol)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset))
-        .boxed()
-        .fuse();
+            .boxed()
+            .fuse();
         let stream = Arc::new(Mutex::new(boxed_stream));
         Ok(StreamIterator { stream })
     }
 
+    /// Subscribes to symbol updates with chunked delivery.
+    /// 
+    /// # Arguments
+    /// * `symbol` - The trading symbol to subscribe to (e.g., "EUR/USD")
+    /// * `chunk_size` - Number of updates to collect before delivery
+    /// 
+    /// # Returns
+    /// A StreamIterator for receiving chunked price updates
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const stream = await client.subscribeSymbolChunked("EUR/USD", 10);
+    /// for await (const updates of stream) {
+    ///     console.log(`Received batch of ${updates.length} updates`);
+    /// }
+    /// ```
     #[napi]
     pub async fn subscribe_symbol_chunked(
         &self,
@@ -171,17 +378,33 @@ impl RawPocketOption {
         chunk_size: u32,
     ) -> Result<StreamIterator> {
         let stream_asset = self
-        .client
-        .subscribe_symbol_chuncked(symbol, chunk_size as usize)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+            .client
+            .subscribe_symbol_chuncked(symbol, chunk_size as usize)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset))
-        .boxed()
-        .fuse();
+            .boxed()
+            .fuse();
         let stream = Arc::new(Mutex::new(boxed_stream));
         Ok(StreamIterator { stream })
     }
 
+    /// Subscribes to symbol updates with time-based delivery.
+    /// 
+    /// # Arguments
+    /// * `symbol` - The trading symbol to subscribe to (e.g., "EUR/USD")
+    /// * `time_seconds` - Time interval in seconds between updates
+    /// 
+    /// # Returns
+    /// A StreamIterator for receiving time-based price updates
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const stream = await client.subscribeSymbolTimed("EUR/USD", 5);
+    /// for await (const update of stream) {
+    ///     console.log(`Update at ${new Date()}: ${update.price}`);
+    /// }
+    /// ```
     #[napi]
     pub async fn subscribe_symbol_timed(
         &self,
@@ -189,17 +412,29 @@ impl RawPocketOption {
         time_seconds: u32,
     ) -> Result<StreamIterator> {
         let stream_asset = self
-        .client
-        .subscribe_symbol_timed(symbol, Duration::from_secs(time_seconds as u64))
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+            .client
+            .subscribe_symbol_timed(symbol, Duration::from_secs(time_seconds as u64))
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
         let boxed_stream = StreamAsset::to_stream_static(Arc::new(stream_asset))
-        .boxed()
-        .fuse();
+            .boxed()
+            .fuse();
         let stream = Arc::new(Mutex::new(boxed_stream));
         Ok(StreamIterator { stream })
     }
 
+    /// Sends a raw WebSocket message to the server.
+    /// 
+    /// # Arguments
+    /// * `message` - The raw message string to send
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// await client.sendRawMessage(JSON.stringify({
+    ///     type: "custom_command",
+    ///     data: { /* ... */ }
+    /// }));
+    /// ```
     pub async fn send_raw_message(&self, message: String) -> Result<()> {
         self.client
             .send_raw_message(message)
@@ -207,14 +442,50 @@ impl RawPocketOption {
             .map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Creates a raw order with custom validation.
+    /// 
+    /// # Arguments
+    /// * `message` - The raw order message
+    /// * `validator` - A validator instance for response validation
+    /// 
+    /// # Returns
+    /// A JSON string containing the order result
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = new Validator();
+    /// const result = await client.createRawOrder(
+    ///     JSON.stringify({ /* order details */ }),
+    ///     validator
+    /// );
+    /// ```
     pub async fn create_raw_order(&self, message: String, validator: &Validator) -> Result<String> {
         let res = self.client
             .create_raw_order(message, validator.to_val())
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
-        Ok(res.to_string())
+        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
+    /// Creates a raw order with a timeout for response validation.
+    /// 
+    /// # Arguments
+    /// * `message` - The raw order message to send
+    /// * `validator` - A validator instance for response validation
+    /// * `timeout` - Timeout duration in seconds
+    /// 
+    /// # Returns
+    /// A JSON string containing the order result, or error if timeout is reached
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = new Validator();
+    /// const result = await client.createRawOrderWithTimeout(
+    ///     JSON.stringify({ /* order details */ }),
+    ///     validator,
+    ///     30 // 30 seconds timeout
+    /// );
+    /// ```
     pub async fn create_raw_order_with_timeout(
         &self,
         message: String,
@@ -232,6 +503,25 @@ impl RawPocketOption {
         Ok(res.to_string())
     }
 
+    /// Creates a raw order with timeout and automatic retry functionality.
+    /// 
+    /// # Arguments
+    /// * `message` - The raw order message to send
+    /// * `validator` - A validator instance for response validation
+    /// * `timeout` - Timeout duration in seconds for each attempt
+    /// 
+    /// # Returns
+    /// A JSON string containing the order result, or error if all retries fail
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = new Validator();
+    /// const result = await client.createRawOrderWithTimeoutAndRetry(
+    ///     JSON.stringify({ /* order details */ }),
+    ///     validator,
+    ///     15 // 15 seconds timeout per attempt
+    /// );
+    /// ```
     pub async fn create_raw_order_with_timeout_and_retry(
         &self,
         message: String,
@@ -249,6 +539,28 @@ impl RawPocketOption {
         Ok(res.to_string())
     }
 
+    /// Creates an iterator for handling raw WebSocket messages with validation.
+    /// 
+    /// # Arguments
+    /// * `message` - The initial message to send to establish the stream
+    /// * `validator` - A validator instance for filtering messages
+    /// * `timeout` - Optional timeout duration in seconds for the stream
+    /// 
+    /// # Returns
+    /// A RawStreamIterator that yields validated messages
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = new Validator();
+    /// const stream = await client.createRawIterator(
+    ///     JSON.stringify({ /* subscription details */ }),
+    ///     validator,
+    ///     60 // Optional: 60 seconds timeout
+    /// );
+    /// for await (const message of stream) {
+    ///     console.log(`Received: ${message}`);
+    /// }
+    /// ```
     pub async fn create_raw_iterator(
         &self,
         message: String,

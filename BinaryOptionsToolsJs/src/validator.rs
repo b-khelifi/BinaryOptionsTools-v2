@@ -91,6 +91,19 @@ impl ValidatorTrait<RawWebsocketMessage> for BoxedValidator {
     }
 }
 
+
+/// A validator for WebSocket messages that provides various matching strategies.
+/// 
+/// # Examples
+/// ```javascript
+/// const validator = new Validator();
+/// const regexValidator = Validator.regex("^Hello");
+/// const containsValidator = Validator.contains("World");
+/// 
+/// console.log(validator.check("Hello World")); // true
+/// console.log(regexValidator.check("Hello World")); // true
+/// console.log(containsValidator.check("Hello World")); // true
+/// ```
 #[napi]
 #[derive(Clone, Default)]
 pub struct Validator {
@@ -99,11 +112,29 @@ pub struct Validator {
 
 #[napi]
 impl Validator {
+    /// Creates a new empty validator that matches any message.
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = new Validator();
+    /// console.log(validator.check("any message")); // true
+    /// ```
     #[napi(constructor)]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Creates a new regex validator that matches messages using a regular expression pattern.
+    /// 
+    /// # Arguments
+    /// * `pattern` - A string containing a valid regular expression pattern
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = Validator.regex("^Hello\\s\\w+");
+    /// console.log(validator.check("Hello World")); // true
+    /// console.log(validator.check("Hi World")); // false
+    /// ```
     #[napi(factory)]
     pub fn regex(pattern: String) -> Result<Self> {
         Ok(Self {
@@ -111,6 +142,17 @@ impl Validator {
         })
     }
 
+    /// Creates a new validator that checks if a message contains the specified pattern.
+    /// 
+    /// # Arguments
+    /// * `pattern` - The substring to search for in the message
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = Validator.contains("World");
+    /// console.log(validator.check("Hello World")); // true
+    /// console.log(validator.check("Hello")); // false
+    /// ```
     #[napi(factory)]
     pub fn contains(pattern: String) -> Self {
         Self {
@@ -118,6 +160,17 @@ impl Validator {
         }
     }
 
+    /// Creates a new validator that checks if a message starts with the specified pattern.
+    /// 
+    /// # Arguments
+    /// * `pattern` - The prefix to match at the start of the message
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = Validator.starts_with("Hello");
+    /// console.log(validator.check("Hello World")); // true
+    /// console.log(validator.check("World Hello")); // false
+    /// ```
     #[napi(factory)]
     pub fn starts_with(pattern: String) -> Self {
         Self {
@@ -125,6 +178,17 @@ impl Validator {
         }
     }
 
+    /// Creates a new validator that checks if a message ends with the specified pattern.
+    /// 
+    /// # Arguments
+    /// * `pattern` - The suffix to match at the end of the message
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = Validator.ends_with("World");
+    /// console.log(validator.check("Hello World")); // true
+    /// console.log(validator.check("World Hello")); // false
+    /// ```
     #[napi(factory)]
     pub fn ends_with(pattern: String) -> Self {
         Self {
@@ -132,6 +196,18 @@ impl Validator {
         }
     }
 
+    /// Creates a new validator that negates the result of another validator.
+    /// 
+    /// # Arguments
+    /// * `validator` - The validator whose result should be negated
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const contains = Validator.contains("World");
+    /// const notContains = Validator.ne(contains);
+    /// console.log(notContains.check("Hello Universe")); // true
+    /// console.log(notContains.check("Hello World")); // false
+    /// ```
     #[napi(factory)]
     pub fn ne(validator: &Validator) -> Self {
         Self {
@@ -139,6 +215,19 @@ impl Validator {
         }
     }
 
+    /// Creates a new validator that requires all provided validators to match.
+    /// 
+    /// # Arguments
+    /// * `validators` - An array of validators that must all match for this validator to match
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const startsHello = Validator.starts_with("Hello");
+    /// const endsWorld = Validator.ends_with("World");
+    /// const both = Validator.all([startsHello, endsWorld]);
+    /// console.log(both.check("Hello Beautiful World")); // true
+    /// console.log(both.check("Hello Universe")); // false
+    /// ```
     #[napi(factory)]
     pub fn all(validators: Vec<&Validator>) -> Self {
         Self {
@@ -146,6 +235,20 @@ impl Validator {
         }
     }
 
+    /// Creates a new validator that requires at least one of the provided validators to match.
+    /// 
+    /// # Arguments
+    /// * `validators` - An array of validators where at least one must match for this validator to match
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const containsHello = Validator.contains("Hello");
+    /// const containsHi = Validator.contains("Hi");
+    /// const either = Validator.any([containsHello, containsHi]);
+    /// console.log(either.check("Hello World")); // true
+    /// console.log(either.check("Hi there")); // true
+    /// console.log(either.check("Hey there")); // false
+    /// ```
     #[napi(factory)]
     pub fn any(validators: Vec<&Validator>) -> Self {
         Self {
@@ -153,6 +256,21 @@ impl Validator {
         }
     }
 
+    /// Checks if a message matches this validator's conditions.
+    /// 
+    /// # Arguments
+    /// * `msg` - The message string to validate
+    /// 
+    /// # Returns
+    /// * `true` if the message matches the validator's conditions
+    /// * `false` otherwise
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const validator = Validator.contains("World");
+    /// console.log(validator.check("Hello World")); // true
+    /// console.log(validator.check("Hello Universe")); // false
+    /// ```
     #[napi]
     pub fn check(&self, msg: String) -> bool {
         let raw = RawWebsocketMessage::from(msg);
