@@ -1,3 +1,3 @@
-# `binary-options-tools-darwin-arm64`
+# `@rick-29/binary-options-tools-darwin-arm64`
 
-This is the **aarch64-apple-darwin** binary for `binary-options-tools`
+This is the **aarch64-apple-darwin** binary for `@rick-29/binary-options-tools`

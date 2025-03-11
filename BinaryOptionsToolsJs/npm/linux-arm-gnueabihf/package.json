@@ -1,5 +1,5 @@
 {
-  "name": "binary-options-tools-linux-arm-gnueabihf",
+  "name": "@rick-29/binary-options-tools-linux-arm-gnueabihf",
   "version": "0.0.0",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "binary-options-tools.linux-arm-gnueabihf.node",
+  "main": "@rick-29/binary-options-tools.linux-arm-gnueabihf.node",
   "files": [
-    "binary-options-tools.linux-arm-gnueabihf.node"
+    "@rick-29/binary-options-tools.linux-arm-gnueabihf.node"
   ],
   "license": "MIT",
   "engines": {

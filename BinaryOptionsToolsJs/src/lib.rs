@@ -1,13 +1,9 @@
-use napi_derive::napi;
-
 mod pocketoption;
 mod runtime;
 mod error;
+mod validator;
+mod logs;
 
 pub use pocketoption::RawPocketOption;
-
-
-#[napi]
-pub fn sum(a: i32, b: i32) -> i32 {
-  a + b
-}
+pub use validator::Validator;
+pub use logs::{start_tracing, LogBuilder, Logger, StreamLogsLayer, StreamLogsIterator};

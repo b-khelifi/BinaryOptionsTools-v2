@@ -1,5 +1,5 @@
 {
-  "name": "binary-options-tools",
+  "name": "@rick-29/binary-options-tools",
   "version": "0.0.0",
   "main": "index.js",
   "types": "index.d.ts",

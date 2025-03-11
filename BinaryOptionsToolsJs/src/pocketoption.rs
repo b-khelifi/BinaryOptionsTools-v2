@@ -4,6 +4,7 @@ use binary_option_tools::pocketoption::pocket_client::PocketOption;
 use binary_option_tools::pocketoption::types::base::RawWebsocketMessage;
 use binary_option_tools::pocketoption::types::update::DataCandle;
 use binary_option_tools::pocketoption::ws::stream::StreamAsset;
+use binary_option_tools::reimports::FilteredRecieverStream;
 use futures_util::stream::{BoxStream, Fuse};
 use futures_util::StreamExt;
 use napi::bindgen_prelude::*;
@@ -16,6 +17,7 @@ use uuid::Uuid;
 
 use crate::error::BinaryErrorJs;
 use crate::runtime::get_runtime;
+use crate::validator::Validator;
 
 #[napi]
 pub struct RawPocketOption {
@@ -43,7 +45,7 @@ impl RawPocketOption {
         })
     }
 
-    #[napi]
+    #[napi(factory)]
     pub async fn new_with_url(ssid: String, url: String) -> Result<Self> {
         let client = PocketOption::new_with_url(
         ssid,
@@ -197,18 +199,101 @@ impl RawPocketOption {
         let stream = Arc::new(Mutex::new(boxed_stream));
         Ok(StreamIterator { stream })
     }
+
+    pub async fn send_raw_message(&self, message: String) -> Result<()> {
+        self.client
+            .send_raw_message(message)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))
+    }
+
+    pub async fn create_raw_order(&self, message: String, validator: &Validator) -> Result<String> {
+        let res = self.client
+            .create_raw_order(message, validator.to_val())
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
+        Ok(res.to_string())
+    }
+
+    pub async fn create_raw_order_with_timeout(
+        &self,
+        message: String,
+        validator: &Validator,
+        timeout: u64,
+    ) -> Result<String> {
+        let res = self.client
+            .create_raw_order_with_timeout(
+                message,
+                validator.to_val(),
+                Duration::from_secs(timeout),
+            )
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
+        Ok(res.to_string())
+    }
+
+    pub async fn create_raw_order_with_timeout_and_retry(
+        &self,
+        message: String,
+        validator: &Validator,
+        timeout: u64,
+    ) -> Result<String> {
+        let res = self.client
+            .create_raw_order_with_timeout_and_retry(
+                message,
+                validator.to_val(),
+                Duration::from_secs(timeout),
+            )
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
+        Ok(res.to_string())
+    }
+
+    pub async fn create_raw_iterator(
+        &self,
+        message: String,
+        validator: &Validator,
+        timeout: Option<u64>,
+    ) -> Result<RawStreamIterator> {
+        let timeout = timeout.map(Duration::from_secs);
+        let stream = self.client
+            .create_raw_iterator(message, validator.to_val(), timeout)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
+        
+        let boxed_stream = FilteredRecieverStream::to_stream_static(Arc::new(stream))
+            .boxed()
+            .fuse();
+        let stream = Arc::new(Mutex::new(boxed_stream));
+        Ok(RawStreamIterator { stream })
+    }
 }
+
+
 #[napi]
 impl StreamIterator {
     #[napi]
     pub async fn next(&self) -> Result<Option<String>> {
         let mut stream = self.stream.lock().await;
         match stream.next().await {
-        Some(Ok(candle)) => serde_json::to_string(&candle)
-            .map(Some)
-            .map_err(|e| Error::from_reason(e.to_string())),
-        Some(Err(e)) => Err(Error::from_reason(e.to_string())),
-        None => Ok(None),
+            Some(Ok(candle)) => serde_json::to_string(&candle)
+                .map(Some)
+                .map_err(|e| Error::from_reason(e.to_string())),
+            Some(Err(e)) => Err(Error::from_reason(e.to_string())),
+            None => Ok(None),
+        }
+    }
+}
+
+#[napi]
+impl RawStreamIterator {
+    #[napi]
+    pub async fn next(&self) -> Result<Option<String>> {
+        let mut stream = self.stream.lock().await;
+        match stream.next().await {
+            Some(Ok(msg)) => Ok(Some(msg.to_string())),
+            Some(Err(e)) => Err(Error::from_reason(e.to_string())),
+            None => Ok(None),
         }
     }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "binary-options-tools-android-arm-eabi",
+  "name": "@rick-29/binary-options-tools-android-arm-eabi",
   "version": "0.0.0",
   "os": [
     "android"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "binary-options-tools.android-arm-eabi.node",
+  "main": "@rick-29/binary-options-tools.android-arm-eabi.node",
   "files": [
-    "binary-options-tools.android-arm-eabi.node"
+    "@rick-29/binary-options-tools.android-arm-eabi.node"
   ],
   "license": "MIT",
   "engines": {

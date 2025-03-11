@@ -1,5 +1,5 @@
 {
-  "name": "binary-options-tools-linux-x64-musl",
+  "name": "@rick-29/binary-options-tools-linux-x64-musl",
   "version": "0.0.0",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "x64"
   ],
-  "main": "binary-options-tools.linux-x64-musl.node",
+  "main": "@rick-29/binary-options-tools.linux-x64-musl.node",
   "files": [
-    "binary-options-tools.linux-x64-musl.node"
+    "@rick-29/binary-options-tools.linux-x64-musl.node"
   ],
   "license": "MIT",
   "engines": {

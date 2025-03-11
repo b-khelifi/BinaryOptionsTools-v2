@@ -1,0 +1,23 @@
+name: JS Package Publish
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  js-build:
+    name: Run JS Build and Publish
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: BinaryOptionsToolsJs
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run NAPI Workflow
+        uses: ./BinaryOptionsToolsJs/.github/workflows/CI.yml

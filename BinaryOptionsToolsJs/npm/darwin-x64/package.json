@@ -1,5 +1,5 @@
 {
-  "name": "binary-options-tools-darwin-x64",
+  "name": "@rick-29/binary-options-tools-darwin-x64",
   "version": "0.0.0",
   "os": [
     "darwin"
@@ -7,9 +7,9 @@
   "cpu": [
     "x64"
   ],
-  "main": "binary-options-tools.darwin-x64.node",
+  "main": "@rick-29/binary-options-tools.darwin-x64.node",
   "files": [
-    "binary-options-tools.darwin-x64.node"
+    "@rick-29/binary-options-tools.darwin-x64.node"
   ],
   "license": "MIT",
   "engines": {

@@ -1,5 +1,5 @@
 {
-  "name": "binary-options-tools-linux-arm64-gnu",
+  "name": "@rick-29/binary-options-tools-linux-arm64-gnu",
   "version": "0.0.0",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm64"
   ],
-  "main": "binary-options-tools.linux-arm64-gnu.node",
+  "main": "@rick-29/binary-options-tools.linux-arm64-gnu.node",
   "files": [
-    "binary-options-tools.linux-arm64-gnu.node"
+    "@rick-29/binary-options-tools.linux-arm64-gnu.node"
   ],
   "license": "MIT",
   "engines": {

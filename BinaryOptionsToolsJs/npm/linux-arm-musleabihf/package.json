@@ -1,5 +1,5 @@
 {
-  "name": "binary-options-tools-linux-arm-musleabihf",
+  "name": "@rick-29/binary-options-tools-linux-arm-musleabihf",
   "version": "0.0.0",
   "os": [
     "linux"
@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "binary-options-tools.linux-arm-musleabihf.node",
+  "main": "@rick-29/binary-options-tools.linux-arm-musleabihf.node",
   "files": [
-    "binary-options-tools.linux-arm-musleabihf.node"
+    "@rick-29/binary-options-tools.linux-arm-musleabihf.node"
   ],
   "license": "MIT",
   "engines": {

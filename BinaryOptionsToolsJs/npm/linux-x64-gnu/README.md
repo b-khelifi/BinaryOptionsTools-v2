@@ -1,3 +1,3 @@
-# `binary-options-tools-linux-x64-gnu`
+# `@rick-29/binary-options-tools-linux-x64-gnu`
 
-This is the **x86_64-unknown-linux-gnu** binary for `binary-options-tools`
+This is the **x86_64-unknown-linux-gnu** binary for `@rick-29/binary-options-tools`
