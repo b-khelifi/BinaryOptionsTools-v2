@@ -1,0 +1,15 @@
+{
+  "name": "binary-options-tools-darwin-universal",
+  "version": "0.0.0",
+  "os": [
+    "darwin"
+  ],
+  "main": "binary-options-tools.darwin-universal.node",
+  "files": [
+    "binary-options-tools.darwin-universal.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}
