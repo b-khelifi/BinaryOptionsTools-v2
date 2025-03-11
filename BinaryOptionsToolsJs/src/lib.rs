@@ -1,6 +1,8 @@
 use napi_derive::napi;
 
 mod pocketoption;
+mod runtime;
+mod error;
 
 pub use pocketoption::RawPocketOption;
 

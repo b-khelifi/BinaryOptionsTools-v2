@@ -14,9 +14,12 @@ use tokio::sync::Mutex;
 use url::Url;
 use uuid::Uuid;
 
-#[napi(js_name = "PocketOption")]
+use crate::error::BinaryErrorJs;
+use crate::runtime::get_runtime;
+
+#[napi]
 pub struct RawPocketOption {
-  client: PocketOption,
+    client: PocketOption,
 }
 
 #[napi]
@@ -31,13 +34,13 @@ pub struct RawStreamIterator {
 
 #[napi]
 impl RawPocketOption {
-  //   #[napi(constructor)]
-
-    pub async fn new(ssid: String) -> Result<Self> {
-        let client = PocketOption::new(ssid)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
-        Ok(Self { client })
+    #[napi(constructor)]
+    pub fn new(ssid: String) -> Result<Self> {
+        let runtime = get_runtime()?;
+        runtime.block_on(async move {
+            let client = PocketOption::new(ssid).await.map_err(BinaryErrorJs::from)?;
+            Ok(Self { client })
+        })
     }
 
     #[napi]

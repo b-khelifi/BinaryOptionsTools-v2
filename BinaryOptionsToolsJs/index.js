@@ -310,9 +310,9 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { PocketOption, StreamIterator, RawStreamIterator, sum } = nativeBinding
+const { RawPocketOption, StreamIterator, RawStreamIterator, sum } = nativeBinding
 
-module.exports.PocketOption = PocketOption
+module.exports.RawPocketOption = RawPocketOption
 module.exports.StreamIterator = StreamIterator
 module.exports.RawStreamIterator = RawStreamIterator
 module.exports.sum = sum
