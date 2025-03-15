@@ -1,7 +1,7 @@
 name: JS Package Publish
 env:
   DEBUG: napi:*
-  APP_NAME: '@rick-29/binary-options-tools'
+  APP_NAME: 'binary-options-tools'
   MACOSX_DEPLOYMENT_TARGET: '10.13'
 permissions:
   contents: write
@@ -11,7 +11,7 @@ on:
     branches:
       - main
   workflow_dispatch:
-  
+
 jobs:
   build:
     strategy:
