@@ -49,6 +49,7 @@ jobs:
             setup: |
               sudo apt-get update
               sudo apt-get install gcc-arm-linux-gnueabihf -y
+              sudo apt-get install libssl-dev -y
             build: yarn build --target armv7-unknown-linux-gnueabihf
           - host: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
@@ -74,6 +75,7 @@ jobs:
             setup: |
               sudo apt-get update
               sudo apt-get install gcc-riscv64-linux-gnu -y
+              sudo apt-get install libssl-dev -y
             build: yarn build --target riscv64gc-unknown-linux-gnu
     name: stable - ${{ matrix.settings.target }} - node@20
     runs-on: ${{ matrix.settings.host }}
