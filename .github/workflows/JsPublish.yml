@@ -14,7 +14,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.settings.host }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
