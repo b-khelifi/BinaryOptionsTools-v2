@@ -54,6 +54,7 @@ jobs:
               sudo apt install pkg-config -y
               sudo apt-get install libudev-dev -y
               sudo apt-get install -y musl-tools -y
+              which -s openssl
             build: yarn build --target armv7-unknown-linux-gnueabihf
           - host: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
