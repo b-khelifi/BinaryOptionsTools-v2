@@ -20,7 +20,9 @@ enum RawValidator {
     Contains(String),
     All(ArrayRawValidator),
     Any(ArrayRawValidator),
-    Not(BoxedValidator)
+    Not(BoxedValidator),
+    Or(BoxedValidator, BoxedValidator),
+    Xor(BoxedValidator, BoxedValidator),
 }
 
 impl RawValidator {
@@ -70,7 +72,9 @@ impl ValidatorTrait<RawWebsocketMessage> for RawValidator {
             Self::Not(val) => !val.validate(message),
             Self::All(val) => val.validate_all(message),
             Self::Any(val) => val.validate_any(message),
-            Self::Regex(regex) => regex.is_match(&message.to_string())
+            Self::Regex(regex) => regex.is_match(&message.to_string()),
+            Self::Or(val1, val2) => val1.validate(message) | val2.validate(message),
+            Self::Xor(val1, val2) => val1.validate(message) != val2.validate(message)
         }
     }
 }
@@ -255,6 +259,21 @@ impl Validator {
             inner: RawValidator::new_any(validators.into_iter().map(|v| v.inner.clone()).collect())
         }
     }
+
+    #[napi(factory)]
+    pub fn or(val1: &Validator, val2: &Validator) -> Self {
+        Self {
+            inner: RawValidator::Or(BoxedValidator(Box::new(val1.inner.clone())), BoxedValidator(Box::new(val2.inner.clone())))
+        }
+    }
+
+    #[napi(factory)]
+    pub fn xor(val1: &Validator, val2: &Validator) -> Self {
+        Self {
+            inner: RawValidator::Or(BoxedValidator(Box::new(val1.inner.clone())), BoxedValidator(Box::new(val2.inner.clone())))
+        }
+    }
+
 
     /// Checks if a message matches this validator's conditions.
     /// 

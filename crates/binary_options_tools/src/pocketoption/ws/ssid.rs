@@ -88,7 +88,7 @@ impl Ssid {
                 .collect()),
             Self::Real(_) => Ok(Regions
                 .get_servers()
-                .await?
+                .await
                 .iter()
                 .map(|s| s.to_string())
                 .collect()),

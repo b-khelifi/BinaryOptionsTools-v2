@@ -28,7 +28,9 @@ pub enum RawValidator {
     Contains(String),
     All(ArrayValidator),
     Any(ArrayValidator),
-    Not(BoxedValidator)
+    Not(BoxedValidator),
+    Or(BoxedValidator, BoxedValidator),
+    Xor(BoxedValidator, BoxedValidator),
 }
 
 impl RawValidator {
@@ -79,7 +81,9 @@ impl ValidatorTrait<RawWebsocketMessage> for RawValidator {
             Self::Not(val) => !val.validate(message),
             Self::All(val) => val.validate_all(message),
             Self::Any(val) => val.validate_any(message),
-            Self::Regex(val) => val.validate(message)
+            Self::Regex(val) => val.validate(message),
+            Self::Or(val1, val2) => val1.validate(message) | val2.validate(message),
+            Self::Xor(val1, val2) => val1.validate(message) != val2.validate(message)
         }
     }
 }
@@ -150,6 +154,17 @@ impl RawValidator {
         let val = validator.extract::<Vec<RawValidator>>()?;
         Ok(Self::new_any(val))
     }
+
+    #[staticmethod]
+    pub fn or(val1: Bound<'_, RawValidator>, val2: Bound<'_, RawValidator>) -> Self {
+        Self::Or(BoxedValidator(Box::new(val1.get().clone())), BoxedValidator(Box::new(val2.get().clone())))
+    }
+
+    #[staticmethod]
+    pub fn xor(val1: Bound<'_, RawValidator>, val2: Bound<'_, RawValidator>) -> Self {
+        Self::Xor(BoxedValidator(Box::new(val1.get().clone())), BoxedValidator(Box::new(val2.get().clone())))
+    }
+
 
     pub fn check(&self, msg: String) -> bool {
         let raw = RawWebsocketMessage::from(msg);

@@ -1,4 +1,5 @@
 use binary_options_tools_macros::RegionImpl;
+use tracing::warn;
 
 use crate::pocketoption::{
     error::PocketResult,
@@ -44,9 +45,22 @@ impl Regions {
         Ok(server.0)
     }
 
-    pub async fn get_servers(&self) -> PocketResult<Vec<&str>> {
-        let ip = get_public_ip().await?;
-        self.sort_servers(&ip).await
+    pub async fn get_servers(&self) -> Vec<&str> {
+        let servers: Result<Vec<&str>, crate::pocketoption::error::PocketOptionError> = {
+            match get_public_ip().await {
+                Ok(ip) => self.sort_servers(&ip).await,
+                Err(e) => Err(e)
+            }
+            
+        };
+        match servers {
+            Ok(servers) => servers,
+            Err(e) => {
+                warn!(target: "Regions", "Error sorting server, {e}");
+                Regions::regions_str()
+            }
+        }
+
     }
 }
 
