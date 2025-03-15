@@ -1,7 +1,18 @@
 import test from 'ava'
 
-import { sum } from '../index.js'
+import { Validator } from '../index.js'
 
-test('sum from native', (t) => {
-  t.is(sum(1, 2), 3)
+test('test validate none', (t) => {
+  let val1 = new Validator();
+  if (val1.check("test")) {
+    t.pass()
+  }
+})
+
+
+test('test validate starts_with', (t) => {
+  let val2 = Validator.startsWith("Hello");
+  if (val2.check("Hello world")) {
+    t.pass()
+  }
 })
