@@ -270,7 +270,7 @@ impl Validator {
     #[napi(factory)]
     pub fn xor(val1: &Validator, val2: &Validator) -> Self {
         Self {
-            inner: RawValidator::Or(BoxedValidator(Box::new(val1.inner.clone())), BoxedValidator(Box::new(val2.inner.clone())))
+            inner: RawValidator::Xor(BoxedValidator(Box::new(val1.inner.clone())), BoxedValidator(Box::new(val2.inner.clone())))
         }
     }
 
