@@ -6,10 +6,11 @@ env:
 permissions:
   contents: write
   id-token: write
-'on':
+on:
   push:
     branches:
       - main
+    
 jobs:
   build:
     strategy:
