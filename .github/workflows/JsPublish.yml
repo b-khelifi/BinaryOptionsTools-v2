@@ -46,12 +46,14 @@ jobs:
             build: yarn build --target aarch64-unknown-linux-gnu
           - host: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
+            run: which -s openssl
             setup: |
               sudo apt-get update
               sudo apt-get install gcc-arm-linux-gnueabihf -y
               sudo apt-get install libssl-dev -y
               sudo apt install pkg-config -y
               sudo apt-get install libudev-dev -y
+              sudo apt-get install -y musl-tools -y
             build: yarn build --target armv7-unknown-linux-gnueabihf
           - host: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
