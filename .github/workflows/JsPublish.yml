@@ -46,32 +46,6 @@ jobs:
             build: yarn build --target aarch64-unknown-linux-gnu
           - host: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
-            run: which -s openssl
-            - name: Checkout repository
-              uses: actions/checkout@v2
-
-            - name: Set up Rust
-              uses: actions-rs/toolchain@v1
-            with:
-            toolchain: stable
-            override: true
-
-            - name: Install dependencies
-              run: sudo apt-get install -y pkg-config libssl-dev
-
-            - name: Set OPENSSL_DIR
-              run: echo "OPENSSL_DIR=/usr/local/ssl" >> $GITHUB_ENV
-
-            - name: Build project
-              run: cargo build --release --target armv7-unknown-linux-gnueabihf
-            setup: |
-              sudo apt-get update
-              sudo apt-get install gcc-arm-linux-gnueabihf -y
-              sudo apt-get install libssl-dev -y
-              sudo apt install pkg-config -y
-              sudo apt-get install libudev-dev -y
-              sudo apt-get install -y musl-tools -y
-              which -s openssl
             build: yarn build --target armv7-unknown-linux-gnueabihf
           - host: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
@@ -85,7 +59,7 @@ jobs:
           - host: ubuntu-latest
             target: aarch64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
-            build: |-
+            build: |
               set -e &&
               rustup target add aarch64-unknown-linux-musl &&
               yarn build --target aarch64-unknown-linux-musl
