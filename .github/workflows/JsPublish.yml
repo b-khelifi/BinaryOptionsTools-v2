@@ -50,7 +50,7 @@ jobs:
               sudo apt-get update
               sudo apt-get install gcc-arm-linux-gnueabihf -y
               sudo apt-get install libssl-dev -y
-            run: sudo apt-get install libssl-dev -y && which -s openssl && export OPENSSL_DIR=/usr/local/ssl
+            run: sudo apt-get install libssl-dev -y && which -s openssl && export OPENSSL_DIR=/usr/local/ssl && ls /usr/local
             build: export OPENSSL_DIR=/usr/local/ssl && sudo apt-get install libssl-dev -y && which -s openssl && yarn build --target armv7-unknown-linux-gnueabihf
           - host: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
