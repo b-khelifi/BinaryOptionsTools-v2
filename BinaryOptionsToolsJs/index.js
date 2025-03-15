@@ -37,7 +37,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./binary-options-tools.android-arm64.node')
           } else {
-            nativeBinding = require('binary-options-tools-android-arm64')
+            nativeBinding = require('@rick-29/binary-options-tools-android-arm64')
           }
         } catch (e) {
           loadError = e
@@ -49,7 +49,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./binary-options-tools.android-arm-eabi.node')
           } else {
-            nativeBinding = require('binary-options-tools-android-arm-eabi')
+            nativeBinding = require('@rick-29/binary-options-tools-android-arm-eabi')
           }
         } catch (e) {
           loadError = e
@@ -69,7 +69,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./binary-options-tools.win32-x64-msvc.node')
           } else {
-            nativeBinding = require('binary-options-tools-win32-x64-msvc')
+            nativeBinding = require('@rick-29/binary-options-tools-win32-x64-msvc')
           }
         } catch (e) {
           loadError = e
@@ -83,7 +83,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./binary-options-tools.win32-ia32-msvc.node')
           } else {
-            nativeBinding = require('binary-options-tools-win32-ia32-msvc')
+            nativeBinding = require('@rick-29/binary-options-tools-win32-ia32-msvc')
           }
         } catch (e) {
           loadError = e
@@ -97,7 +97,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./binary-options-tools.win32-arm64-msvc.node')
           } else {
-            nativeBinding = require('binary-options-tools-win32-arm64-msvc')
+            nativeBinding = require('@rick-29/binary-options-tools-win32-arm64-msvc')
           }
         } catch (e) {
           loadError = e
@@ -113,7 +113,7 @@ switch (platform) {
       if (localFileExisted) {
         nativeBinding = require('./binary-options-tools.darwin-universal.node')
       } else {
-        nativeBinding = require('binary-options-tools-darwin-universal')
+        nativeBinding = require('@rick-29/binary-options-tools-darwin-universal')
       }
       break
     } catch {}
@@ -124,7 +124,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./binary-options-tools.darwin-x64.node')
           } else {
-            nativeBinding = require('binary-options-tools-darwin-x64')
+            nativeBinding = require('@rick-29/binary-options-tools-darwin-x64')
           }
         } catch (e) {
           loadError = e
@@ -138,7 +138,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./binary-options-tools.darwin-arm64.node')
           } else {
-            nativeBinding = require('binary-options-tools-darwin-arm64')
+            nativeBinding = require('@rick-29/binary-options-tools-darwin-arm64')
           }
         } catch (e) {
           loadError = e
@@ -157,7 +157,7 @@ switch (platform) {
       if (localFileExisted) {
         nativeBinding = require('./binary-options-tools.freebsd-x64.node')
       } else {
-        nativeBinding = require('binary-options-tools-freebsd-x64')
+        nativeBinding = require('@rick-29/binary-options-tools-freebsd-x64')
       }
     } catch (e) {
       loadError = e
@@ -174,7 +174,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./binary-options-tools.linux-x64-musl.node')
             } else {
-              nativeBinding = require('binary-options-tools-linux-x64-musl')
+              nativeBinding = require('@rick-29/binary-options-tools-linux-x64-musl')
             }
           } catch (e) {
             loadError = e
@@ -187,7 +187,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./binary-options-tools.linux-x64-gnu.node')
             } else {
-              nativeBinding = require('binary-options-tools-linux-x64-gnu')
+              nativeBinding = require('@rick-29/binary-options-tools-linux-x64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -203,7 +203,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./binary-options-tools.linux-arm64-musl.node')
             } else {
-              nativeBinding = require('binary-options-tools-linux-arm64-musl')
+              nativeBinding = require('@rick-29/binary-options-tools-linux-arm64-musl')
             }
           } catch (e) {
             loadError = e
@@ -216,7 +216,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./binary-options-tools.linux-arm64-gnu.node')
             } else {
-              nativeBinding = require('binary-options-tools-linux-arm64-gnu')
+              nativeBinding = require('@rick-29/binary-options-tools-linux-arm64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -232,7 +232,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./binary-options-tools.linux-arm-musleabihf.node')
             } else {
-              nativeBinding = require('binary-options-tools-linux-arm-musleabihf')
+              nativeBinding = require('@rick-29/binary-options-tools-linux-arm-musleabihf')
             }
           } catch (e) {
             loadError = e
@@ -245,7 +245,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./binary-options-tools.linux-arm-gnueabihf.node')
             } else {
-              nativeBinding = require('binary-options-tools-linux-arm-gnueabihf')
+              nativeBinding = require('@rick-29/binary-options-tools-linux-arm-gnueabihf')
             }
           } catch (e) {
             loadError = e
@@ -261,7 +261,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./binary-options-tools.linux-riscv64-musl.node')
             } else {
-              nativeBinding = require('binary-options-tools-linux-riscv64-musl')
+              nativeBinding = require('@rick-29/binary-options-tools-linux-riscv64-musl')
             }
           } catch (e) {
             loadError = e
@@ -274,7 +274,7 @@ switch (platform) {
             if (localFileExisted) {
               nativeBinding = require('./binary-options-tools.linux-riscv64-gnu.node')
             } else {
-              nativeBinding = require('binary-options-tools-linux-riscv64-gnu')
+              nativeBinding = require('@rick-29/binary-options-tools-linux-riscv64-gnu')
             }
           } catch (e) {
             loadError = e
@@ -289,7 +289,7 @@ switch (platform) {
           if (localFileExisted) {
             nativeBinding = require('./binary-options-tools.linux-s390x-gnu.node')
           } else {
-            nativeBinding = require('binary-options-tools-linux-s390x-gnu')
+            nativeBinding = require('@rick-29/binary-options-tools-linux-s390x-gnu')
           }
         } catch (e) {
           loadError = e
@@ -310,9 +310,14 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { RawPocketOption, StreamIterator, RawStreamIterator, sum } = nativeBinding
+const { StreamIterator, RawStreamIterator, PocketOption, Validator, startTracing, StreamLogsLayer, StreamLogsIterator, LogBuilder, Logger } = nativeBinding
 
-module.exports.RawPocketOption = RawPocketOption
 module.exports.StreamIterator = StreamIterator
 module.exports.RawStreamIterator = RawStreamIterator
-module.exports.sum = sum
+module.exports.PocketOption = PocketOption
+module.exports.Validator = Validator
+module.exports.startTracing = startTracing
+module.exports.StreamLogsLayer = StreamLogsLayer
+module.exports.StreamLogsIterator = StreamLogsIterator
+module.exports.LogBuilder = LogBuilder
+module.exports.Logger = Logger
