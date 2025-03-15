@@ -7,9 +7,9 @@
   "cpu": [
     "arm64"
   ],
-  "main": "@rick-29/binary-options-tools.linux-arm64-gnu.node",
+  "main": "binary-options-tools.linux-arm64-gnu.node",
   "files": [
-    "@rick-29/binary-options-tools.linux-arm64-gnu.node"
+    "binary-options-tools.linux-arm64-gnu.node"
   ],
   "license": "MIT",
   "engines": {

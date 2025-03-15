@@ -4,9 +4,9 @@
   "os": [
     "darwin"
   ],
-  "main": "@rick-29/binary-options-tools.darwin-universal.node",
+  "main": "binary-options-tools.darwin-universal.node",
   "files": [
-    "@rick-29/binary-options-tools.darwin-universal.node"
+    "binary-options-tools.darwin-universal.node"
   ],
   "license": "MIT",
   "engines": {

@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "@rick-29/binary-options-tools.linux-arm-gnueabihf.node",
+  "main": "binary-options-tools.linux-arm-gnueabihf.node",
   "files": [
-    "@rick-29/binary-options-tools.linux-arm-gnueabihf.node"
+    "binary-options-tools.linux-arm-gnueabihf.node"
   ],
   "license": "MIT",
   "engines": {

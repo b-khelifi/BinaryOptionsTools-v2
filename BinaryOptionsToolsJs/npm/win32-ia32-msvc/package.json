@@ -7,9 +7,9 @@
   "cpu": [
     "ia32"
   ],
-  "main": "@rick-29/binary-options-tools.win32-ia32-msvc.node",
+  "main": "binary-options-tools.win32-ia32-msvc.node",
   "files": [
-    "@rick-29/binary-options-tools.win32-ia32-msvc.node"
+    "binary-options-tools.win32-ia32-msvc.node"
   ],
   "license": "MIT",
   "engines": {

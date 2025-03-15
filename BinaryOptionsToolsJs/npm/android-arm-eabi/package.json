@@ -7,9 +7,9 @@
   "cpu": [
     "arm"
   ],
-  "main": "@rick-29/binary-options-tools.android-arm-eabi.node",
+  "main": "binary-options-tools.android-arm-eabi.node",
   "files": [
-    "@rick-29/binary-options-tools.android-arm-eabi.node"
+    "binary-options-tools.android-arm-eabi.node"
   ],
   "license": "MIT",
   "engines": {

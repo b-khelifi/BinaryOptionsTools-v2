@@ -7,9 +7,9 @@
   "cpu": [
     "x64"
   ],
-  "main": "@rick-29/binary-options-tools.darwin-x64.node",
+  "main": "binary-options-tools.darwin-x64.node",
   "files": [
-    "@rick-29/binary-options-tools.darwin-x64.node"
+    "binary-options-tools.darwin-x64.node"
   ],
   "license": "MIT",
   "engines": {
