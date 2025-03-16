@@ -1,6 +1,10 @@
 {
   "name": "@rick-29/binary-options-tools",
-  "version": "0.0.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ChipaDevTeam/BinaryOptionsTools-v2.git"
+  },  
+  "version": "0.0.1",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
