@@ -124,7 +124,6 @@ jobs:
           else
             echo "Not a release, skipping publish"
           fi
-
           set +x
         working-directory: BinaryOptionsToolsJs
         env:
