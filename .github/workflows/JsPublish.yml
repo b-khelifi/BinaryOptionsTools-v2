@@ -36,14 +36,14 @@ jobs:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
-            build: yarn build --target x86_64-unknown-linux-musl
+            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl &&  yarn build --target x86_64-unknown-linux-musl
           - host: macos-latest
             target: aarch64-apple-darwin
             build: yarn build --target aarch64-apple-darwin
           - host: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
-            build: yarn build --target aarch64-unknown-linux-gnu
+            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl &&  yarn build --target aarch64-unknown-linux-gnu
           - host: ubuntu-latest
             target: armv7-unknown-linux-gnueabihf
             setup: |
@@ -51,16 +51,16 @@ jobs:
               sudo apt-get install gcc-arm-linux-gnueabihf -y
               sudo apt-get install libssl-dev -y
             run: sudo apt-get install libssl-dev:armhf -y && which -s openssl && export OPENSSL_DIR=/usr/lib/ssl && ls /usr/local
-            build: openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl && yarn build --target armv7-unknown-linux-gnueabihf
+            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl && yarn build --target armv7-unknown-linux-gnueabihf
           - host: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
-            build: yarn build --target armv7-unknown-linux-musleabihf
+            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl &&  yarn build --target armv7-unknown-linux-musleabihf
           - host: ubuntu-latest
             target: aarch64-linux-android
-            build: yarn build --target aarch64-linux-android
+            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl &&  yarn build --target aarch64-linux-android
           - host: ubuntu-latest
             target: armv7-linux-androideabi
-            build: yarn build --target armv7-linux-androideabi
+            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl && yarn build --target armv7-linux-androideabi
           - host: ubuntu-latest
             target: aarch64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
@@ -70,14 +70,14 @@ jobs:
               yarn build --target aarch64-unknown-linux-musl
           - host: windows-latest
             target: aarch64-pc-windows-msvc
-            build: yarn build --target aarch64-pc-windows-msvc
+            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl && yarn build --target aarch64-pc-windows-msvc
           - host: ubuntu-latest
             target: riscv64gc-unknown-linux-gnu
             setup: |
               sudo apt-get update
-              sudo apt-get install gcc-riscv64-linux-gnu -y
+              sudo apt-get install gcc-arm-linux-gnueabihf -y
               sudo apt-get install libssl-dev -y
-            build: yarn build --target riscv64gc-unknown-linux-gnu
+            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl && yarn build --target riscv64gc-unknown-linux-gnu
     name: stable - ${{ matrix.settings.target }} - node@20
     runs-on: ${{ matrix.settings.host }}
     defaults:
