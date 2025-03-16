@@ -113,6 +113,7 @@ jobs:
         working-directory: BinaryOptionsToolsJs
       - name: Publish to NPM
         run: |
+          set -x
           npm config set provenance true
           if git log -1 --pretty=%B | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+$"; then
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
@@ -122,6 +123,9 @@ jobs:
             npm publish --tag next --access public
           else
             echo "Not a release, skipping publish"
+          fi
+
+          set +x
         working-directory: BinaryOptionsToolsJs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
