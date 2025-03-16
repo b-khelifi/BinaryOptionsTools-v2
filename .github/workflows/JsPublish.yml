@@ -50,9 +50,7 @@ jobs:
               sudo apt-get update
               sudo apt-get install gcc-arm-linux-gnueabihf -y
               sudo apt-get install libssl-dev -y
-              echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV
-            run: sudo apt-get install libssl-dev:armhf -y && which -s openssl && export OPENSSL_DIR=/usr/lib/ssl && ls /usr/local
-            build: sudo apt-get install pkg-config libssl-dev && openssl version -d && which -s openssl && yarn build --target armv7-unknown-linux-gnueabihf
+            build: echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV && sudo apt-get install pkg-config libssl-dev && openssl version -d && which -s openssl && yarn build --target armv7-unknown-linux-gnueabihf
           - host: ubuntu-latest
             target: armv7-unknown-linux-musleabihf
             build: sudo apt-get install pkg-config libssl-dev && openssl version -d && export OPENSSL_DIR=/usr/lib/ssl && export OPENSSL_INCLUDE_DIR=/usr/include && export OPENSSL_LIB_DIR=/usr/lib && which -s openssl &&  yarn build --target armv7-unknown-linux-musleabihf
