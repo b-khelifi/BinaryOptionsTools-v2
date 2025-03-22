@@ -1,5 +1,5 @@
 from .asyncronous import PocketOptionAsync
-from BinaryOptionsToolsV2 import RawValidator
+from BinaryOptionsToolsV2.validator import Validator
 from datetime import timedelta
 
 import asyncio
@@ -97,17 +97,158 @@ class PocketOption:
         """
         return SyncSubscription(self.loop.run_until_complete(self._client._subscribe_symbol_timed_inner(asset, time)))
     
-    def send_raw_message(self, message: str):
+    def send_raw_message(self, message: str) -> None:
+        """
+        Sends a raw WebSocket message without waiting for a response.
+        
+        Args:
+            message: Raw WebSocket message to send (e.g., '42["ping"]')
+            
+        Example:
+            ```python
+            client = PocketOption(ssid)
+            client.send_raw_message('42["ping"]')
+            ```
+        """
         self.loop.run_until_complete(self._client.send_raw_message(message))
         
-    def create_raw_order(self, message: str, validator: RawValidator) -> str:
+    def create_raw_order(self, message: str, validator: Validator) -> str:
+        """
+        Sends a raw WebSocket message and waits for a validated response.
+        
+        Args:
+            message: Raw WebSocket message to send
+            validator: Validator instance to validate the response
+            
+        Returns:
+            str: The first message that matches the validator's conditions
+            
+        Example:
+            ```python
+            from BinaryOptionsToolsV2.validator import Validator
+            
+            client = PocketOption(ssid)
+            validator = Validator.starts_with('451-["signals/load"')
+            response = client.create_raw_order(
+                '42["signals/subscribe"]',
+                validator
+            )
+            ```
+        """
         return self.loop.run_until_complete(self._client.create_raw_order(message, validator))
         
-    def create_raw_order_with_timout(self, message: str, validator: RawValidator, timeout: timedelta) -> str:
+    def create_raw_order_with_timout(self, message: str, validator: Validator, timeout: timedelta) -> str:
+        """
+        Similar to create_raw_order but with a timeout.
+        
+        Args:
+            message: Raw WebSocket message to send
+            validator: Validator instance to validate the response
+            timeout: Maximum time to wait for a valid response
+            
+        Returns:
+            str: The first message that matches the validator's conditions
+            
+        Raises:
+            TimeoutError: If no valid response is received within the timeout period
+            
+        Example:
+            ```python
+            from datetime import timedelta
+            from BinaryOptionsToolsV2.validator import Validator
+            
+            client = PocketOption(ssid)
+            validator = Validator.contains('"status":"success"')
+            try:
+                response = client.create_raw_order_with_timout(
+                    '42["trade/start"]',
+                    validator,
+                    timedelta(seconds=5)
+                )
+            except TimeoutError:
+                print("Operation timed out")
+            ```
+        """
         return self.loop.run_until_complete(self._client.create_raw_order_with_timeout(message, validator, timeout))
     
-    def create_raw_order_with_timeout_and_retry(self, message: str, validator: RawValidator, timeout: timedelta) -> str:
+    def create_raw_order_with_timeout_and_retry(self, message: str, validator: Validator, timeout: timedelta) -> str:
+        """
+        Similar to create_raw_order_with_timout but with automatic retry on failure.
+        
+        Args:
+            message: Raw WebSocket message to send
+            validator: Validator instance to validate the response
+            timeout: Maximum time to wait for each attempt
+            
+        Returns:
+            str: The first message that matches the validator's conditions
+            
+        Notes:
+            - Uses exponential backoff for retries
+            - More resilient to temporary network issues
+            - Suitable for important operations that must succeed
+            
+        Example:
+            ```python
+            from datetime import timedelta
+            from BinaryOptionsToolsV2.validator import Validator
+            
+            client = PocketOption(ssid)
+            validator = Validator.all([
+                Validator.contains('"type":"trade"'),
+                Validator.contains('"status":"completed"')
+            ]).raw_validator
+            
+            response = client.create_raw_order_with_timeout_and_retry(
+                '42["trade/execute"]',
+                validator,
+                timedelta(seconds=10)
+            )
+            ```
+        """
         return self.loop.run_until_complete(self._client.create_raw_order_with_timeout_and_retry(message, validator, timeout))
  
-    def create_raw_iterator(self, message: str, validator: RawValidator, timeout: timedelta | None = None):
-        return self.loop.run_until_complete(self._client.create_raw_iterator(message, validator, timeout))
+    def create_raw_iterator(self, message: str, validator: Validator, timeout: timedelta | None = None) -> SyncSubscription:
+        """
+        Creates a synchronous iterator that yields validated WebSocket messages.
+        
+        Args:
+            message: Initial WebSocket message to send
+            validator: Validator instance to filter incoming messages
+            timeout: Optional timeout for the entire stream
+            
+        Returns:
+            SyncSubscription yielding validated messages
+            
+        Example:
+            ```python
+            from datetime import timedelta
+            from BinaryOptionsToolsV2.validator import Validator
+            
+            client = PocketOption(ssid)
+            # Create validator for price updates
+            validator = Validator.regex(r'{"price":\d+\.\d+}').raw_validator
+            
+            # Subscribe to price stream
+            stream = client.create_raw_iterator(
+                '42["price/subscribe"]',
+                validator,
+                timeout=timedelta(minutes=5)
+            )
+            
+            # Process price updates
+            for message in stream:
+                price_data = json.loads(message)
+                print(f"Current price: {price_data['price']}")
+            ```
+            
+        Notes:
+            - The iterator will continue until the timeout is reached or an error occurs
+            - If timeout is None, the iterator will continue indefinitely
+            - The stream can be stopped by breaking out of the loop
+        """
+        return SyncSubscription(self.loop.run_until_complete(self._client.create_raw_iterator(message, validator, timeout)))
+
+    def get_server_time(self) -> int:
+        """Returns the current server time as a UNIX timestamp"""
+        return self.loop.run_until_complete(self._client.get_server_time())

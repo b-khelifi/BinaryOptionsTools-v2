@@ -1,14 +1,14 @@
 [package]
 edition = "2021"
 name = "binary-options-tools"
-version = "0.0.1"
+version = "0.1.0"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
 # Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
-napi = { version = "2.12.2", default-features = false, features = ["napi4", "tokio_rt"] }
+napi = { version = "2.12.2", default-features = false, features = ["napi4", "tokio_rt", "serde-json"] }
 napi-derive = "2.12.2"
 binary-option-tools = { path = "../crates/binary_options_tools", version = "0.1.7" }
 thiserror = "2.0.12"

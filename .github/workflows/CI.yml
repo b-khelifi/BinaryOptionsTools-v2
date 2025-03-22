@@ -12,14 +12,11 @@ on:
       - master
   #   tags:
   #     - '*'
-  # pull_request:
-  # workflow_dispatch:
+  pull_request: null
+  workflow_dispatch:
 
 # permissions:
 #   contents: read
-defaults:
-  run:
-    working-directory: BinaryOptionsToolsV2
 
 jobs:
   linux:
@@ -61,6 +58,10 @@ jobs:
 
   musllinux:
     runs-on: ${{ matrix.platform.runner }}
+    defaults:
+      run:
+        working-directory: BinaryOptionsToolsV2
+
     strategy:
       matrix:
         platform:
@@ -94,6 +95,10 @@ jobs:
 
   windows:
     runs-on: ${{ matrix.platform.runner }}
+    defaults:
+      run:
+        working-directory: BinaryOptionsToolsV2
+
     strategy:
       matrix:
         platform:
@@ -125,6 +130,10 @@ jobs:
 
   macos:
     runs-on: ${{ matrix.platform.runner }}
+    defaults:
+      run:
+        working-directory: BinaryOptionsToolsV2
+
     strategy:
       matrix:
         platform:
@@ -155,6 +164,9 @@ jobs:
 
   sdist:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: BinaryOptionsToolsV2
     steps:
       - uses: actions/checkout@v4
       - name: Build sdist
@@ -172,6 +184,10 @@ jobs:
   release:
     name: Release
     runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: BinaryOptionsToolsV2
+
     needs: [macos, windows] # [macos, windows, linux, musllinux]
     steps:
       - uses: actions/download-artifact@v3

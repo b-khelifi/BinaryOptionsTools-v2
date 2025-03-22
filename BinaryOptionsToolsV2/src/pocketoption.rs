@@ -328,6 +328,13 @@ impl RawPocketOption {
             Python::with_gil(|py| RawStreamIterator { stream }.into_py_any(py))
         })
     }
+
+    pub fn get_server_time<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+        future_into_py(py, async move {
+            Ok(client.get_server_time().await.timestamp())
+        })
+    }
 }
 
 #[pymethods]

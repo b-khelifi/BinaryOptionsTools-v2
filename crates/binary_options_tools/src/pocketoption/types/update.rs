@@ -59,7 +59,7 @@ pub struct ProcessedCandle {
     asset: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DataCandle {
     pub time: DateTime<Utc>,
     pub open: f64,

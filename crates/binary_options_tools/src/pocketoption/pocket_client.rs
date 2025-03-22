@@ -39,7 +39,61 @@ use super::{
     ws::{connect::PocketConnect, listener::Handler, stream::StreamAsset},
 };
 
-/// Class to connect automatically to Pocket Option's quick trade passing a valid SSID
+/// A client for interacting with the Pocket Option trading platform.
+/// This struct provides methods for executing trades, managing positions,
+/// streaming market data, and accessing account information.
+///
+/// # Features
+/// - Real-time market data streaming
+/// - Binary options trading (CALL/PUT)
+/// - Account management
+/// - Historical data access
+/// - Raw WebSocket message handling
+///
+/// # Examples
+/// Basic usage:
+/// ```rust
+/// use binary_option_tools::pocketoption::pocket_client::PocketOption;
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // Initialize client with session ID
+///     let client = PocketOption::new("your-ssid-here").await?;
+///
+///     // Execute a trade
+///     let trade = client.buy("EURUSD", 100.0, 60).await?;
+///
+///     // Check trade result
+///     let result = client.check_win(&trade.id).await?;
+///
+///     // Stream market data
+///     let stream = client.subscribe_symbol("EURUSD").await?;
+///     while let Some(candle) = stream.to_stream().next().await {
+///         println!("New candle: {:?}", candle);
+///     }
+///     Ok(())
+/// }
+/// ```
+///
+/// # Authentication
+/// The client requires a valid session ID (SSID) for authentication. The SSID can be obtained
+/// from the Pocket Option platform after logging in.
+///
+/// # WebSocket Connection
+/// The client maintains a WebSocket connection to the Pocket Option servers and automatically
+/// handles reconnection in case of disconnects.
+///
+/// # Error Handling
+/// Most methods return a `PocketResult<T>` which can contain various error types:
+/// - Connection errors
+/// - Authentication failures
+/// - Invalid parameters
+/// - Trading restrictions
+/// - Server errors
+///
+/// # Thread Safety
+/// The client is inherently thread-safe as it internally uses an Arc-wrapped WebSocket client.
+/// It can be safely cloned and shared between multiple tasks.
 #[derive(Clone)]
 pub struct PocketOption {
     client: WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData>,
@@ -54,6 +108,18 @@ impl Deref for PocketOption {
 }
 
 impl PocketOption {
+    /// Creates a new PocketOption client with default connection settings.
+    ///
+    /// # Arguments
+    /// * `ssid` - Session ID for authentication, can be any type that implements ToString
+    ///
+    /// # Returns
+    /// A Result containing the initialized PocketOption client or an error
+    ///
+    /// # Examples
+    /// ```rust
+    /// let client = PocketOption::new("your-session-id").await?;
+    /// ```
     pub async fn new(ssid: impl ToString) -> PocketResult<Self> {
         let ssid = Ssid::parse(ssid)?;
         let data = Data::new(PocketData::default());
@@ -73,10 +139,24 @@ impl PocketOption {
             config,
         )
         .await?;
-        // println!("Initialized!");
         Ok(Self { client })
     }
 
+    /// Creates a new PocketOption client with a custom WebSocket URL.
+    ///
+    /// # Arguments
+    /// * `ssid` - Session ID for authentication, can be any type that implements ToString
+    /// * `url` - Custom WebSocket URL to connect to
+    ///
+    /// # Returns
+    /// A Result containing the initialized PocketOption client or an error
+    ///
+    /// # Examples
+    /// ```rust
+    /// use url::Url;
+    /// let url = Url::parse("wss://custom.pocketoption.com/websocket")?;
+    /// let client = PocketOption::new_with_url("your-session-id", url).await?;
+    /// ```
     pub async fn new_with_url(ssid: impl ToString, url: Url) -> PocketResult<Self> {
         let ssid = Ssid::parse(ssid)?;
         let data = Data::new(PocketData::default());
@@ -100,6 +180,22 @@ impl PocketOption {
         // println!("Initialized!");
         Ok(Self { client })
     }
+
+    /// Executes a trade with the specified parameters.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol (e.g., "EURUSD")
+    /// * `action` - Trade direction (Call/Put)
+    /// * `amount` - Trade amount in account currency
+    /// * `time` - Trade duration in seconds
+    ///
+    /// # Returns
+    /// A tuple containing the trade ID (UUID) and trade details (Deal)
+    ///
+    /// # Examples
+    /// ```rust
+    /// let (trade_id, deal) = client.trade("EURUSD", Action::Call, 100.0, 60).await?;
+    /// ```
     pub async fn trade(
         &self,
         asset: impl ToString,
@@ -134,6 +230,20 @@ impl PocketOption {
         ))
     }
 
+    /// Places a buy (CALL) order.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol (e.g., "EURUSD")
+    /// * `amount` - Trade amount in account currency
+    /// * `time` - Trade duration in seconds
+    ///
+    /// # Returns
+    /// A tuple containing the trade ID (UUID) and trade details (Deal)
+    ///
+    /// # Examples
+    /// ```rust
+    /// let (trade_id, deal) = client.buy("EURUSD", 100.0, 60).await?;
+    /// ```
     pub async fn buy(
         &self,
         asset: impl ToString,
@@ -144,6 +254,20 @@ impl PocketOption {
         self.trade(asset, Action::Call, amount, time).await
     }
 
+    /// Places a sell (PUT) order.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol (e.g., "EURUSD")
+    /// * `amount` - Trade amount in account currency
+    /// * `time` - Trade duration in seconds
+    ///
+    /// # Returns
+    /// A tuple containing the trade ID (UUID) and trade details (Deal)
+    ///
+    /// # Examples
+    /// ```rust
+    /// let (trade_id, deal) = client.sell("EURUSD", 100.0, 60).await?;
+    /// ```
     pub async fn sell(
         &self,
         asset: impl ToString,
@@ -154,6 +278,14 @@ impl PocketOption {
         self.trade(asset, Action::Put, amount, time).await
     }
 
+    /// Gets the end time of a deal by its ID.
+    ///
+    /// # Arguments
+    /// * `id` - UUID of the trade
+    ///
+    /// # Returns
+    /// Optional DateTime indicating when the trade will expire, adjusted for server time
+    /// Returns None if the trade is not found
     pub async fn get_deal_end_time(&self, id: Uuid) -> Option<DateTime<Utc>> {
         if let Some(trade) = self
             .client
@@ -179,7 +311,22 @@ impl PocketOption {
         None
     }
 
-    /// If the function returna an `OutOfRangeError` that means that the deal was not found within the closed deals even thought the expiration time passed
+    /// Checks the results of a trade by its ID.
+    ///
+    /// # Arguments
+    /// * `trade_id` - UUID of the trade to check
+    ///
+    /// # Returns
+    /// Deal information containing profit/loss and other trade details
+    ///
+    /// # Errors
+    /// Returns an OutOfRangeError if the deal is not found in closed deals after expiration
+    ///
+    /// # Examples
+    /// ```rust
+    /// let result = client.check_results(trade_id).await?;
+    /// println!("Trade profit: {}", result.profit);
+    /// ```
     pub async fn check_results(&self, trade_id: Uuid) -> PocketResult<Deal> {
         info!(target: "CheckResults", "Checking results for trade of id {}", trade_id);
         if let Some(trade) = self
@@ -249,6 +396,24 @@ impl PocketOption {
         Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()).into())
     }
 
+    /// Retrieves historical candle data for a specific asset.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol (e.g., "EURUSD")
+    /// * `period` - Time period for each candle in seconds
+    /// * `offset` - Number of periods to offset from current time
+    ///
+    /// # Returns
+    /// A vector of DataCandle objects containing historical price data
+    ///
+    /// # Errors
+    /// * Returns GeneralParsingError if server time is invalid
+    /// * Returns UnexpectedIncorrectWebSocketMessage if response format is incorrect
+    ///
+    /// # Examples
+    /// ```rust
+    /// let candles = client.get_candles("EURUSD", 60, 0).await?; // Get current minute candles
+    /// ```
     pub async fn get_candles(
         &self,
         asset: impl ToString,
@@ -287,6 +452,19 @@ impl PocketOption {
         ))
     }
 
+    /// Retrieves the most recent historical data for an asset.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol (e.g., "EURUSD")
+    /// * `period` - Time period for each candle in seconds
+    ///
+    /// # Returns
+    /// A vector of DataCandle objects containing recent price data
+    ///
+    /// # Examples
+    /// ```rust
+    /// let recent_data = client.history("EURUSD", 60).await?; // Get recent minute data
+    /// ```
     pub async fn history(
         &self,
         asset: impl ToString,
@@ -333,11 +511,31 @@ impl PocketOption {
         self.client.data.get_balance().await
     }
 
+    pub async fn is_demo(&self) -> bool {
+        info!(target: "IsDemo", "Retrieving demo status");
+        self.client.credentials.demo()
+    }
+
     pub async fn get_payout(&self) -> HashMap<String, i32> {
         info!(target: "GetPayout", "Retrieving payout for all the assets");
         self.client.data.get_full_payout().await
     }
 
+    /// Subscribes to real-time price updates for an asset.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol to subscribe to (e.g., "EURUSD")
+    ///
+    /// # Returns
+    /// A StreamAsset object that can be used to receive real-time updates
+    ///
+    /// # Examples
+    /// ```rust
+    /// let stream = client.subscribe_symbol("EURUSD").await?;
+    /// while let Some(update) = stream.next().await {
+    ///     println!("New price: {:?}", update);
+    /// }
+    /// ```
     pub async fn subscribe_symbol(&self, asset: impl ToString) -> PocketResult<StreamAsset> {
         info!(target: "SubscribeSymbol", "Subscribing to asset '{}'", asset.to_string());
         let _ = self.history(asset.to_string(), 1).await?;
@@ -345,6 +543,20 @@ impl PocketOption {
         Ok(self.client.data.add_stream(asset.to_string()).await)
     }
 
+    /// Subscribes to chunked real-time price updates for an asset.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol to subscribe to (e.g., "EURUSD")
+    /// * `chunck_size` - Number of updates to group together into a single candle
+    ///
+    /// # Returns
+    /// A StreamAsset object that emits chunks of price updates
+    ///
+    /// # Examples
+    /// ```rust
+    /// let stream = client.subscribe_symbol_chuncked("EURUSD", 5).await?;
+    /// // Will receive updates in groups of 5
+    /// ```
     pub async fn subscribe_symbol_chuncked(
         &self,
         asset: impl ToString,
@@ -360,6 +572,21 @@ impl PocketOption {
             .await)
     }
 
+    /// Subscribes to time-based real-time price updates for an asset.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol to subscribe to (e.g., "EURUSD")
+    /// * `time` - Time duration between updates
+    ///
+    /// # Returns
+    /// A StreamAsset object that emits updates at specified time intervals
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::time::Duration;
+    /// let stream = client.subscribe_symbol_timed("EURUSD", Duration::from_secs(5)).await?;
+    /// // Will receive updates every 5 seconds
+    /// ```
     pub async fn subscribe_symbol_timed(
         &self,
         asset: impl ToString,
@@ -375,16 +602,45 @@ impl PocketOption {
             .await)
     }
 
+    /// Sends a raw WebSocket message without waiting for a response.
+    ///
+    /// # Arguments
+    /// * `message` - Raw message to send to the WebSocket server
+    ///
+    /// # Returns
+    /// Returns Ok(()) if the message was sent successfully
+    ///
+    /// # Examples
+    /// ```rust
+    /// client.send_raw_message(r#"42["signals/subscribe"]"#).await?;
+    /// ```
     pub async fn send_raw_message(&self, message: impl ToString) -> PocketResult<()> {
         self.client.raw_send(RawWebsocketMessage::from(message.to_string())).await?;
         Ok(())
     }
 
+    /// Sends a raw WebSocket message and waits for a validated response.
+    ///
+    /// # Arguments
+    /// * `message` - Raw message or RawWebsocketMessage to send
+    /// * `validator` - Validator instance to filter and validate the response
+    ///
+    /// # Returns
+    /// The first validated response message
+    ///
+    /// # Examples
+    /// ```rust
+    /// let validator = Box::new(RawValidator::starts_with(r#"42["signals/load""#));
+    /// let response = client.create_raw_order(
+    ///     r#"42["signals/subscribe"]"#,
+    ///     validator
+    /// ).await?;
+    /// ```
     pub async fn create_raw_order(
         &self,
         message: impl Into<RawWebsocketMessage>,
         validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>,
-    ) -> PocketResult<RawWebsocketMessage>{
+    ) -> PocketResult<RawWebsocketMessage> {
         // TODO: Complete this function + add the following functionality
         //  * create_raw_order_with_timeout
         //  * create_raw_order_iterator: return a stream like the StreamAsset
@@ -393,16 +649,108 @@ impl PocketOption {
         Ok(self.client.send_raw_message(message.into(), validator).await?)
     }
 
-    pub async fn create_raw_order_with_timeout(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>, timeout: Duration) -> PocketResult<RawWebsocketMessage> {
+    /// Sends a raw WebSocket message and waits for a validated response with a timeout.
+    ///
+    /// # Arguments
+    /// * `message` - Raw message or RawWebsocketMessage to send
+    /// * `validator` - Validator instance to filter and validate the response
+    /// * `timeout` - Maximum time to wait for a response
+    ///
+    /// # Returns
+    /// The first validated response message or times out
+    ///
+    /// # Errors
+    /// Returns TimeoutError if no valid response is received within the timeout period
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::time::Duration;
+    /// 
+    /// let validator = Box::new(RawValidator::starts_with(r#"42["signals/load""#));
+    /// let response = client.create_raw_order_with_timeout(
+    ///     r#"42["signals/subscribe"]"#,
+    ///     validator,
+    ///     Duration::from_secs(5)
+    /// ).await?;
+    /// ```
+    pub async fn create_raw_order_with_timeout(
+        &self,
+        message: impl Into<RawWebsocketMessage>,
+        validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>,
+        timeout: Duration
+    ) -> PocketResult<RawWebsocketMessage> {
         Ok(self.client.send_raw_message_with_timout(timeout, "CreateRawOrder".to_string(), message.into(), validator).await?)
     }
 
-    pub async fn create_raw_order_with_timeout_and_retry(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>, timeout: Duration) -> PocketResult<RawWebsocketMessage> {
+    /// Sends a raw WebSocket message with timeout and automatic retry on failure.
+    ///
+    /// # Arguments
+    /// * `message` - Raw message or RawWebsocketMessage to send
+    /// * `validator` - Validator instance to filter and validate the response
+    /// * `timeout` - Maximum time to wait for each attempt
+    ///
+    /// # Returns
+    /// The first validated response message
+    ///
+    /// # Notes
+    /// Will retry the request if a timeout occurs, using exponential backoff
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::time::Duration;
+    /// 
+    /// let validator = Box::new(RawValidator::starts_with(r#"42["signals/load""#));
+    /// let response = client.create_raw_order_with_timeout_and_retry(
+    ///     r#"42["signals/subscribe"]"#,
+    ///     validator,
+    ///     Duration::from_secs(5)
+    /// ).await?;
+    /// ```
+    pub async fn create_raw_order_with_timeout_and_retry(
+        &self,
+        message: impl Into<RawWebsocketMessage>,
+        validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>,
+        timeout: Duration
+    ) -> PocketResult<RawWebsocketMessage> {
         Ok(self.client.send_raw_message_with_timeout_and_retry(timeout, "CreateRawOrderWithRetry".to_string(), message.into(), validator).await?)
     }
 
-    pub async fn create_raw_iterator(&self, message: impl Into<RawWebsocketMessage>, validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>, timeout: Option<Duration>) -> PocketResult<FilteredRecieverStream<RawWebsocketMessage>> {
+    /// Creates a stream of validated WebSocket messages.
+    ///
+    /// # Arguments
+    /// * `message` - Initial message to establish the stream
+    /// * `validator` - Validator instance to filter incoming messages
+    /// * `timeout` - Optional timeout for the entire stream
+    ///
+    /// # Returns
+    /// A stream that yields validated WebSocket messages
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::time::Duration;
+    /// 
+    /// let validator = Box::new(RawValidator::starts_with(r#"42["signals/load""#));
+    /// let stream = client.create_raw_iterator(
+    ///     r#"42["signals/subscribe"]"#,
+    ///     validator,
+    ///     Some(Duration::from_secs(60))
+    /// ).await?;
+    /// 
+    /// while let Some(message) = stream.next().await {
+    ///     println!("Received: {}", message?);
+    /// }
+    /// ```
+    pub async fn create_raw_iterator(
+        &self,
+        message: impl Into<RawWebsocketMessage>,
+        validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>,
+        timeout: Option<Duration>
+    ) -> PocketResult<FilteredRecieverStream<RawWebsocketMessage>> {
         Ok(self.client.send_raw_message_iterator(message.into(), validator, timeout).await?)
+    }
+
+    pub async fn get_server_time(&self) -> DateTime<Utc> {
+        Utc::now() + Duration::from_secs(2 * 3600 + 123)
     }
 
     pub fn kill(self) {
@@ -781,6 +1129,9 @@ mod tests {
         let ssid = r#"42["auth",{"session":"mj194bjgehatidr1ml82453ajg","isDemo":1,"uid":87888871,"platform":2}]	"#;
         let client = PocketOption::new(ssid).await?;
         sleep(Duration::from_secs(5)).await;
+        fn my_validator(msg: &RawWebsocketMessage) -> bool {
+                 msg.to_string().contains("success")
+             }
         let res = client.create_raw_order(r#"42["signals/subscribe"]"#, Box::new(raw_validator())).await?;
         info!("{res}");
         Ok(())

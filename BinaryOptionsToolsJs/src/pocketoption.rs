@@ -20,11 +20,31 @@ use crate::runtime::get_runtime;
 use crate::validator::Validator;
 
 
+/// Iterator for receiving processed WebSocket messages.
+/// Provides asynchronous iteration over parsed messages from the server.
+/// 
+/// # Examples
+/// ```javascript
+/// const stream = await client.subscribeSymbol('EUR/USD');
+/// for await (const price of stream) {
+///     console.log('Current price:', price);
+/// }
+/// ```
 #[napi]
 pub struct StreamIterator {
     stream: Arc<Mutex<Fuse<BoxStream<'static, PocketResult<DataCandle>>>>>,
 }
 
+/// Iterator for receiving raw WebSocket messages.
+/// Provides asynchronous iteration over raw messages from the server.
+/// 
+/// # Examples
+/// ```javascript
+/// const stream = await client.createRawIterator();
+/// for await (const message of stream) {
+///     console.log('Raw message:', message);
+/// }
+/// ```
 #[napi]
 pub struct RawStreamIterator {
     stream: Arc<Mutex<Fuse<BoxStream<'static, BinaryOptionsResult<RawWebsocketMessage>>>>>,
@@ -432,9 +452,10 @@ impl PocketOption {
     /// ```javascript
     /// await client.sendRawMessage(JSON.stringify({
     ///     type: "custom_command",
-    ///     data: { /* ... */ }
+    ///     data: { / ... / }
     /// }));
     /// ```
+    #[napi]
     pub async fn send_raw_message(&self, message: String) -> Result<()> {
         self.client
             .send_raw_message(message)
@@ -455,10 +476,11 @@ impl PocketOption {
     /// ```javascript
     /// const validator = new Validator();
     /// const result = await client.createRawOrder(
-    ///     JSON.stringify({ /* order details */ }),
+    ///     JSON.stringify({ / order details / }),
     ///     validator
     /// );
     /// ```
+    #[napi]
     pub async fn create_raw_order(&self, message: String, validator: &Validator) -> Result<String> {
         let res = self.client
             .create_raw_order(message, validator.to_val())
@@ -481,22 +503,23 @@ impl PocketOption {
     /// ```javascript
     /// const validator = new Validator();
     /// const result = await client.createRawOrderWithTimeout(
-    ///     JSON.stringify({ /* order details */ }),
+    ///     JSON.stringify({ / order details / }),
     ///     validator,
     ///     30 // 30 seconds timeout
     /// );
     /// ```
+    #[napi]
     pub async fn create_raw_order_with_timeout(
         &self,
         message: String,
         validator: &Validator,
-        timeout: u64,
+        timeout: u32,
     ) -> Result<String> {
         let res = self.client
             .create_raw_order_with_timeout(
                 message,
                 validator.to_val(),
-                Duration::from_secs(timeout),
+                Duration::from_secs(timeout as u64),
             )
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
@@ -517,22 +540,23 @@ impl PocketOption {
     /// ```javascript
     /// const validator = new Validator();
     /// const result = await client.createRawOrderWithTimeoutAndRetry(
-    ///     JSON.stringify({ /* order details */ }),
+    ///     JSON.stringify({ / order details / }),
     ///     validator,
     ///     15 // 15 seconds timeout per attempt
     /// );
     /// ```
+    #[napi]
     pub async fn create_raw_order_with_timeout_and_retry(
         &self,
         message: String,
         validator: &Validator,
-        timeout: u64,
+        timeout: u32,
     ) -> Result<String> {
         let res = self.client
             .create_raw_order_with_timeout_and_retry(
                 message,
                 validator.to_val(),
-                Duration::from_secs(timeout),
+                Duration::from_secs(timeout as u64),
             )
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
@@ -553,7 +577,7 @@ impl PocketOption {
     /// ```javascript
     /// const validator = new Validator();
     /// const stream = await client.createRawIterator(
-    ///     JSON.stringify({ /* subscription details */ }),
+    ///     JSON.stringify({ / subscription details / }),
     ///     validator,
     ///     60 // Optional: 60 seconds timeout
     /// );
@@ -561,13 +585,14 @@ impl PocketOption {
     ///     console.log(`Received: ${message}`);
     /// }
     /// ```
+    #[napi]
     pub async fn create_raw_iterator(
         &self,
         message: String,
         validator: &Validator,
-        timeout: Option<u64>,
+        timeout: Option<u32>,
     ) -> Result<RawStreamIterator> {
-        let timeout = timeout.map(Duration::from_secs);
+        let timeout = timeout.map(|t| Duration::from_secs(t as u64));
         let stream = self.client
             .create_raw_iterator(message, validator.to_val(), timeout)
             .await
@@ -584,11 +609,35 @@ impl PocketOption {
 
 #[napi]
 impl StreamIterator {
+    /// Gets the next price update from the stream.
+    /// 
+    /// # Returns
+    /// * A Promise that resolves to:
+    ///   * A JSON string containing the next price update data
+    ///   * null if the stream has ended
+    /// * Rejects with an error if the stream encounters an error
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const stream = await client.subscribeSymbol('EUR/USD');
+    /// 
+    /// // Using async/await
+    /// try {
+    ///     while (true) {
+    ///         const update = await stream.next();
+    ///         if (update === null) break;
+    ///         const data = JSON.parse(update);
+    ///         console.log('Price:', data.price);
+    ///     }
+    /// } catch (err) {
+    ///     console.error('Stream error:', err);
+    /// }
+    /// ```
     #[napi]
-    pub async fn next(&self) -> Result<Option<String>> {
+    pub async fn next(&self) -> Result<Option<serde_json::Value>> {
         let mut stream = self.stream.lock().await;
         match stream.next().await {
-            Some(Ok(candle)) => serde_json::to_string(&candle)
+            Some(Ok(candle)) => serde_json::to_value(&candle)
                 .map(Some)
                 .map_err(|e| Error::from_reason(e.to_string())),
             Some(Err(e)) => Err(Error::from_reason(e.to_string())),
@@ -599,6 +648,41 @@ impl StreamIterator {
 
 #[napi]
 impl RawStreamIterator {
+    /// Gets the next raw WebSocket message from the stream.
+    /// 
+    /// # Returns
+    /// * A Promise that resolves to:
+    ///   * A string containing the raw WebSocket message
+    ///   * null if the stream has ended
+    /// * Rejects with an error if the stream encounters an error
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const stream = await client.createRawIterator(
+    ///     JSON.stringify({ type: 'subscribe' }),
+    ///     validator
+    /// );
+    /// 
+    /// // Using async/await
+    /// try {
+    ///     while (true) {
+    ///         const message = await stream.next();
+    ///         if (message === null) break;
+    ///         console.log('Raw message:', message);
+    ///     }
+    /// } catch (err) {
+    ///     console.error('Stream error:', err);
+    /// }
+    /// 
+    /// // Using for-await-of
+    /// try {
+    ///     for await (const message of stream) {
+    ///         console.log('Raw message:', message);
+    ///     }
+    /// } catch (err) {
+    ///     console.error('Stream error:', err);
+    /// }
+    /// ```
     #[napi]
     pub async fn next(&self) -> Result<Option<String>> {
         let mut stream = self.stream.lock().await;

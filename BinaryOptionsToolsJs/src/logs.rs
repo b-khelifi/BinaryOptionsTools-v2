@@ -10,8 +10,7 @@ use futures_util::{
     StreamExt,
 };
 use napi::{
-    Error,
-    Result,
+    Error, Result
 };
 use napi_derive::napi;
 use tokio::sync::Mutex;
@@ -25,6 +24,21 @@ use tracing_subscriber::{
 
 const TARGET: &str = "JavaScript";
 
+/// Initializes the logging system with the specified configuration.
+/// 
+/// # Arguments
+/// * `path` - Directory path where log files will be stored
+/// * `level` - Logging level ("DEBUG", "INFO", "WARN", "ERROR")
+/// * `terminal` - Whether to output logs to terminal
+/// * `layers` - Additional logging layers for custom log handling
+/// 
+/// # Examples
+/// ```javascript
+/// const { startTracing } = require('binary-options-tools');
+/// 
+/// // Initialize logging with DEBUG level and terminal output
+/// startTracing('./logs', 'DEBUG', true, []);
+/// ```
 #[napi]
 pub fn start_tracing(
     path: String,
@@ -76,6 +90,16 @@ pub fn start_tracing(
     Ok(())
 }
 
+/// A custom logging layer that can be used to capture and process log messages.
+/// Used in conjunction with `StreamLogsIterator` to receive log messages.
+/// 
+/// # Examples
+/// ```javascript
+/// const { StreamLogsLayer, LogBuilder } = require('binary-options-tools');
+/// 
+/// const builder = new LogBuilder();
+/// const iterator = builder.createLogsIterator('DEBUG');
+/// ```
 #[napi]
 #[derive(Clone)]
 pub struct StreamLogsLayer {
@@ -103,6 +127,18 @@ impl<'a> MakeWriter<'a> for NoneWriter {
 
 type LogStream = Fuse<BoxStream<'static, BinaryOptionsResult<String>>>;
 
+/// Iterator for receiving log messages from a `StreamLogsLayer`.
+/// Supports asynchronous iteration over log messages.
+/// 
+/// # Examples
+/// ```javascript
+/// const iterator = builder.createLogsIterator('DEBUG');
+/// 
+/// // Async iteration
+/// for await (const log of iterator) {
+///     console.log('Received log:', log);
+/// }
+/// ```
 #[napi]
 pub struct StreamLogsIterator {
     stream: Arc<Mutex<LogStream>>,
@@ -110,17 +146,57 @@ pub struct StreamLogsIterator {
 
 #[napi]
 impl StreamLogsIterator {
+    /// Gets the next log message from the stream.
+    /// 
+    /// # Returns
+    /// * A Promise that resolves to:
+    ///   * A string containing the next log message
+    ///   * null if the stream has ended
+    /// * Rejects with an error if the stream encounters an error
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const iterator = builder.createLogsIterator('DEBUG');
+    /// 
+    /// // Using async/await
+    /// try {
+    ///     while (true) {
+    ///         const log = await iterator.next();
+    ///         if (log === null) break;
+    ///         console.log('Log:', log);
+    ///     }
+    /// } catch (err) {
+    ///     console.error('Stream error:', err);
+    /// }
+    /// ```
     #[napi]
-    pub async fn next(&self) -> Result<Option<String>> {
+    pub async fn next(&self) -> Result<Option<serde_json::Value>> {
         let mut stream = self.stream.lock().await;
         match stream.next().await {
-            Some(Ok(msg)) => Ok(Some(msg)),
+            Some(Ok(msg)) => Ok(Some(serde_json::from_str(&msg)?)),
             Some(Err(e)) => Err(Error::from_reason(e.to_string())),
             None => Ok(None),
         }
     }
 }
 
+/// Builder pattern for configuring the logging system.
+/// Allows adding multiple log outputs and configuring log levels.
+/// 
+/// # Examples
+/// ```javascript
+/// const { LogBuilder } = require('binary-options-tools');
+/// 
+/// const builder = new LogBuilder();
+/// // Add file logging
+/// builder.logFile('./app.log', 'INFO');
+/// // Add terminal logging
+/// builder.terminal('DEBUG');
+/// // Create log stream
+/// const iterator = builder.createLogsIterator('DEBUG');
+/// // Initialize logging
+/// builder.build();
+/// ```
 #[napi]
 #[derive(Default)]
 pub struct LogBuilder {
@@ -130,11 +206,37 @@ pub struct LogBuilder {
 
 #[napi]
 impl LogBuilder {
+    /// Creates a new LogBuilder instance.
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const { LogBuilder } = require('binary-options-tools');
+    /// const builder = new LogBuilder();
+    /// ```
     #[napi(constructor)]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Creates a new logs iterator that receives log messages at the specified level.
+    /// 
+    /// # Arguments
+    /// * `level` - Logging level ("DEBUG", "INFO", "WARN", "ERROR")
+    /// * `timeout` - Optional timeout in seconds after which the iterator will stop
+    /// 
+    /// # Returns
+    /// * A StreamLogsIterator that can be used to receive log messages
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const builder = new LogBuilder();
+    /// 
+    /// // Create iterator with default DEBUG level
+    /// const iterator1 = builder.createLogsIterator('DEBUG');
+    /// 
+    /// // Create iterator with INFO level and 60-second timeout
+    /// const iterator2 = builder.createLogsIterator('INFO', 60);
+    /// ```
     #[napi]
     pub fn create_logs_iterator(
         &mut self,
@@ -156,6 +258,25 @@ impl LogBuilder {
         Ok(iter)
     }
 
+    /// Adds a file output for logs at the specified level.
+    /// 
+    /// # Arguments
+    /// * `path` - Path to the log file
+    /// * `level` - Logging level ("DEBUG", "INFO", "WARN", "ERROR")
+    /// 
+    /// # Returns
+    /// * Result indicating success or failure
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const builder = new LogBuilder();
+    /// 
+    /// // Log INFO and above to app.log
+    /// builder.logFile('./app.log', 'INFO');
+    /// 
+    /// // Log DEBUG and above to debug.log
+    /// builder.logFile('./debug.log', 'DEBUG');
+    /// ```
     #[napi]
     pub fn log_file(&mut self, path: String, level: String) -> Result<()> {
         let logs = OpenOptions::new()
@@ -172,6 +293,21 @@ impl LogBuilder {
         Ok(())
     }
 
+    /// Adds terminal (console) output for logs at the specified level.
+    /// 
+    /// # Arguments
+    /// * `level` - Logging level ("DEBUG", "INFO", "WARN", "ERROR")
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const builder = new LogBuilder();
+    /// 
+    /// // Show DEBUG and above in terminal
+    /// builder.terminal('DEBUG');
+    /// 
+    /// // Show only INFO and above in terminal
+    /// builder.terminal('INFO');
+    /// ```
     #[napi]
     pub fn terminal(&mut self, level: String) {
         let layer = fmt::Layer::default()
@@ -180,6 +316,25 @@ impl LogBuilder {
         self.layers.push(layer);
     }
 
+    /// Finalizes the logging configuration and initializes the logging system.
+    /// Must be called after all outputs are configured and before logging begins.
+    /// Can only be called once per builder instance.
+    /// 
+    /// # Returns
+    /// * Result indicating success or failure
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const builder = new LogBuilder();
+    /// builder.logFile('./app.log', 'INFO');
+    /// builder.terminal('DEBUG');
+    /// 
+    /// // Initialize logging system
+    /// builder.build();
+    /// 
+    /// // Attempting to build again will result in an error
+    /// builder.build(); // Error: Builder has already been built
+    /// ```
     #[napi]
     pub fn build(&mut self) -> Result<()> {
         if self.build {
@@ -199,32 +354,99 @@ impl LogBuilder {
     }
 }
 
+/// Simple logging interface for emitting log messages at different levels.
+/// 
+/// # Examples
+/// ```javascript
+/// const { Logger } = require('binary-options-tools');
+/// 
+/// const logger = new Logger();
+/// logger.debug('Debug message');
+/// logger.info('Info message');
+/// logger.warn('Warning message');
+/// logger.error('Error message');
+/// ```
 #[napi]
 #[derive(Default)]
 pub struct Logger;
 
 #[napi]
 impl Logger {
+    /// Creates a new Logger instance.
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const { Logger } = require('binary-options-tools');
+    /// const logger = new Logger();
+    /// ```
     #[napi(constructor)]
     pub fn new() -> Self {
         Self
     }
 
+    /// Logs a debug message.
+    /// Only appears if logging level is set to DEBUG.
+    /// 
+    /// # Arguments
+    /// * `message` - The message to log
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const logger = new Logger();
+    /// logger.debug('Processing started');
+    /// logger.debug(`Current value: ${value}`);
+    /// ```
     #[napi]
     pub fn debug(&self, message: String) {
         debug!(target: TARGET, message);
     }
 
+    /// Logs an info message.
+    /// Only appears if logging level is set to INFO or lower.
+    /// 
+    /// # Arguments
+    /// * `message` - The message to log
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const logger = new Logger();
+    /// logger.info('Operation completed successfully');
+    /// logger.info(`Processed ${count} items`);
+    /// ```
     #[napi]
     pub fn info(&self, message: String) {
         info!(target: TARGET, message);
     }
 
+    /// Logs a warning message.
+    /// Only appears if logging level is set to WARN or lower.
+    /// 
+    /// # Arguments
+    /// * `message` - The message to log
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const logger = new Logger();
+    /// logger.warn('Resource usage high');
+    /// logger.warn(`Retry attempt ${retryCount} of ${maxRetries}`);
+    /// ```
     #[napi]
     pub fn warn(&self, message: String) {
         warn!(target: TARGET, message);
     }
 
+    /// Logs an error message.
+    /// Only appears if logging level is set to ERROR or lower.
+    /// 
+    /// # Arguments
+    /// * `message` - The message to log
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// const logger = new Logger();
+    /// logger.error('Operation failed');
+    /// logger.error(`Failed to connect: ${error.message}`);
+    /// ```
     #[napi]
     pub fn error(&self, message: String) {
         error!(target: TARGET, message);
@@ -291,3 +513,4 @@ mod tests {
         join(log(), reciever_fn(receiver)).await;
     }
 }
+
