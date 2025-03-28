@@ -1061,10 +1061,13 @@ mod tests {
         let ssid = r#"42["auth",{"session":"t0mc6nefcv7ncr21g4fmtioidb","isDemo":1,"uid":90000798,"platform":2}]	"#;
         // time: 1733040000, offset: 540000, period: 3600
         let client = PocketOption::new(ssid).await.unwrap();
-        for i in 0..1000 {
+        let mut last_candles = Vec::new();
+        for i in 0..10 {
             let candles = client.get_candles("EURUSD_otc", 60, 6000).await?;
+            last_candles = candles.clone();
             println!("Candles n°{} len: {}, ", i + 1, candles.len());
         }
+        println!("Candles: {:#?}", last_candles);
         Ok(())
     }
 

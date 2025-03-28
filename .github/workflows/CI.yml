@@ -12,7 +12,6 @@ on:
       - master
   #   tags:
   #     - '*'
-  pull_request: null
   workflow_dispatch:
 
 # permissions:

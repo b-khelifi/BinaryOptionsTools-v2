@@ -252,3 +252,33 @@ class PocketOption:
     def get_server_time(self) -> int:
         """Returns the current server time as a UNIX timestamp"""
         return self.loop.run_until_complete(self._client.get_server_time())
+
+    def is_demo(self) -> bool:
+        """
+        Checks if the current account is a demo account.
+
+        Returns:
+            bool: True if using a demo account, False if using a real account
+
+        Examples:
+            ```python
+            # Basic account type check
+            client = PocketOption(ssid)
+            is_demo = client.is_demo()
+            print("Using", "demo" if is_demo else "real", "account")
+
+            # Example with balance check
+            def check_account():
+                is_demo = client.is_demo()
+                balance = client.balance()
+                print(f"{'Demo' if is_demo else 'Real'} account balance: {balance}")
+
+            # Example with trade validation
+            def safe_trade(asset: str, amount: float, duration: int):
+                is_demo = client.is_demo()
+                if not is_demo and amount > 100:
+                    raise ValueError("Large trades should be tested in demo first")
+                return client.buy(asset, amount, duration)
+            ```
+        """
+        return self.loop.run_until_complete(self._client.is_demo())

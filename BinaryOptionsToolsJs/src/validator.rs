@@ -101,7 +101,7 @@ impl ValidatorTrait<RawWebsocketMessage> for BoxedValidator {
 /// const containsValidator = Validator.contains("World");
 /// 
 /// console.log(validator.check("Hello World")); // true
-/// console.log(regexValidator.check("Hello World")); // true
+/// cons-.log(regexValidator.check("Hello World")); // true
 /// console.log(containsValidator.check("Hello World")); // true
 /// ```
 #[napi]

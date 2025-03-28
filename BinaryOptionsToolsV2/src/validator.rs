@@ -1,4 +1,6 @@
-use pyo3::{pyclass, pymethods, types::{PyAnyMethods, PyList}, Bound, PyResult};
+use std::sync::Arc;
+
+use pyo3::{pyclass, pymethods, types::{PyAnyMethods, PyList}, Bound, PyObject, PyResult, Python};
 use regex::Regex;
 
 use binary_option_tools::{pocketoption::types::base::RawWebsocketMessage, reimports::ValidatorTrait};
@@ -20,6 +22,12 @@ pub struct RegexValidator {
 
 #[pyclass]
 #[derive(Clone)]
+pub struct PyCustom {
+    custom: Arc<PyObject>
+}
+
+#[pyclass]
+#[derive(Clone)]
 pub enum RawValidator {
     None(),
     Regex(RegexValidator),
@@ -28,7 +36,8 @@ pub enum RawValidator {
     Contains(String),
     All(ArrayValidator),
     Any(ArrayValidator),
-    Not(BoxedValidator)
+    Not(BoxedValidator),
+    Custom(PyCustom)
 }
 
 impl RawValidator {
@@ -79,8 +88,18 @@ impl ValidatorTrait<RawWebsocketMessage> for RawValidator {
             Self::Not(val) => !val.validate(message),
             Self::All(val) => val.validate_all(message),
             Self::Any(val) => val.validate_any(message),
-            Self::Regex(val) => val.validate(message)
+            Self::Regex(val) => val.validate(message),
+            Self::Custom(val) => val.validate(message)
         }
+    }
+}
+
+impl ValidatorTrait<RawWebsocketMessage> for PyCustom {
+    fn validate(&self, message: &RawWebsocketMessage) -> bool {
+        Python::with_gil(|py| {
+            let res = self.custom.call(py, (message.to_string(),), None).expect("Expected provided function to be callable");
+            res.extract(py).expect("Expected provided function to return a boolean")
+        })
     }
 }
 
@@ -149,6 +168,11 @@ impl RawValidator {
     pub fn any(validator: Bound<'_, PyList>) -> PyResult<Self> {
         let val = validator.extract::<Vec<RawValidator>>()?;
         Ok(Self::new_any(val))
+    }
+
+    #[staticmethod]
+    pub fn custom(func: PyObject) -> Self {
+        Self::Custom(PyCustom { custom: Arc::new(func) })
     }
 
     pub fn check(&self, msg: String) -> bool {

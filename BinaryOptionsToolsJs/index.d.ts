@@ -159,6 +159,36 @@ export declare class PocketOption {
    */
   static newWithUrl(ssid: string, url: string): Promise<PocketOption>
   /**
+   * Checks if the current account is a demo account.
+   *
+   * # Returns
+   * * `true` if the account is a demo account
+   * * `false` if the account is a real account
+   *
+   * # Examples
+   * ```javascript
+   * // Check account type
+   * const isDemo = await client.isDemo();
+   * if (isDemo) {
+   *     console.log("Using demo account");
+   * } else {
+   *     console.log("Using real account");
+   * }
+   *
+   * // Example with balance check
+   * const isDemo = await client.isDemo();
+   * const balance = await client.balance();
+   * console.log(`${isDemo ? 'Demo' : 'Real'} account balance: ${balance}`);
+   *
+   * // Example with trade validation
+   * const isDemo = await client.isDemo();
+   * if (!isDemo && amount > 100) {
+   *     throw new Error("Large trades should be tested in demo first");
+   * }
+   * ```
+   */
+  isDemo(): Promise<boolean>
+  /**
    * Executes a buy (CALL) order for a specified asset.
    *
    * # Arguments
@@ -167,7 +197,7 @@ export declare class PocketOption {
    * * `time` - The option duration in seconds
    *
    * # Returns
-   * A vector containing the order ID and order details as JSON strings
+   * A vector containing the order ID and order details as JSON
    *
    * # Examples
    * ```javascript
@@ -176,7 +206,7 @@ export declare class PocketOption {
    * console.log(`Details: ${details}`);
    * ```
    */
-  buy(asset: string, amount: number, time: number): Promise<Array<string>>
+  buy(asset: string, amount: number, time: number): Promise<Array<any>>
   /**
    * Executes a sell (PUT) order for a specified asset.
    *
@@ -186,7 +216,7 @@ export declare class PocketOption {
    * * `time` - The option duration in seconds
    *
    * # Returns
-   * A vector containing the order ID and order details as JSON strings
+   * A vector containing the order ID and order details as JSON
    *
    * # Examples
    * ```javascript
@@ -195,7 +225,7 @@ export declare class PocketOption {
    * console.log(`Details: ${details}`);
    * ```
    */
-  sell(asset: string, amount: number, time: number): Promise<Array<string>>
+  sell(asset: string, amount: number, time: number): Promise<Array<any>>
   /**
    * Checks the result of a trade by its ID.
    *
@@ -212,7 +242,7 @@ export declare class PocketOption {
    * console.log(`Profit: ${details.profit}`);
    * ```
    */
-  checkWin(tradeId: string): Promise<string>
+  checkWin(tradeId: string): Promise<any>
   /**
    * Gets the expiration timestamp of a trade.
    *
@@ -249,21 +279,20 @@ export declare class PocketOption {
    * console.log(`Retrieved ${data.length} candles`);
    * ```
    */
-  getCandles(asset: string, period: number, offset: number): Promise<string>
+  getCandles(asset: string, period: number, offset: number): Promise<any>
   /**
    * Retrieves the current account balance.
    *
    * # Returns
-   * A JSON string containing the balance information
+   * A f64 representing the account balance
    *
    * # Examples
    * ```javascript
-   * const balanceInfo = await client.balance();
-   * const data = JSON.parse(balanceInfo);
-   * console.log(`Current balance: ${data.balance}`);
+   * const balance = await client.balance();
+   * console.log(`Current balance: ${balance}`);
    * ```
    */
-  balance(): Promise<string>
+  balance(): Promise<number>
   /**
    * Retrieves all closed deals/trades.
    *
@@ -277,7 +306,7 @@ export declare class PocketOption {
    * console.log(`Total closed deals: ${data.length}`);
    * ```
    */
-  closedDeals(): Promise<string>
+  closedDeals(): Promise<any>
   /**
    * Clears the list of closed deals from memory.
    *
@@ -300,21 +329,57 @@ export declare class PocketOption {
    * console.log(`Total open positions: ${data.length}`);
    * ```
    */
-  openedDeals(): Promise<string>
+  openedDeals(): Promise<any>
   /**
-   * Retrieves the current payout rates for all assets.
+   * Retrieves the current payout rates for assets.
+   *
+   * # Arguments
+   * * `asset` - Optional parameter that can be:
+   *   * `undefined`: Returns all asset payouts (default)
+   *   * `string`: Returns payout for a specific asset
+   *   * `string[]`: Returns payouts for multiple assets
    *
    * # Returns
-   * A JSON string containing the payout information
+   * A JSON value containing the payout information:
+   * * When no asset specified: Object mapping assets to payout percentages
+   * * When single asset specified: Number representing payout percentage
+   * * When multiple assets specified: Array of payout percentages in same order
    *
    * # Examples
    * ```javascript
-   * const payoutInfo = await client.payout();
-   * const rates = JSON.parse(payoutInfo);
-   * console.log(`EUR/USD payout: ${rates["EUR/USD"]}%`);
+   * // Get all payouts
+   * const allPayouts = await client.payout();
+   * console.log("All payouts:", allPayouts);
+   * // Output: { "EUR/USD": 85, "GBP/USD": 82, ... }
+   *
+   * // Get single asset payout
+   * const eurUsdPayout = await client.payout("EUR/USD");
+   * if (eurUsdPayout !== null) {
+   *     console.log(`EUR/USD payout: ${eurUsdPayout}%`);
+   * } else {
+   *     console.log("Asset not found");
+   * }
+   *
+   * // Get multiple asset payouts
+   * const assets = ["EUR/USD", "GBP/USD", "USD/JPY"];
+   * const payouts = await client.payout(assets);
+   * assets.forEach((asset, index) => {
+   *     const rate = payouts[index];
+   *     if (rate > 0) {
+   *         console.log(`${asset} payout: ${rate}%`);
+   *     } else {
+   *         console.log(`${asset} not available`);
+   *     }
+   * });
+   *
+   * // Find best payout
+   * const rates = await client.payout();
+   * const bestAsset = Object.entries(rates)
+   *     .reduce((a, b) => a[1] > b[1] ? a : b);
+   * console.log(`Best payout: ${bestAsset[0]} at ${bestAsset[1]}%`);
    * ```
    */
-  payout(): Promise<string>
+  payout(asset?: string | Array<string> | undefined | null): Promise<any>
   /**
    * Retrieves historical data for an asset.
    *
@@ -332,7 +397,7 @@ export declare class PocketOption {
    * console.log(`Retrieved ${data.length} historical records`);
    * ```
    */
-  history(asset: string, period: number): Promise<string>
+  history(asset: string, period: number): Promise<any>
   /**
    * Subscribes to real-time price updates for a symbol.
    *
@@ -504,7 +569,7 @@ export declare class PocketOption {
  * const containsValidator = Validator.contains("World");
  *
  * console.log(validator.check("Hello World")); // true
- * console.log(regexValidator.check("Hello World")); // true
+ * cons-.log(regexValidator.check("Hello World")); // true
  * console.log(containsValidator.check("Hello World")); // true
  * ```
  */

@@ -64,6 +64,10 @@ impl RawPocketOption {
         })
     }
 
+    pub async fn is_demo(&self) -> bool {
+        self.client.is_demo().await
+    }
+
     pub fn buy<'py>(
         &self,
         py: Python<'py>,

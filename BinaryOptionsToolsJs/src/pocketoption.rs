@@ -8,6 +8,7 @@ use binary_option_tools::reimports::FilteredRecieverStream;
 use futures_util::stream::{BoxStream, Fuse};
 use futures_util::StreamExt;
 use napi::bindgen_prelude::*;
+use serde_json::Value;
 use napi_derive::napi;
 use std::sync::Arc;
 use std::time::Duration;
@@ -112,6 +113,38 @@ impl PocketOption {
         Ok(Self { client })
     }
 
+    /// Checks if the current account is a demo account.
+    /// 
+    /// # Returns
+    /// * `true` if the account is a demo account
+    /// * `false` if the account is a real account
+    /// 
+    /// # Examples
+    /// ```javascript
+    /// // Check account type
+    /// const isDemo = await client.isDemo();
+    /// if (isDemo) {
+    ///     console.log("Using demo account");
+    /// } else {
+    ///     console.log("Using real account");
+    /// }
+    /// 
+    /// // Example with balance check
+    /// const isDemo = await client.isDemo();
+    /// const balance = await client.balance();
+    /// console.log(`${isDemo ? 'Demo' : 'Real'} account balance: ${balance}`);
+    /// 
+    /// // Example with trade validation
+    /// const isDemo = await client.isDemo();
+    /// if (!isDemo && amount > 100) {
+    ///     throw new Error("Large trades should be tested in demo first");
+    /// }
+    /// ```
+    #[napi]
+    pub async fn is_demo(&self) -> bool {
+        self.client.is_demo().await
+    }
+
     /// Executes a buy (CALL) order for a specified asset.
     /// 
     /// # Arguments
@@ -120,7 +153,7 @@ impl PocketOption {
     /// * `time` - The option duration in seconds
     /// 
     /// # Returns
-    /// A vector containing the order ID and order details as JSON strings
+    /// A vector containing the order ID and order details as JSON
     /// 
     /// # Examples
     /// ```javascript
@@ -129,14 +162,15 @@ impl PocketOption {
     /// console.log(`Details: ${details}`);
     /// ```
     #[napi]
-    pub async fn buy(&self, asset: String, amount: f64, time: u32) -> Result<Vec<String>> {
+    pub async fn buy(&self, asset: String, amount: f64, time: u32) -> Result<Vec<Value>> {
         let res = self
             .client
             .buy(asset, amount, time)
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
-        let deal = serde_json::to_string(&res.1).map_err(|e| Error::from_reason(e.to_string()))?;
-        Ok(vec![res.0.to_string(), deal])
+        let deal = serde_json::to_value(&res.1).map_err(|e| Error::from_reason(e.to_string()))?;
+        let id = serde_json::to_value(res.0)?;
+        Ok(vec![id, deal])
     }
 
     /// Executes a sell (PUT) order for a specified asset.
@@ -147,7 +181,7 @@ impl PocketOption {
     /// * `time` - The option duration in seconds
     /// 
     /// # Returns
-    /// A vector containing the order ID and order details as JSON strings
+    /// A vector containing the order ID and order details as JSON
     /// 
     /// # Examples
     /// ```javascript
@@ -156,14 +190,15 @@ impl PocketOption {
     /// console.log(`Details: ${details}`);
     /// ```
     #[napi]
-    pub async fn sell(&self, asset: String, amount: f64, time: u32) -> Result<Vec<String>> {
+    pub async fn sell(&self, asset: String, amount: f64, time: u32) -> Result<Vec<Value>> {
         let res = self
             .client
             .sell(asset, amount, time)
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
-        let deal = serde_json::to_string(&res.1).map_err(|e| Error::from_reason(e.to_string()))?;
-        Ok(vec![res.0.to_string(), deal])
+        let deal = serde_json::to_value(&res.1).map_err(|e| Error::from_reason(e.to_string()))?;
+        let id = serde_json::to_value(res.0)?;
+        Ok(vec![id, deal])
     }
 
     /// Checks the result of a trade by its ID.
@@ -181,13 +216,13 @@ impl PocketOption {
     /// console.log(`Profit: ${details.profit}`);
     /// ```
     #[napi]
-    pub async fn check_win(&self, trade_id: String) -> Result<String> {
+    pub async fn check_win(&self, trade_id: String) -> Result<Value> {
         let res = self
             .client
             .check_results(Uuid::parse_str(&trade_id).map_err(|e| Error::from_reason(e.to_string()))?)
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
-        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
+        serde_json::to_value(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
     /// Gets the expiration timestamp of a trade.
@@ -228,35 +263,34 @@ impl PocketOption {
     /// 
     /// # Examples
     /// ```javascript
-    /// const candles = await client.getCandles("EUR/USD", 60, 0);
+    /// const candles = await client.getCandles("EUR/USD", 60, 6000);
     /// const data = JSON.parse(candles);
     /// console.log(`Retrieved ${data.length} candles`);
     /// ```
     #[napi]
-    pub async fn get_candles(&self, asset: String, period: i64, offset: i64) -> Result<String> {
+    pub async fn get_candles(&self, asset: String, period: i64, offset: i64) -> Result<Value> {
         let res = self
             .client
             .get_candles(asset, period, offset)
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
-        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
+        serde_json::to_value(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
     /// Retrieves the current account balance.
     /// 
     /// # Returns
-    /// A JSON string containing the balance information
+    /// A f64 representing the account balance
     /// 
     /// # Examples
     /// ```javascript
-    /// const balanceInfo = await client.balance();
-    /// const data = JSON.parse(balanceInfo);
-    /// console.log(`Current balance: ${data.balance}`);
+    /// const balance = await client.balance();
+    /// console.log(`Current balance: ${balance}`);
     /// ```
     #[napi]
-    pub async fn balance(&self) -> Result<String> {
+    pub async fn balance(&self) -> f64 {
         let res = self.client.get_balance().await;
-        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
+        res.balance
     }
 
     /// Retrieves all closed deals/trades.
@@ -271,9 +305,9 @@ impl PocketOption {
     /// console.log(`Total closed deals: ${data.length}`);
     /// ```
     #[napi]
-    pub async fn closed_deals(&self) -> Result<String> {
+    pub async fn closed_deals(&self) -> Result<Value> {
         let res = self.client.get_closed_deals().await;
-        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
+        serde_json::to_value(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
     /// Clears the list of closed deals from memory.
@@ -299,26 +333,72 @@ impl PocketOption {
     /// console.log(`Total open positions: ${data.length}`);
     /// ```
     #[napi]
-    pub async fn opened_deals(&self) -> Result<String> {
+    pub async fn opened_deals(&self) -> Result<Value> {
         let res = self.client.get_opened_deals().await;
-        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
+        serde_json::to_value(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
-
-    /// Retrieves the current payout rates for all assets.
+    
+    /// Retrieves the current payout rates for assets.
+    /// 
+    /// # Arguments
+    /// * `asset` - Optional parameter that can be:
+    ///   * `undefined`: Returns all asset payouts (default)
+    ///   * `string`: Returns payout for a specific asset
+    ///   * `string[]`: Returns payouts for multiple assets
     /// 
     /// # Returns
-    /// A JSON string containing the payout information
+    /// A JSON value containing the payout information:
+    /// * When no asset specified: Object mapping assets to payout percentages
+    /// * When single asset specified: Number representing payout percentage
+    /// * When multiple assets specified: Array of payout percentages in same order
     /// 
     /// # Examples
     /// ```javascript
-    /// const payoutInfo = await client.payout();
-    /// const rates = JSON.parse(payoutInfo);
-    /// console.log(`EUR/USD payout: ${rates["EUR/USD"]}%`);
+    /// // Get all payouts
+    /// const allPayouts = await client.payout();
+    /// console.log("All payouts:", allPayouts);
+    /// // Output: { "EUR/USD": 85, "GBP/USD": 82, ... }
+    /// 
+    /// // Get single asset payout
+    /// const eurUsdPayout = await client.payout("EUR/USD");
+    /// if (eurUsdPayout !== null) {
+    ///     console.log(`EUR/USD payout: ${eurUsdPayout}%`);
+    /// } else {
+    ///     console.log("Asset not found");
+    /// }
+    /// 
+    /// // Get multiple asset payouts
+    /// const assets = ["EUR/USD", "GBP/USD", "USD/JPY"];
+    /// const payouts = await client.payout(assets);
+    /// assets.forEach((asset, index) => {
+    ///     const rate = payouts[index];
+    ///     if (rate > 0) {
+    ///         console.log(`${asset} payout: ${rate}%`);
+    ///     } else {
+    ///         console.log(`${asset} not available`);
+    ///     }
+    /// });
+    /// 
+    /// // Find best payout
+    /// const rates = await client.payout();
+    /// const bestAsset = Object.entries(rates)
+    ///     .reduce((a, b) => a[1] > b[1] ? a : b);
+    /// console.log(`Best payout: ${bestAsset[0]} at ${bestAsset[1]}%`);
     /// ```
     #[napi]
-    pub async fn payout(&self) -> Result<String> {
+    pub async fn payout(&self, asset: Option<Either<String, Vec<String>>>) -> Result<Value> {
         let res = self.client.get_payout().await;
-        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
+        match asset {
+            Some(Either::A(single)) => Ok(serde_json::to_value(res.get(&single).ok_or(Error::from_reason("Asset not found"))?)?),
+            Some(Either::B(multiple)) => Ok(serde_json::to_value(
+                multiple
+                    .iter()
+                    .map(|asset| res.get(asset).unwrap_or(&0))
+                    .collect::<Vec<_>>(),
+            )?),
+            None => Ok(serde_json::to_value(&res)?)
+        }
+        
     }
 
     /// Retrieves historical data for an asset.
@@ -337,13 +417,13 @@ impl PocketOption {
     /// console.log(`Retrieved ${data.length} historical records`);
     /// ```
     #[napi]
-    pub async fn history(&self, asset: String, period: i64) -> Result<String> {
+    pub async fn history(&self, asset: String, period: i64) -> Result<Value> {
         let res = self
             .client
             .history(asset, period)
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
-        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
+        serde_json::to_value(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
     /// Subscribes to real-time price updates for a symbol.
@@ -486,7 +566,7 @@ impl PocketOption {
             .create_raw_order(message, validator.to_val())
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
-        serde_json::to_string(&res).map_err(|e| Error::from_reason(e.to_string()))
+        Ok(res.to_string())
     }
 
     /// Creates a raw order with a timeout for response validation.
@@ -634,7 +714,7 @@ impl StreamIterator {
     /// }
     /// ```
     #[napi]
-    pub async fn next(&self) -> Result<Option<serde_json::Value>> {
+    pub async fn next(&self) -> Result<Option<Value>> {
         let mut stream = self.stream.lock().await;
         match stream.next().await {
             Some(Ok(candle)) => serde_json::to_value(&candle)
@@ -693,3 +773,4 @@ impl RawStreamIterator {
         }
     }
 }
+

@@ -353,7 +353,37 @@ class PocketOptionAsync:
             ```
         """
         return await self.client.create_raw_iterator(message, validator, timeout)
-       
+    
+    async def is_demo(self) -> bool:
+        """
+        Checks if the current account is a demo account.
+
+        Returns:
+            bool: True if using a demo account, False if using a real account
+
+        Examples:
+            ```python
+            # Basic account type check
+            async with PocketOptionAsync(ssid) as client:
+                is_demo = await client.is_demo()
+                print("Using", "demo" if is_demo else "real", "account")
+
+            # Example with balance check
+            async def check_account():
+                is_demo = await client.is_demo()
+                balance = await client.balance()
+                print(f"{'Demo' if is_demo else 'Real'} account balance: {balance}")
+
+            # Example with trade validation
+            async def safe_trade(asset: str, amount: float, duration: int):
+                is_demo = await client.is_demo()
+                if not is_demo and amount > 100:
+                    raise ValueError("Large trades should be tested in demo first")
+                return await client.buy(asset, amount, duration)
+            ```
+        """
+        return await self.client.is_demo()
+
 async def _timeout(future, timeout: int):
     if sys.version_info[:3] >= (3,11): 
         async with asyncio.timeout(timeout):

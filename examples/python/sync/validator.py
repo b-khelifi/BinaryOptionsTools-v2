@@ -1,3 +1,5 @@
+# Same thing as in the async folder, the code is sync and can be passed to both the async and sync implementations of the create_raw_order* methods.
+
 from BinaryOptionsToolsV2.validator import Validator
 
 if __name__ == "__main__":

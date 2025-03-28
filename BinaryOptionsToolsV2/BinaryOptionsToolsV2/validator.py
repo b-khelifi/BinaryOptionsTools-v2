@@ -99,7 +99,7 @@ class Validator:
         return v
         
     @staticmethod
-    def not_(validator: 'Validator') -> 'Validator':
+    def ne(validator: 'Validator') -> 'Validator':
         """
         Creates a validator that negates another validator's result.
         
@@ -112,7 +112,7 @@ class Validator:
         Example:
             ```python
             # Match messages that don't contain "error"
-            v = Validator.not_(Validator.contains("error"))
+            v = Validator.ne(Validator.contains("error"))
             assert v.check("success message") == True
             assert v.check("error occurred") == False
             ```
@@ -175,6 +175,74 @@ class Validator:
         from BinaryOptionsToolsV2 import RawValidator
         v = Validator()
         v._validator = RawValidator.any([v._validator for v in validators])
+        return v
+    
+    @staticmethod
+    def custom(func: callable) -> 'Validator':
+        """
+        Creates a validator that uses a custom function for validation.
+        
+        IMPORTANT SAFETY AND USAGE NOTES:
+        1. The provided function MUST:
+            - Take exactly one string parameter
+            - Return a boolean value
+            - Be synchronous (not async)
+        2. If these requirements are not met, the program will crash with a Rust panic
+        that CANNOT be caught with try/except
+        3. The function will be called from Rust, so Python exception handling won't work
+        4. Custom validators CANNOT be used in async/threaded contexts due to JavaScript
+        engine limitations
+        
+        Args:
+            func: A callable that takes a string message and returns a boolean.
+                The function MUST follow the requirements listed above.
+                Returns True if the message is valid, False otherwise.
+                    
+        Returns:
+            Validator that uses the custom function for validation
+            
+        Raises:
+            Rust panic: If the function doesn't meet the requirements or fails during execution.
+            This cannot be caught with Python exception handling.
+                    
+        Example:
+            ```python
+            # Safe usage - function takes string, returns bool
+            def json_checker(msg: str) -> bool:
+                try:
+                    data = json.loads(msg)
+                    return "status" in data and "timestamp" in data
+                except:
+                    return False
+                    
+            validator = Validator.custom(json_checker)
+            assert validator.check('{"status": "ok", "timestamp": 123}') == True
+            assert validator.check('{"error": "failed"}') == False
+            
+            # Using lambda (must still take string, return bool)
+            contains_both = Validator.custom(
+                lambda msg: "success" in msg and "completed" in msg
+            )
+            assert contains_both.check("operation success - completed") == True
+            
+            # UNSAFE - Will crash the program:
+            # Wrong return type
+            bad_validator1 = Validator.custom(lambda x: "hello")  # Returns str instead of bool
+            
+            # No exception handling possible
+            def will_crash(msg: str) -> bool:
+                raise ValueError("This will crash the program")
+                
+            bad_validator2 = Validator.custom(will_crash)
+            try:
+                bad_validator2.check("any message")  # Will crash despite try/except
+            except Exception:
+                print("This will never be reached")
+            ```
+        """
+        from BinaryOptionsToolsV2 import RawValidator
+        v = Validator()
+        v._validator = RawValidator.custom(func)
         return v
         
     def check(self, message: str) -> bool:
