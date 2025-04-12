@@ -20,7 +20,11 @@ use binary_options_tools_core::{
     constants::TIMEOUT_TIME,
     error::BinaryOptionsToolsError,
     general::{
-        client::WebSocketClient, config::{Config, _Config}, stream::FilteredRecieverStream, traits::{MessageTransfer, ValidatorTrait}, types::{Callback, Data}
+        client::WebSocketClient,
+        config::{_Config, Config},
+        stream::FilteredRecieverStream,
+        traits::{MessageTransfer, ValidatorTrait},
+        types::{Callback, Data},
     },
 };
 
@@ -53,7 +57,7 @@ use super::{
 /// # Examples
 /// Basic usage:
 /// ```rust
-/// use binary_option_tools::pocketoption::pocket_client::PocketOption;
+/// use binary_options_tools::pocketoption::pocket_client::PocketOption;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -615,7 +619,9 @@ impl PocketOption {
     /// client.send_raw_message(r#"42["signals/subscribe"]"#).await?;
     /// ```
     pub async fn send_raw_message(&self, message: impl ToString) -> PocketResult<()> {
-        self.client.raw_send(RawWebsocketMessage::from(message.to_string())).await?;
+        self.client
+            .raw_send(RawWebsocketMessage::from(message.to_string()))
+            .await?;
         Ok(())
     }
 
@@ -646,7 +652,10 @@ impl PocketOption {
         //  * create_raw_order_iterator: return a stream like the StreamAsset
         //  * send_raw_message: send message without validator
         //  * OTHER: Create a callback related function to add new options for the callback + add support for struct or functions in it (like the Validator) so future me will have it easy
-        Ok(self.client.send_raw_message(message.into(), validator).await?)
+        Ok(self
+            .client
+            .send_raw_message(message.into(), validator)
+            .await?)
     }
 
     /// Sends a raw WebSocket message and waits for a validated response with a timeout.
@@ -665,7 +674,7 @@ impl PocketOption {
     /// # Examples
     /// ```rust
     /// use std::time::Duration;
-    /// 
+    ///
     /// let validator = Box::new(RawValidator::starts_with(r#"42["signals/load""#));
     /// let response = client.create_raw_order_with_timeout(
     ///     r#"42["signals/subscribe"]"#,
@@ -677,9 +686,17 @@ impl PocketOption {
         &self,
         message: impl Into<RawWebsocketMessage>,
         validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>,
-        timeout: Duration
+        timeout: Duration,
     ) -> PocketResult<RawWebsocketMessage> {
-        Ok(self.client.send_raw_message_with_timout(timeout, "CreateRawOrder".to_string(), message.into(), validator).await?)
+        Ok(self
+            .client
+            .send_raw_message_with_timout(
+                timeout,
+                "CreateRawOrder".to_string(),
+                message.into(),
+                validator,
+            )
+            .await?)
     }
 
     /// Sends a raw WebSocket message with timeout and automatic retry on failure.
@@ -698,7 +715,7 @@ impl PocketOption {
     /// # Examples
     /// ```rust
     /// use std::time::Duration;
-    /// 
+    ///
     /// let validator = Box::new(RawValidator::starts_with(r#"42["signals/load""#));
     /// let response = client.create_raw_order_with_timeout_and_retry(
     ///     r#"42["signals/subscribe"]"#,
@@ -710,9 +727,17 @@ impl PocketOption {
         &self,
         message: impl Into<RawWebsocketMessage>,
         validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>,
-        timeout: Duration
+        timeout: Duration,
     ) -> PocketResult<RawWebsocketMessage> {
-        Ok(self.client.send_raw_message_with_timeout_and_retry(timeout, "CreateRawOrderWithRetry".to_string(), message.into(), validator).await?)
+        Ok(self
+            .client
+            .send_raw_message_with_timeout_and_retry(
+                timeout,
+                "CreateRawOrderWithRetry".to_string(),
+                message.into(),
+                validator,
+            )
+            .await?)
     }
 
     /// Creates a stream of validated WebSocket messages.
@@ -728,14 +753,14 @@ impl PocketOption {
     /// # Examples
     /// ```rust
     /// use std::time::Duration;
-    /// 
+    ///
     /// let validator = Box::new(RawValidator::starts_with(r#"42["signals/load""#));
     /// let stream = client.create_raw_iterator(
     ///     r#"42["signals/subscribe"]"#,
     ///     validator,
     ///     Some(Duration::from_secs(60))
     /// ).await?;
-    /// 
+    ///
     /// while let Some(message) = stream.next().await {
     ///     println!("Received: {}", message?);
     /// }
@@ -744,9 +769,12 @@ impl PocketOption {
         &self,
         message: impl Into<RawWebsocketMessage>,
         validator: Box<dyn ValidatorTrait<RawWebsocketMessage> + Send + Sync>,
-        timeout: Option<Duration>
+        timeout: Option<Duration>,
     ) -> PocketResult<FilteredRecieverStream<RawWebsocketMessage>> {
-        Ok(self.client.send_raw_message_iterator(message.into(), validator, timeout).await?)
+        Ok(self
+            .client
+            .send_raw_message_iterator(message.into(), validator, timeout)
+            .await?)
     }
 
     pub async fn get_server_time(&self) -> DateTime<Utc> {
@@ -1133,9 +1161,11 @@ mod tests {
         let client = PocketOption::new(ssid).await?;
         sleep(Duration::from_secs(5)).await;
         fn my_validator(msg: &RawWebsocketMessage) -> bool {
-                 msg.to_string().contains("success")
-             }
-        let res = client.create_raw_order(r#"42["signals/subscribe"]"#, Box::new(raw_validator())).await?;
+            msg.to_string().contains("success")
+        }
+        let res = client
+            .create_raw_order(r#"42["signals/subscribe"]"#, Box::new(raw_validator()))
+            .await?;
         info!("{res}");
         Ok(())
     }
@@ -1146,7 +1176,9 @@ mod tests {
         let ssid = r#"42["auth",{"session":"mj194bjgehatidr1ml82453ajg","isDemo":1,"uid":87888871,"platform":2}]	"#;
         let client = PocketOption::new(ssid).await?;
         sleep(Duration::from_secs(5)).await;
-        let res = client.create_raw_iterator(r#"42["signals/subscribe"]"#, Box::new(raw_iterator()), None).await?;
+        let res = client
+            .create_raw_iterator(r#"42["signals/subscribe"]"#, Box::new(raw_iterator()), None)
+            .await?;
         let mut stream = res.to_stream();
         while let Some(Ok(e)) = stream.next().await {
             info!(target: "RecievedStreamItem", "{}", e);
@@ -1161,12 +1193,19 @@ mod tests {
         let ssid = r#"42["auth",{"session":"mj194bjgehatidr1ml82453ajg","isDemo":1,"uid":87888871,"platform":2}]	"#;
         let client = PocketOption::new(ssid).await.unwrap();
         sleep(Duration::from_secs(5)).await;
-        let res = client.create_raw_iterator(r#"42["signals/subscribe"]"#, Box::new(raw_iterator()), Some(Duration::from_secs(1))).await.unwrap();
+        let res = client
+            .create_raw_iterator(
+                r#"42["signals/subscribe"]"#,
+                Box::new(raw_iterator()),
+                Some(Duration::from_secs(1)),
+            )
+            .await
+            .unwrap();
         let mut stream = res.to_stream();
         while let Some(e) = stream.next().await {
             match e {
                 Ok(e) => info!(target: "RecievedStreamItem", "{}", e),
-                Err(e) => panic!("Error, {e}")
+                Err(e) => panic!("Error, {e}"),
             }
         }
     }

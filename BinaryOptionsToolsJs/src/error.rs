@@ -1,7 +1,9 @@
-use binary_option_tools::{error::BinaryOptionsToolsError, pocketoption::error::PocketOptionError};
+use binary_options_tools::{
+    error::BinaryOptionsToolsError, pocketoption::error::PocketOptionError,
+};
+use napi::Error;
 use thiserror::Error;
 use uuid::Uuid;
-use napi::Error;
 
 #[derive(Error, Debug)]
 pub enum BinaryErrorJs {
@@ -20,7 +22,7 @@ pub enum BinaryErrorJs {
     #[error("Operation not allowed")]
     NotAllowed(String),
     #[error("Invalid Regex pattern, {0}")]
-    InvalidRegexError(#[from] regex::Error)
+    InvalidRegexError(#[from] regex::Error),
 }
 
 impl From<BinaryErrorJs> for Error {

@@ -1,6 +1,6 @@
 use std::{fs::OpenOptions, io::Write, sync::Arc};
 
-use binary_option_tools::{
+use binary_options_tools::{
     error::BinaryOptionsResult,
     stream::{stream_logs_layer, RecieverStream},
 };

@@ -1,6 +1,6 @@
 use std::{fs::OpenOptions, io::Write, sync::Arc};
 
-use binary_option_tools::{
+use binary_options_tools::{
     error::BinaryOptionsResult,
     stream::{stream_logs_layer, RecieverStream},
 };
@@ -9,12 +9,10 @@ use futures_util::{
     stream::{BoxStream, Fuse},
     StreamExt,
 };
-use napi::{
-    Error, Result
-};
+use napi::{Error, Result};
 use napi_derive::napi;
 use tokio::sync::Mutex;
-use tracing::{debug, info, warn, error, Level, level_filters::LevelFilter};
+use tracing::{debug, error, info, level_filters::LevelFilter, warn, Level};
 use tracing_subscriber::{
     fmt::{self, MakeWriter},
     layer::SubscriberExt,
@@ -25,17 +23,17 @@ use tracing_subscriber::{
 const TARGET: &str = "JavaScript";
 
 /// Initializes the logging system with the specified configuration.
-/// 
+///
 /// # Arguments
 /// * `path` - Directory path where log files will be stored
 /// * `level` - Logging level ("DEBUG", "INFO", "WARN", "ERROR")
 /// * `terminal` - Whether to output logs to terminal
 /// * `layers` - Additional logging layers for custom log handling
-/// 
+///
 /// # Examples
 /// ```javascript
 /// const { startTracing } = require('binary-options-tools');
-/// 
+///
 /// // Initialize logging with DEBUG level and terminal output
 /// startTracing('./logs', 'DEBUG', true, []);
 /// ```
@@ -92,11 +90,11 @@ pub fn start_tracing(
 
 /// A custom logging layer that can be used to capture and process log messages.
 /// Used in conjunction with `StreamLogsIterator` to receive log messages.
-/// 
+///
 /// # Examples
 /// ```javascript
 /// const { StreamLogsLayer, LogBuilder } = require('binary-options-tools');
-/// 
+///
 /// const builder = new LogBuilder();
 /// const iterator = builder.createLogsIterator('DEBUG');
 /// ```
@@ -129,11 +127,11 @@ type LogStream = Fuse<BoxStream<'static, BinaryOptionsResult<String>>>;
 
 /// Iterator for receiving log messages from a `StreamLogsLayer`.
 /// Supports asynchronous iteration over log messages.
-/// 
+///
 /// # Examples
 /// ```javascript
 /// const iterator = builder.createLogsIterator('DEBUG');
-/// 
+///
 /// // Async iteration
 /// for await (const log of iterator) {
 ///     console.log('Received log:', log);
@@ -147,17 +145,17 @@ pub struct StreamLogsIterator {
 #[napi]
 impl StreamLogsIterator {
     /// Gets the next log message from the stream.
-    /// 
+    ///
     /// # Returns
     /// * A Promise that resolves to:
     ///   * A string containing the next log message
     ///   * null if the stream has ended
     /// * Rejects with an error if the stream encounters an error
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const iterator = builder.createLogsIterator('DEBUG');
-    /// 
+    ///
     /// // Using async/await
     /// try {
     ///     while (true) {
@@ -182,11 +180,11 @@ impl StreamLogsIterator {
 
 /// Builder pattern for configuring the logging system.
 /// Allows adding multiple log outputs and configuring log levels.
-/// 
+///
 /// # Examples
 /// ```javascript
 /// const { LogBuilder } = require('binary-options-tools');
-/// 
+///
 /// const builder = new LogBuilder();
 /// // Add file logging
 /// builder.logFile('./app.log', 'INFO');
@@ -207,7 +205,7 @@ pub struct LogBuilder {
 #[napi]
 impl LogBuilder {
     /// Creates a new LogBuilder instance.
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const { LogBuilder } = require('binary-options-tools');
@@ -219,21 +217,21 @@ impl LogBuilder {
     }
 
     /// Creates a new logs iterator that receives log messages at the specified level.
-    /// 
+    ///
     /// # Arguments
     /// * `level` - Logging level ("DEBUG", "INFO", "WARN", "ERROR")
     /// * `timeout` - Optional timeout in seconds after which the iterator will stop
-    /// 
+    ///
     /// # Returns
     /// * A StreamLogsIterator that can be used to receive log messages
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const builder = new LogBuilder();
-    /// 
+    ///
     /// // Create iterator with default DEBUG level
     /// const iterator1 = builder.createLogsIterator('DEBUG');
-    /// 
+    ///
     /// // Create iterator with INFO level and 60-second timeout
     /// const iterator2 = builder.createLogsIterator('INFO', 60);
     /// ```
@@ -243,9 +241,8 @@ impl LogBuilder {
         level: String,
         timeout: Option<i64>,
     ) -> Result<StreamLogsIterator> {
-        let timeout = timeout.map(Duration::seconds)
-            .and_then(|d| d.to_std().ok());
-        
+        let timeout = timeout.map(Duration::seconds).and_then(|d| d.to_std().ok());
+
         let (layer, inner_iter) =
             stream_logs_layer(level.parse().unwrap_or(Level::DEBUG.into()), timeout);
         let stream = RecieverStream::to_stream_static(Arc::new(inner_iter))
@@ -259,21 +256,21 @@ impl LogBuilder {
     }
 
     /// Adds a file output for logs at the specified level.
-    /// 
+    ///
     /// # Arguments
     /// * `path` - Path to the log file
     /// * `level` - Logging level ("DEBUG", "INFO", "WARN", "ERROR")
-    /// 
+    ///
     /// # Returns
     /// * Result indicating success or failure
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const builder = new LogBuilder();
-    /// 
+    ///
     /// // Log INFO and above to app.log
     /// builder.logFile('./app.log', 'INFO');
-    /// 
+    ///
     /// // Log DEBUG and above to debug.log
     /// builder.logFile('./debug.log', 'DEBUG');
     /// ```
@@ -294,17 +291,17 @@ impl LogBuilder {
     }
 
     /// Adds terminal (console) output for logs at the specified level.
-    /// 
+    ///
     /// # Arguments
     /// * `level` - Logging level ("DEBUG", "INFO", "WARN", "ERROR")
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const builder = new LogBuilder();
-    /// 
+    ///
     /// // Show DEBUG and above in terminal
     /// builder.terminal('DEBUG');
-    /// 
+    ///
     /// // Show only INFO and above in terminal
     /// builder.terminal('INFO');
     /// ```
@@ -319,19 +316,19 @@ impl LogBuilder {
     /// Finalizes the logging configuration and initializes the logging system.
     /// Must be called after all outputs are configured and before logging begins.
     /// Can only be called once per builder instance.
-    /// 
+    ///
     /// # Returns
     /// * Result indicating success or failure
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const builder = new LogBuilder();
     /// builder.logFile('./app.log', 'INFO');
     /// builder.terminal('DEBUG');
-    /// 
+    ///
     /// // Initialize logging system
     /// builder.build();
-    /// 
+    ///
     /// // Attempting to build again will result in an error
     /// builder.build(); // Error: Builder has already been built
     /// ```
@@ -355,11 +352,11 @@ impl LogBuilder {
 }
 
 /// Simple logging interface for emitting log messages at different levels.
-/// 
+///
 /// # Examples
 /// ```javascript
 /// const { Logger } = require('binary-options-tools');
-/// 
+///
 /// const logger = new Logger();
 /// logger.debug('Debug message');
 /// logger.info('Info message');
@@ -373,7 +370,7 @@ pub struct Logger;
 #[napi]
 impl Logger {
     /// Creates a new Logger instance.
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const { Logger } = require('binary-options-tools');
@@ -386,10 +383,10 @@ impl Logger {
 
     /// Logs a debug message.
     /// Only appears if logging level is set to DEBUG.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The message to log
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const logger = new Logger();
@@ -403,10 +400,10 @@ impl Logger {
 
     /// Logs an info message.
     /// Only appears if logging level is set to INFO or lower.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The message to log
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const logger = new Logger();
@@ -420,10 +417,10 @@ impl Logger {
 
     /// Logs a warning message.
     /// Only appears if logging level is set to WARN or lower.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The message to log
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const logger = new Logger();
@@ -437,10 +434,10 @@ impl Logger {
 
     /// Logs an error message.
     /// Only appears if logging level is set to ERROR or lower.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The message to log
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const logger = new Logger();
@@ -513,4 +510,3 @@ mod tests {
         join(log(), reciever_fn(receiver)).await;
     }
 }
-

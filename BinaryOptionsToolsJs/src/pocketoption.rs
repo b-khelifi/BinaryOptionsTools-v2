@@ -1,15 +1,15 @@
-use binary_option_tools::error::BinaryOptionsResult;
-use binary_option_tools::pocketoption::error::PocketResult;
-use binary_option_tools::pocketoption::pocket_client::PocketOption as Pocket;
-use binary_option_tools::pocketoption::types::base::RawWebsocketMessage;
-use binary_option_tools::pocketoption::types::update::DataCandle;
-use binary_option_tools::pocketoption::ws::stream::StreamAsset;
-use binary_option_tools::reimports::FilteredRecieverStream;
+use binary_options_tools::error::BinaryOptionsResult;
+use binary_options_tools::pocketoption::error::PocketResult;
+use binary_options_tools::pocketoption::pocket_client::PocketOption as Pocket;
+use binary_options_tools::pocketoption::types::base::RawWebsocketMessage;
+use binary_options_tools::pocketoption::types::update::DataCandle;
+use binary_options_tools::pocketoption::ws::stream::StreamAsset;
+use binary_options_tools::reimports::FilteredRecieverStream;
 use futures_util::stream::{BoxStream, Fuse};
 use futures_util::StreamExt;
 use napi::bindgen_prelude::*;
-use serde_json::Value;
 use napi_derive::napi;
+use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -20,10 +20,9 @@ use crate::error::BinaryErrorJs;
 use crate::runtime::get_runtime;
 use crate::validator::Validator;
 
-
 /// Iterator for receiving processed WebSocket messages.
 /// Provides asynchronous iteration over parsed messages from the server.
-/// 
+///
 /// # Examples
 /// ```javascript
 /// const stream = await client.subscribeSymbol('EUR/USD');
@@ -38,7 +37,7 @@ pub struct StreamIterator {
 
 /// Iterator for receiving raw WebSocket messages.
 /// Provides asynchronous iteration over raw messages from the server.
-/// 
+///
 /// # Examples
 /// ```javascript
 /// const stream = await client.createRawIterator();
@@ -53,14 +52,14 @@ pub struct RawStreamIterator {
 
 /// A client for interacting with the Pocket Option trading platform.
 /// Provides methods for executing trades, managing positions, and streaming market data.
-/// 
+///
 /// # Examples
 /// ```javascript
 /// const client = new PocketOption("your-ssid-here");
-/// 
+///
 /// // Execute a buy order
 /// const [orderId, details] = await client.buy("EUR/USD", 100, 60);
-/// 
+///
 /// // Check trade result
 /// const result = await client.checkWin(orderId);
 /// ```
@@ -72,10 +71,10 @@ pub struct PocketOption {
 #[napi]
 impl PocketOption {
     /// Creates a new PocketOption client instance using a session ID.
-    /// 
+    ///
     /// # Arguments
     /// * `ssid` - A valid session ID string from Pocket Option
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const client = new PocketOption("your-ssid-here");
@@ -90,11 +89,11 @@ impl PocketOption {
     }
 
     /// Creates a new PocketOption client instance with a custom WebSocket URL.
-    /// 
+    ///
     /// # Arguments
     /// * `ssid` - A valid session ID string from Pocket Option
     /// * `url` - Custom WebSocket server URL
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const client = await PocketOption.newWithUrl(
@@ -114,11 +113,11 @@ impl PocketOption {
     }
 
     /// Checks if the current account is a demo account.
-    /// 
+    ///
     /// # Returns
     /// * `true` if the account is a demo account
     /// * `false` if the account is a real account
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// // Check account type
@@ -128,12 +127,12 @@ impl PocketOption {
     /// } else {
     ///     console.log("Using real account");
     /// }
-    /// 
+    ///
     /// // Example with balance check
     /// const isDemo = await client.isDemo();
     /// const balance = await client.balance();
     /// console.log(`${isDemo ? 'Demo' : 'Real'} account balance: ${balance}`);
-    /// 
+    ///
     /// // Example with trade validation
     /// const isDemo = await client.isDemo();
     /// if (!isDemo && amount > 100) {
@@ -146,15 +145,15 @@ impl PocketOption {
     }
 
     /// Executes a buy (CALL) order for a specified asset.
-    /// 
+    ///
     /// # Arguments
     /// * `asset` - The trading asset/symbol (e.g., "EUR/USD")
     /// * `amount` - The trade amount in account currency
     /// * `time` - The option duration in seconds
-    /// 
+    ///
     /// # Returns
     /// A vector containing the order ID and order details as JSON
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const [orderId, details] = await client.buy("EUR/USD", 100, 60);
@@ -174,15 +173,15 @@ impl PocketOption {
     }
 
     /// Executes a sell (PUT) order for a specified asset.
-    /// 
+    ///
     /// # Arguments
     /// * `asset` - The trading asset/symbol (e.g., "EUR/USD")
     /// * `amount` - The trade amount in account currency
     /// * `time` - The option duration in seconds
-    /// 
+    ///
     /// # Returns
     /// A vector containing the order ID and order details as JSON
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const [orderId, details] = await client.sell("EUR/USD", 100, 60);
@@ -202,13 +201,13 @@ impl PocketOption {
     }
 
     /// Checks the result of a trade by its ID.
-    /// 
+    ///
     /// # Arguments
     /// * `trade_id` - The UUID of the trade to check
-    /// 
+    ///
     /// # Returns
     /// A JSON string containing the trade result details
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const result = await client.checkWin(tradeId);
@@ -219,20 +218,22 @@ impl PocketOption {
     pub async fn check_win(&self, trade_id: String) -> Result<Value> {
         let res = self
             .client
-            .check_results(Uuid::parse_str(&trade_id).map_err(|e| Error::from_reason(e.to_string()))?)
+            .check_results(
+                Uuid::parse_str(&trade_id).map_err(|e| Error::from_reason(e.to_string()))?,
+            )
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
         serde_json::to_value(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
 
     /// Gets the expiration timestamp of a trade.
-    /// 
+    ///
     /// # Arguments
     /// * `trade_id` - The UUID of the trade
-    /// 
+    ///
     /// # Returns
     /// The Unix timestamp when the trade will expire, or null if not found
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const endTime = await client.getDealEndTime(tradeId);
@@ -252,15 +253,15 @@ impl PocketOption {
     }
 
     /// Retrieves historical candle data for an asset.
-    /// 
+    ///
     /// # Arguments
     /// * `asset` - The trading asset/symbol (e.g., "EUR/USD")
     /// * `period` - The candle period in seconds
     /// * `offset` - Time offset for historical data
-    /// 
+    ///
     /// # Returns
     /// A JSON string containing the candle data
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const candles = await client.getCandles("EUR/USD", 60, 6000);
@@ -278,10 +279,10 @@ impl PocketOption {
     }
 
     /// Retrieves the current account balance.
-    /// 
+    ///
     /// # Returns
     /// A f64 representing the account balance
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const balance = await client.balance();
@@ -294,10 +295,10 @@ impl PocketOption {
     }
 
     /// Retrieves all closed deals/trades.
-    /// 
+    ///
     /// # Returns
     /// A JSON string containing the closed deals information
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const deals = await client.closedDeals();
@@ -311,7 +312,7 @@ impl PocketOption {
     }
 
     /// Clears the list of closed deals from memory.
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// await client.clearClosedDeals();
@@ -322,10 +323,10 @@ impl PocketOption {
     }
 
     /// Retrieves all currently open deals/trades.
-    /// 
+    ///
     /// # Returns
     /// A JSON string containing the open deals information
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const deals = await client.openedDeals();
@@ -337,28 +338,28 @@ impl PocketOption {
         let res = self.client.get_opened_deals().await;
         serde_json::to_value(&res).map_err(|e| Error::from_reason(e.to_string()))
     }
-    
+
     /// Retrieves the current payout rates for assets.
-    /// 
+    ///
     /// # Arguments
     /// * `asset` - Optional parameter that can be:
     ///   * `undefined`: Returns all asset payouts (default)
     ///   * `string`: Returns payout for a specific asset
     ///   * `string[]`: Returns payouts for multiple assets
-    /// 
+    ///
     /// # Returns
     /// A JSON value containing the payout information:
     /// * When no asset specified: Object mapping assets to payout percentages
     /// * When single asset specified: Number representing payout percentage
     /// * When multiple assets specified: Array of payout percentages in same order
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// // Get all payouts
     /// const allPayouts = await client.payout();
     /// console.log("All payouts:", allPayouts);
     /// // Output: { "EUR/USD": 85, "GBP/USD": 82, ... }
-    /// 
+    ///
     /// // Get single asset payout
     /// const eurUsdPayout = await client.payout("EUR/USD");
     /// if (eurUsdPayout !== null) {
@@ -366,7 +367,7 @@ impl PocketOption {
     /// } else {
     ///     console.log("Asset not found");
     /// }
-    /// 
+    ///
     /// // Get multiple asset payouts
     /// const assets = ["EUR/USD", "GBP/USD", "USD/JPY"];
     /// const payouts = await client.payout(assets);
@@ -378,7 +379,7 @@ impl PocketOption {
     ///         console.log(`${asset} not available`);
     ///     }
     /// });
-    /// 
+    ///
     /// // Find best payout
     /// const rates = await client.payout();
     /// const bestAsset = Object.entries(rates)
@@ -389,27 +390,29 @@ impl PocketOption {
     pub async fn payout(&self, asset: Option<Either<String, Vec<String>>>) -> Result<Value> {
         let res = self.client.get_payout().await;
         match asset {
-            Some(Either::A(single)) => Ok(serde_json::to_value(res.get(&single).ok_or(Error::from_reason("Asset not found"))?)?),
+            Some(Either::A(single)) => Ok(serde_json::to_value(
+                res.get(&single)
+                    .ok_or(Error::from_reason("Asset not found"))?,
+            )?),
             Some(Either::B(multiple)) => Ok(serde_json::to_value(
                 multiple
                     .iter()
                     .map(|asset| res.get(asset).unwrap_or(&0))
                     .collect::<Vec<_>>(),
             )?),
-            None => Ok(serde_json::to_value(&res)?)
+            None => Ok(serde_json::to_value(&res)?),
         }
-        
     }
 
     /// Retrieves historical data for an asset.
-    /// 
+    ///
     /// # Arguments
     /// * `asset` - The trading asset/symbol (e.g., "EUR/USD")
     /// * `period` - The historical data period
-    /// 
+    ///
     /// # Returns
     /// A JSON string containing the historical data
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const history = await client.history("EUR/USD", 60);
@@ -427,13 +430,13 @@ impl PocketOption {
     }
 
     /// Subscribes to real-time price updates for a symbol.
-    /// 
+    ///
     /// # Arguments
     /// * `symbol` - The trading symbol to subscribe to (e.g., "EUR/USD")
-    /// 
+    ///
     /// # Returns
     /// A StreamIterator for receiving price updates
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const stream = await client.subscribeSymbol("EUR/USD");
@@ -456,14 +459,14 @@ impl PocketOption {
     }
 
     /// Subscribes to symbol updates with chunked delivery.
-    /// 
+    ///
     /// # Arguments
     /// * `symbol` - The trading symbol to subscribe to (e.g., "EUR/USD")
     /// * `chunk_size` - Number of updates to collect before delivery
-    /// 
+    ///
     /// # Returns
     /// A StreamIterator for receiving chunked price updates
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const stream = await client.subscribeSymbolChunked("EUR/USD", 10);
@@ -490,14 +493,14 @@ impl PocketOption {
     }
 
     /// Subscribes to symbol updates with time-based delivery.
-    /// 
+    ///
     /// # Arguments
     /// * `symbol` - The trading symbol to subscribe to (e.g., "EUR/USD")
     /// * `time_seconds` - Time interval in seconds between updates
-    /// 
+    ///
     /// # Returns
     /// A StreamIterator for receiving time-based price updates
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const stream = await client.subscribeSymbolTimed("EUR/USD", 5);
@@ -524,10 +527,10 @@ impl PocketOption {
     }
 
     /// Sends a raw WebSocket message to the server.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The raw message string to send
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// await client.sendRawMessage(JSON.stringify({
@@ -544,14 +547,14 @@ impl PocketOption {
     }
 
     /// Creates a raw order with custom validation.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The raw order message
     /// * `validator` - A validator instance for response validation
-    /// 
+    ///
     /// # Returns
     /// A JSON string containing the order result
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const validator = new Validator();
@@ -562,7 +565,8 @@ impl PocketOption {
     /// ```
     #[napi]
     pub async fn create_raw_order(&self, message: String, validator: &Validator) -> Result<String> {
-        let res = self.client
+        let res = self
+            .client
             .create_raw_order(message, validator.to_val())
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
@@ -570,15 +574,15 @@ impl PocketOption {
     }
 
     /// Creates a raw order with a timeout for response validation.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The raw order message to send
     /// * `validator` - A validator instance for response validation
     /// * `timeout` - Timeout duration in seconds
-    /// 
+    ///
     /// # Returns
     /// A JSON string containing the order result, or error if timeout is reached
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const validator = new Validator();
@@ -595,7 +599,8 @@ impl PocketOption {
         validator: &Validator,
         timeout: u32,
     ) -> Result<String> {
-        let res = self.client
+        let res = self
+            .client
             .create_raw_order_with_timeout(
                 message,
                 validator.to_val(),
@@ -607,15 +612,15 @@ impl PocketOption {
     }
 
     /// Creates a raw order with timeout and automatic retry functionality.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The raw order message to send
     /// * `validator` - A validator instance for response validation
     /// * `timeout` - Timeout duration in seconds for each attempt
-    /// 
+    ///
     /// # Returns
     /// A JSON string containing the order result, or error if all retries fail
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const validator = new Validator();
@@ -632,7 +637,8 @@ impl PocketOption {
         validator: &Validator,
         timeout: u32,
     ) -> Result<String> {
-        let res = self.client
+        let res = self
+            .client
             .create_raw_order_with_timeout_and_retry(
                 message,
                 validator.to_val(),
@@ -644,15 +650,15 @@ impl PocketOption {
     }
 
     /// Creates an iterator for handling raw WebSocket messages with validation.
-    /// 
+    ///
     /// # Arguments
     /// * `message` - The initial message to send to establish the stream
     /// * `validator` - A validator instance for filtering messages
     /// * `timeout` - Optional timeout duration in seconds for the stream
-    /// 
+    ///
     /// # Returns
     /// A RawStreamIterator that yields validated messages
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const validator = new Validator();
@@ -673,11 +679,12 @@ impl PocketOption {
         timeout: Option<u32>,
     ) -> Result<RawStreamIterator> {
         let timeout = timeout.map(|t| Duration::from_secs(t as u64));
-        let stream = self.client
+        let stream = self
+            .client
             .create_raw_iterator(message, validator.to_val(), timeout)
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
-        
+
         let boxed_stream = FilteredRecieverStream::to_stream_static(Arc::new(stream))
             .boxed()
             .fuse();
@@ -686,21 +693,20 @@ impl PocketOption {
     }
 }
 
-
 #[napi]
 impl StreamIterator {
     /// Gets the next price update from the stream.
-    /// 
+    ///
     /// # Returns
     /// * A Promise that resolves to:
     ///   * A JSON string containing the next price update data
     ///   * null if the stream has ended
     /// * Rejects with an error if the stream encounters an error
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const stream = await client.subscribeSymbol('EUR/USD');
-    /// 
+    ///
     /// // Using async/await
     /// try {
     ///     while (true) {
@@ -729,20 +735,20 @@ impl StreamIterator {
 #[napi]
 impl RawStreamIterator {
     /// Gets the next raw WebSocket message from the stream.
-    /// 
+    ///
     /// # Returns
     /// * A Promise that resolves to:
     ///   * A string containing the raw WebSocket message
     ///   * null if the stream has ended
     /// * Rejects with an error if the stream encounters an error
-    /// 
+    ///
     /// # Examples
     /// ```javascript
     /// const stream = await client.createRawIterator(
     ///     JSON.stringify({ type: 'subscribe' }),
     ///     validator
     /// );
-    /// 
+    ///
     /// // Using async/await
     /// try {
     ///     while (true) {
@@ -753,7 +759,7 @@ impl RawStreamIterator {
     /// } catch (err) {
     ///     console.error('Stream error:', err);
     /// }
-    /// 
+    ///
     /// // Using for-await-of
     /// try {
     ///     for await (const message of stream) {
@@ -773,4 +779,3 @@ impl RawStreamIterator {
         }
     }
 }
-
