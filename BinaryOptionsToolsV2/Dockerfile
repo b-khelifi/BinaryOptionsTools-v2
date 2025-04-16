@@ -1,4 +1,4 @@
-FROM rust:1.76-slim
+FROM rust:latest
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -28,7 +28,7 @@ RUN mkdir -p $ANDROID_SDK_ROOT/ndk && \
 # Add Android Rust targets
 RUN rustup target add aarch64-linux-android
 
-COPY ../../BinaryOptionsToolsV2 .
+COPY . .
 
 ENV CC_aarch64_linux_android=aarch64-linux-android21-clang
 ENV CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=aarch64-linux-android21-clang
