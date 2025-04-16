@@ -1,4 +1,4 @@
-const { PocketOption } = require('@rick-29/binary-options-tools');
+const { PocketOption } = require('./binary-options-tools.node');
 
 async function main(ssid) {
     // Initialize the API client
@@ -7,17 +7,13 @@ async function main(ssid) {
     // Wait for connection to establish
     await new Promise(resolve => setTimeout(resolve, 5000));
     
-    const [orderId, details] = await client.buy("EUR/USD", 100, 60);
+    const [orderId, details] = await api.buy("EURUSD_otc", 10, 60);
     const results = await api.checkWin(orderId);
     // Get balance
     console.log(`Balance: ${results.profit}`);
 }
 
 // Check if ssid is provided as command line argument
-const ssid = process.argv[2];
-if (!ssid) {
-    console.log('Please provide your ssid as a command line argument');
-    process.exit(1);
-}
+const ssid = ''
 
 main(ssid).catch(console.error);

@@ -1,4 +1,4 @@
-const { PocketOption, startLogs } = require('@rick-29/binary-options-tools');
+const { PocketOption, startLogs } = require('./binary-options-tools.node');
 
 async function main(ssid) {
     // Start logs
@@ -39,10 +39,5 @@ async function main(ssid) {
 }
 
 // Check if ssid is provided as command line argument
-const ssid = process.argv[2];
-if (!ssid) {
-    console.log('Please provide your ssid as a command line argument');
-    process.exit(1);
-}
-
+const ssid = ''
 main(ssid).catch(console.error);

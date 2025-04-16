@@ -1,4 +1,4 @@
-const { Validator } = require('@rick-29/binary-options-tools');
+const { Validator } = require('./binary-options-tools.node');
 
 // Create validator instances
 const none = new Validator();
