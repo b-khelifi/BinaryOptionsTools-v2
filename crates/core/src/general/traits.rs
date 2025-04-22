@@ -15,6 +15,9 @@ use super::{
 /// This trait makes sure that the struct passed to the `WebsocketClient` can be cloned, sended through multiple threads, and serialized and deserialized using serde
 pub trait Credentials: Clone + Send + Sync + Serialize + DeserializeOwned {}
 
+/// This trait is used to allow users to pass their own config struct to the `WebsocketClient`
+pub trait InnerConfig: DeserializeOwned + Clone + Send {}
+
 /// This trait allows users to pass their own way of storing and updating recieved data from the `websocket` connection
 #[async_trait]
 pub trait DataHandler: Clone + Send + Sync {
@@ -28,11 +31,13 @@ pub trait DataHandler: Clone + Send + Sync {
 pub trait WCallback: Send + Sync {
     type T: DataHandler;
     type Transfer: MessageTransfer;
+    type U: InnerConfig;
 
     async fn call(
         &self,
         data: Data<Self::T, Self::Transfer>,
         sender: &SenderMessage,
+        config: &Config<Self::T, Self::Transfer, Self::U>
     ) -> BinaryOptionsResult<()>;
 }
 
@@ -85,10 +90,10 @@ pub trait Connect: Clone + Send + Sync {
     type Creds: Credentials;
     // type Uris: Iterator<Item = String>;
 
-    async fn connect<T: DataHandler, Transfer: MessageTransfer>(
+    async fn connect<T: DataHandler, Transfer: MessageTransfer, U: InnerConfig>(
         &self,
         creds: Self::Creds,
-        config: &Config<T, Transfer>,
+        config: &Config<T, Transfer, U>,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 }
 
@@ -105,3 +110,4 @@ where
     }
 }
 
+impl <T> InnerConfig for T where T: DeserializeOwned + Clone + Send {}

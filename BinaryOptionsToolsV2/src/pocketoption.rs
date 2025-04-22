@@ -20,6 +20,7 @@ use crate::error::BinaryErrorPy;
 use crate::runtime::get_runtime;
 use crate::stream::next_stream;
 use crate::validator::RawValidator;
+use crate::config::PyConfig;
 use tokio::sync::Mutex;
 
 #[pyclass]
@@ -41,28 +42,47 @@ pub struct RawStreamIterator {
 #[pymethods]
 impl RawPocketOption {
     #[new]
-    pub fn new(ssid: String, py: Python<'_>) -> PyResult<Self> {
+    #[pyo3(signature = (ssid, config = None))]
+    pub fn new(ssid: String, config: Option<PyConfig>, py: Python<'_>) -> PyResult<Self> {
         let runtime = get_runtime(py)?;
         runtime.block_on(async move {
-            let client = PocketOption::new(ssid).await.map_err(BinaryErrorPy::from)?;
+            let client = if let Some(config) = config {
+                let builder = config.build()?;
+                let config = builder.build().map_err(BinaryOptionsToolsError::from).map_err(BinaryErrorPy::from)?;
+                PocketOption::new_with_config(ssid, config)
+                    .await
+                    .map_err(BinaryErrorPy::from)?
+            } else {
+                PocketOption::new(ssid).await.map_err(BinaryErrorPy::from)?
+            };
             Ok(Self { client })
         })
     }
 
     #[staticmethod]
-    pub fn new_with_url(py: Python<'_>, ssid: String, url: String) -> PyResult<Self> {
+    #[pyo3(signature = (ssid, url, config = None))]
+    pub fn new_with_url(py: Python<'_>, ssid: String, url: String, config: Option<PyConfig>) -> PyResult<Self> {
         let runtime = get_runtime(py)?;
         runtime.block_on(async move {
-            let client = PocketOption::new_with_url(
-                ssid,
-                Url::parse(&url)
-                    .map_err(|e| BinaryErrorPy::from(BinaryOptionsToolsError::from(e)))?,
-            )
-            .await
-            .map_err(BinaryErrorPy::from)?;
+            let parsed_url = Url::parse(&url)
+                .map_err(|e| BinaryErrorPy::from(BinaryOptionsToolsError::from(e)))?;
+            
+            let client = if let Some(config) = config {
+                let builder = config.build()?;
+                let config = builder.build().map_err(BinaryOptionsToolsError::from).map_err(BinaryErrorPy::from)?;
+                PocketOption::new_with_config(ssid, config)
+                    .await
+                    .map_err(BinaryErrorPy::from)?
+            } else {
+                PocketOption::new_with_url(ssid, parsed_url)
+                    .await
+                    .map_err(BinaryErrorPy::from)?
+            };
             Ok(Self { client })
         })
     }
+
+    
 
     pub async fn is_demo(&self) -> bool {
         self.client.is_demo().await
@@ -429,3 +449,4 @@ impl RawStreamIterator {
         })
     }
 }
+

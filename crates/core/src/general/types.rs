@@ -10,7 +10,9 @@ use crate::constants::MAX_CHANNEL_CAPACITY;
 use crate::error::BinaryOptionsResult;
 use crate::error::BinaryOptionsToolsError;
 
+use super::config;
 use super::send::SenderMessage;
+use super::traits::InnerConfig;
 use super::traits::WCallback;
 use super::traits::{DataHandler, MessageTransfer};
 
@@ -48,31 +50,35 @@ impl<T: DataHandler + Default, Transfer: MessageTransfer> Default for Data<T, Tr
     }
 }
 #[derive(Clone)]
-pub struct Callback<T: DataHandler, Transfer: MessageTransfer> {
-    inner: Arc<dyn WCallback<T = T, Transfer = Transfer>>,
+pub struct Callback<T: DataHandler, Transfer: MessageTransfer, U: InnerConfig> {
+    inner: Arc<dyn WCallback<T = T, Transfer = Transfer, U = U>>,
 }
 
 pub fn default_validator<Transfer: MessageTransfer>(_val: &Transfer) -> bool {
     false
 }
 
-impl<T: DataHandler, Transfer: MessageTransfer> Callback<T, Transfer> {
-    pub fn new(callback: Arc<dyn WCallback<T = T, Transfer = Transfer>>) -> Self {
+impl<T: DataHandler, Transfer: MessageTransfer, U: InnerConfig> Callback<T, Transfer, U> {
+    pub fn new(callback: Arc<dyn WCallback<T = T, Transfer = Transfer, U = U>>) -> Self {
         Self { inner: callback }
     }
 }
 
 #[async_trait]
-impl<T: DataHandler, Transfer: MessageTransfer> WCallback for Callback<T, Transfer> {
+impl<T: DataHandler, Transfer: MessageTransfer, U: InnerConfig> WCallback
+    for Callback<T, Transfer, U>
+{
     type T = T;
     type Transfer = Transfer;
+    type U = U;
 
     async fn call(
         &self,
         data: Data<Self::T, Self::Transfer>,
         sender: &SenderMessage,
+        config: &config::Config<Self::T, Self::Transfer, Self::U>,
     ) -> BinaryOptionsResult<()> {
-        self.inner.call(data, sender).await
+        self.inner.call(data, sender, config).await
     }
 }
 
@@ -129,14 +135,13 @@ where
     pub async fn raw_send(&self, msg: Transfer::Raw) -> BinaryOptionsResult<()> {
         let sender = &self.raw_requests.0;
         if sender.receiver_count() > 1 {
-            sender.send(msg).await.map_err(|e| {
-                BinaryOptionsToolsError::ChannelRequestSendingError(
-                    e.to_string(),
-                )
-            })?;
+            sender
+                .send(msg)
+                .await
+                .map_err(|e| BinaryOptionsToolsError::ChannelRequestSendingError(e.to_string()))?;
         }
         Ok(())
-    } 
+    }
 
     pub async fn update_data(
         &self,
@@ -145,8 +150,6 @@ where
         self.inner.update(&message).await?;
         Ok(self.get_sender(&message).await)
     }
-
-
 }
 
 impl<T, Transfer> Deref for Data<T, Transfer>

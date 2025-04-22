@@ -10,9 +10,8 @@ use crate::pocketoption::{
     validators::history_validator,
 };
 use binary_options_tools_core::{
-    constants::TIMEOUT_TIME,
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
-    general::{send::SenderMessage, traits::WCallback, types::Data},
+    general::{config::Config, send::SenderMessage, traits::WCallback, types::Data},
 };
 
 use super::{base::ChangeSymbol, data::PocketData, order::SuccessCloseOrder};
@@ -24,13 +23,14 @@ impl PocketCallback {
     async fn update_assets(
         data: &Data<PocketData, WebSocketMessage>,
         sender: &SenderMessage,
+        config: &Config<PocketData, WebSocketMessage, ()>,
     ) -> BinaryOptionsResult<()> {
         for asset in data.stream_assets().await {
             sleep(Duration::from_secs(1)).await;
             let history = ChangeSymbol::new(asset.to_string(), 3600);
             let res = sender
                 .send_message_with_timout(
-                    Duration::from_secs(TIMEOUT_TIME),
+                    config.get_timeout()?,
                     "SubscribeSymbolCallback",
                     data,
                     WebSocketMessage::ChangeSymbol(history),
@@ -73,15 +73,17 @@ impl PocketCallback {
 impl WCallback for PocketCallback {
     type T = PocketData;
     type Transfer = WebSocketMessage;
+    type U = ();
 
-    #[instrument(skip(self, data, sender))]
+    #[instrument(skip(self, data, sender, config))]
     async fn call(
         &self,
         data: Data<Self::T, Self::Transfer>,
         sender: &SenderMessage,
+        config: &Config<Self::T, Self::Transfer, Self::U>,
     ) -> BinaryOptionsResult<()> {
         // let sender = sender.clone();
-        let update_assets_future = Self::update_assets(&data, sender);
+        let update_assets_future = Self::update_assets(&data, sender, &config);
         let update_check_results_future = Self::update_check_results(&data);
         try_join(update_assets_future, update_check_results_future).await?;
         Ok(())

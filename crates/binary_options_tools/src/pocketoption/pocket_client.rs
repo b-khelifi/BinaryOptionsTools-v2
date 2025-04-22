@@ -1,7 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
-    time::{Duration, Instant},
+    collections::{HashMap, HashSet}, ops::Deref, time::{Duration, Instant}
 };
 
 use chrono::{DateTime, Utc};
@@ -17,11 +15,10 @@ use crate::pocketoption::{
     ws::ssid::Ssid,
 };
 use binary_options_tools_core::{
-    constants::TIMEOUT_TIME,
     error::BinaryOptionsToolsError,
     general::{
         client::WebSocketClient,
-        config::{_Config, Config},
+        config::{Config, _Config},
         stream::FilteredRecieverStream,
         traits::{MessageTransfer, ValidatorTrait},
         types::{Callback, Data},
@@ -100,11 +97,18 @@ use super::{
 /// It can be safely cloned and shared between multiple tasks.
 #[derive(Clone)]
 pub struct PocketOption {
-    client: WebSocketClient<WebSocketMessage, Handler, PocketConnect, Ssid, PocketData>,
+    client: WebSocketClient<
+        WebSocketMessage,
+        Handler,
+        PocketConnect,
+        Ssid,
+        PocketData,
+        (),
+        >,
 }
 
 impl Deref for PocketOption {
-    type Target = Config<PocketData, WebSocketMessage>;
+    type Target = Config<PocketData, WebSocketMessage, ()>;
 
     fn deref(&self) -> &Self::Target {
         &self.client.config
@@ -130,7 +134,7 @@ impl PocketOption {
         let handler = Handler::new(ssid.clone());
         let timeout = Duration::from_millis(500);
         let callback = PocketCallback;
-        let config = _Config::new(timeout, vec![])
+        let config = _Config::new(timeout, vec![], ())
             .builder()
             .reconnect_time(5)
             .build()?;
@@ -167,7 +171,7 @@ impl PocketOption {
         let handler = Handler::new(ssid.clone());
         let timeout = Duration::from_millis(500);
         let callback = PocketCallback;
-        let config = _Config::new(timeout, vec![])
+        let config = _Config::new(timeout, vec![], ())
             .builder()
             .reconnect_time(5)
             .default_connection_url(HashSet::from([url]))
@@ -182,6 +186,45 @@ impl PocketOption {
         )
         .await?;
         // println!("Initialized!");
+        Ok(Self { client })
+    }
+
+        /// Creates a new PocketOption client with a provided configuration.
+    ///
+    /// # Arguments
+    /// * `ssid` - Session ID for authentication
+    /// * `config` - Custom configuration for the client
+    ///
+    /// # Returns
+    /// A Result containing the initialized PocketOption client or an error
+    ///
+    /// # Examples
+    /// ```rust
+    /// let config = Config::new(timeout, vec![], Box::new(()))
+    ///     .builder()
+    ///     .reconnect_time(5)
+    ///     .build()?;
+    /// let client = PocketOption::new_with_config("your-session-id", config).await?;
+    /// ```
+    pub async fn new_with_config(
+        ssid: impl ToString,
+        config: Config<PocketData, WebSocketMessage, ()>,
+    ) -> PocketResult<Self> {
+        let ssid = Ssid::parse(ssid)?;
+        let data = Data::new(PocketData::default());
+        let handler = Handler::new(ssid.clone());
+        let callback = PocketCallback;
+        
+        let client = WebSocketClient::init(
+            ssid,
+            PocketConnect {},
+            data,
+            handler,
+            Some(Callback::new(std::sync::Arc::new(callback))),
+            config,
+        )
+        .await?;
+        
         Ok(Self { client })
     }
 
@@ -218,7 +261,7 @@ impl PocketOption {
         let res = self
             .client
             .send_message_with_timout(
-                Duration::from_secs(TIMEOUT_TIME),
+                self.get_timeout()?,
                 "Trade",
                 WebSocketMessage::OpenOrder(order),
                 MessageInfo::SuccessopenOrder,
@@ -355,7 +398,7 @@ impl PocketOption {
             let res: WebSocketMessage = match self
                 .client
                 .send_message_with_timeout_and_retry(
-                    exp + Duration::from_secs(TIMEOUT_TIME),
+                    exp + self.get_timeout()?,
                     "CheckResult",
                     WebSocketMessage::None,
                     MessageInfo::SuccesscloseOrder,
@@ -441,7 +484,7 @@ impl PocketOption {
         let res = self
             .client
             .send_message_with_timeout_and_retry(
-                Duration::from_secs(TIMEOUT_TIME),
+                self.get_timeout()?,
                 "GetCandles",
                 WebSocketMessage::GetCandles(request),
                 MessageInfo::LoadHistoryPeriod,
@@ -480,7 +523,7 @@ impl PocketOption {
         let res = self
             .client
             .send_message_with_timeout_and_retry(
-                Duration::from_secs(TIMEOUT_TIME),
+                self.get_timeout()?,
                 "History",
                 WebSocketMessage::ChangeSymbol(request),
                 MessageInfo::UpdateHistoryNew,

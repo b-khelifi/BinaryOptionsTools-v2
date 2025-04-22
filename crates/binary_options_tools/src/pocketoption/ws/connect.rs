@@ -12,7 +12,7 @@ use binary_options_tools_core::{
     error::{BinaryOptionsResult, BinaryOptionsToolsError},
     general::{
         config::Config,
-        traits::{Connect, DataHandler, MessageTransfer},
+        traits::{Connect, DataHandler, InnerConfig, MessageTransfer},
     },
     reimports::{MaybeTlsStream, WebSocketStream},
 };
@@ -26,10 +26,10 @@ pub struct PocketConnect;
 impl Connect for PocketConnect {
     type Creds = Ssid;
 
-    async fn connect<T: DataHandler, Transfer: MessageTransfer>(
+    async fn connect<T: DataHandler, Transfer: MessageTransfer, U: InnerConfig>(
         &self,
         creds: Self::Creds,
-        config: &Config<T, Transfer>,
+        config: &Config<T, Transfer, U>,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
         async fn send_ws(
             creds: Ssid,

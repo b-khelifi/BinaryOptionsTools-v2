@@ -22,71 +22,76 @@ use super::config::Config;
 use super::send::SenderMessage;
 use super::stream::FilteredRecieverStream;
 use super::traits::{
-    Connect, Credentials, DataHandler, MessageHandler, MessageTransfer, ValidatorTrait, WCallback
+    Connect, Credentials, DataHandler, InnerConfig, MessageHandler, MessageTransfer, ValidatorTrait, WCallback
 };
 use super::types::{Callback, Data};
 
 #[derive(Clone)]
-pub struct WebSocketClient<Transfer, Handler, Connector, Creds, T>
+pub struct WebSocketClient<Transfer, Handler, Connector, Creds, T, U>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
+    U: InnerConfig,
 {
-    inner: Arc<WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>>,
+    inner: Arc<WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, U>>,
 }
 
-pub struct WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>
+pub struct WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, U>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
+    U: InnerConfig,
 {
     pub credentials: Creds,
     pub connector: Connector,
     pub handler: Handler,
     pub data: Data<T, Transfer>,
     pub sender: SenderMessage,
-    pub reconnect_callback: Option<Callback<T, Transfer>>,
-    pub config: Config<T, Transfer>,
+    pub reconnect_callback: Option<Callback<T, Transfer, U>>,
+    pub config: Config<T, Transfer, U>,
     _event_loop: JoinHandle<BinaryOptionsResult<()>>,
 }
 
-impl<Transfer, Handler, Connector, Creds, T> Deref
-    for WebSocketClient<Transfer, Handler, Connector, Creds, T>
+impl<Transfer, Handler, Connector, Creds, T, U> Deref
+    for WebSocketClient<Transfer, Handler, Connector, Creds, T, U>
 where
     Transfer: MessageTransfer,
     Handler: MessageHandler,
     Connector: Connect,
     Creds: Credentials,
     T: DataHandler,
+    U: InnerConfig,
 {
-    type Target = WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>;
+    type Target = WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, U>;
 
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref()
     }
 }
 
-impl<Transfer, Handler, Connector, Creds, T> WebSocketClient<Transfer, Handler, Connector, Creds, T>
+impl<Transfer, Handler, Connector, Creds, T, U>
+    WebSocketClient<Transfer, Handler, Connector, Creds, T, U>
 where
     Transfer: MessageTransfer + 'static,
     Handler: MessageHandler<Transfer = Transfer> + 'static,
     Creds: Credentials + 'static,
     Connector: Connect<Creds = Creds> + 'static,
     T: DataHandler<Transfer = Transfer> + 'static,
+    U: InnerConfig + 'static,
 {
     pub async fn init(
         credentials: Creds,
         connector: Connector,
         data: Data<T, Transfer>,
         handler: Handler,
-        reconnect_callback: Option<Callback<T, Transfer>>,
-        config: Config<T, Transfer>,
+        reconnect_callback: Option<Callback<T, Transfer, U>>,
+        config: Config<T, Transfer, U>,
     ) -> BinaryOptionsResult<Self> {
         let inner = WebSocketInnerClient::init(
             credentials,
@@ -103,22 +108,23 @@ where
     }
 }
 
-impl<Transfer, Handler, Connector, Creds, T>
-    WebSocketInnerClient<Transfer, Handler, Connector, Creds, T>
+impl<Transfer, Handler, Connector, Creds, T, U>
+    WebSocketInnerClient<Transfer, Handler, Connector, Creds, T, U>
 where
     Transfer: MessageTransfer + 'static,
     Handler: MessageHandler<Transfer = Transfer> + 'static,
     Creds: Credentials + 'static,
     Connector: Connect<Creds = Creds> + 'static,
     T: DataHandler<Transfer = Transfer> + 'static,
+    U: InnerConfig + 'static,
 {
     pub async fn init(
         credentials: Creds,
         connector: Connector,
         data: Data<T, Transfer>,
         handler: Handler,
-        reconnect_callback: Option<Callback<T, Transfer>>,
-        config: Config<T, Transfer>,
+        reconnect_callback: Option<Callback<T, Transfer, U>>,
+        config: Config<T, Transfer, U>,
     ) -> BinaryOptionsResult<Self> {
         let _connection = connector.connect(credentials.clone(), &config).await?; // Check if it's possible to connect before building the struct
         let (_event_loop, sender) = Self::start_loops(
@@ -149,8 +155,8 @@ where
         credentials: Creds,
         data: Data<T, Transfer>,
         connector: Connector,
-        reconnect_callback: Option<Callback<T, Transfer>>,
-        config: Config<T, Transfer>,
+        reconnect_callback: Option<Callback<T, Transfer, U>>,
+        config: Config<T, Transfer, U>,
     ) -> BinaryOptionsResult<(JoinHandle<BinaryOptionsResult<()>>, SenderMessage)> {
         let (mut write, mut read) = connector
             .connect(credentials.clone(), &config)
@@ -163,7 +169,7 @@ where
             let loops = 0;
             let mut reconnected = false;
             loop {
-                match WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::step(
+                match WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, U>::step(
                     &previous,
                     &data,
                     handler.clone(),
@@ -207,15 +213,15 @@ where
         write: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
         reciever: &Receiver<Message>,
         reciever_priority: &Receiver<Message>,
-        config: &Config<T, Transfer>,
-        reconnect_callback: &Option<Callback<T, Transfer>>,
+        config: &Config<T, Transfer, U>,
+        reconnect_callback: &Option<Callback<T, Transfer, U>>,
         reconnected: bool,
         connector: &Connector,
         credentials: &Creds,
         mut loops: u32,
     ) -> BinaryOptionsResult<WebSocketStream<MaybeTlsStream<TcpStream>>> {
         let listener_future =
-            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::listener_loop(
+            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, U>::listener_loop(
                 previous.clone(),
                 data,
                 handler.clone(),
@@ -223,7 +229,7 @@ where
                 read,
             );
         let sender_future =
-            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::sender_loop(
+            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, U>::sender_loop(
                 write,
                 reciever,
                 reciever_priority,
@@ -231,12 +237,13 @@ where
             );
 
         let callback =
-            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T>::reconnect_callback(
+            WebSocketInnerClient::<Transfer, Handler, Connector, Creds, T, U>::reconnect_callback(
                 reconnect_callback.clone(),
                 data.clone(),
                 loop_sender.clone(),
                 reconnected,
                 config.get_reconnect_time()?,
+                config.clone(),
             );
 
         match try_join3(listener_future, sender_future, callback).await {
@@ -396,19 +403,23 @@ where
     // }
 
     async fn reconnect_callback(
-        reconnect_callback: Option<Callback<T, Transfer>>,
+        reconnect_callback: Option<Callback<T, Transfer, U>>,
         data: Data<T, Transfer>,
         sender: SenderMessage,
         reconnect: bool,
         reconnect_time: u64,
+        config: Config<T, Transfer, U>,
     ) -> BinaryOptionsResult<BinaryOptionsResult<()>> {
         Ok(tokio::spawn(async move {
             sleep(Duration::from_secs(reconnect_time)).await;
             if reconnect {
                 if let Some(callback) = &reconnect_callback {
-                    callback.call(data.clone(), &sender).await.inspect_err(
-                        |e| error!(target: "EventLoop","Error calling callback, {e}"),
-                    )?;
+                    callback
+                        .call(data.clone(), &sender, &config)
+                        .await
+                        .inspect_err(
+                            |e| error!(target: "EventLoop","Error calling callback, {e}"),
+                        )?;
                 }
             }
             Ok(())
@@ -503,7 +514,9 @@ where
         validator: Box<dyn ValidatorTrait<Transfer::Raw> + Send + Sync>,
         timeout: Option<Duration>,
     ) -> BinaryOptionsResult<FilteredRecieverStream<Transfer::Raw>> {
-        self.sender.send_raw_message_iterator(timeout, &self.data, msg, validator).await
+        self.sender
+            .send_raw_message_iterator(timeout, &self.data, msg, validator)
+            .await
     }
 }
 
