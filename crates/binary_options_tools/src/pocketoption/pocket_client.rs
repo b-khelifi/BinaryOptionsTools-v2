@@ -443,32 +443,8 @@ impl PocketOption {
         Err(BinaryOptionsToolsError::Unallowed("Couldn't check result for a deal that is not in the list of opened trades nor closed trades.".into()).into())
     }
 
-    /// Retrieves historical candle data for a specific asset.
-    ///
-    /// # Arguments
-    /// * `asset` - Trading symbol (e.g., "EURUSD")
-    /// * `period` - Time period for each candle in seconds
-    /// * `offset` - Number of periods to offset from current time
-    ///
-    /// # Returns
-    /// A vector of DataCandle objects containing historical price data
-    ///
-    /// # Errors
-    /// * Returns GeneralParsingError if server time is invalid
-    /// * Returns UnexpectedIncorrectWebSocketMessage if response format is incorrect
-    ///
-    /// # Examples
-    /// ```rust
-    /// let candles = client.get_candles("EURUSD", 60, 0).await?; // Get current minute candles
-    /// ```
-    pub async fn get_candles(
-        &self,
-        asset: impl ToString,
-        period: i64,
-        offset: i64,
-    ) -> PocketResult<Vec<DataCandle>> {
-        info!(target: "GetCandles", "Retrieving candles for asset '{}' with period of '{}' and offset of '{}'", asset.to_string(), period, offset);
-        let time = self.client.data.get_server_time().await.div_euclid(period) * period;
+    pub async fn get_candles_advanced(&self, asset: impl ToString, time: i64, period: i64, offset: i64) -> PocketResult<Vec<DataCandle>> {
+        info!(target: "GetCandlesAdvanced", "Retrieving candles for asset '{}' with period of '{}' and offset of '{}'", asset.to_string(), period, offset);
         if time == 0 {
             return Err(PocketOptionError::GeneralParsingError(
                 "Server time is invalid.".to_string(),
@@ -497,6 +473,34 @@ impl PocketOption {
         Err(PocketOptionError::UnexpectedIncorrectWebSocketMessage(
             res.info(),
         ))
+    }
+
+    /// Retrieves historical candle data for a specific asset.
+    ///
+    /// # Arguments
+    /// * `asset` - Trading symbol (e.g., "EURUSD")
+    /// * `period` - Time period for each candle in seconds
+    /// * `offset` - Number of periods to offset from current time
+    ///
+    /// # Returns
+    /// A vector of DataCandle objects containing historical price data
+    ///
+    /// # Errors
+    /// * Returns GeneralParsingError if server time is invalid
+    /// * Returns UnexpectedIncorrectWebSocketMessage if response format is incorrect
+    ///
+    /// # Examples
+    /// ```rust
+    /// let candles = client.get_candles("EURUSD", 60, 0).await?; // Get current minute candles
+    /// ```
+    pub async fn get_candles(
+        &self,
+        asset: impl ToString,
+        period: i64,
+        offset: i64,
+    ) -> PocketResult<Vec<DataCandle>> {
+        let time = self.client.data.get_server_time().await.div_euclid(period) * period;
+        self.get_candles_advanced(asset, time, period, offset).await
     }
 
     /// Retrieves the most recent historical data for an asset.

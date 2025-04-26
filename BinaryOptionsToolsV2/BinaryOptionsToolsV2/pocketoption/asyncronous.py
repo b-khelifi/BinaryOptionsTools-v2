@@ -1,4 +1,5 @@
 from BinaryOptionsToolsV2.validator import Validator
+from BinaryOptionsToolsV2.config import Config
 from BinaryOptionsToolsV2 import RawPocketOption, Logger
 from datetime import timedelta
 
@@ -22,11 +23,94 @@ class AsyncSubscription:
     
 # This file contains all the async code for the PocketOption Module
 class PocketOptionAsync:
-    def __init__(self, ssid: str, **kwargs):
-        if kwargs.get("url") is not None:
-            self.client = RawPocketOption.new_with_url(ssid, kwargs.get("url"))
-        else:
-            self.client = RawPocketOption(ssid)
+    def __init__(self, ssid: str, url: str | None = None, config: Config | dict | str = None, **_):
+        """
+        Initializes a new PocketOptionAsync instance.
+
+        This class provides an asynchronous interface for interacting with the Pocket Option trading platform.
+        It supports custom WebSocket URLs and configuration options for fine-tuning the connection behavior.
+
+        Args:
+            ssid (str): Session ID for authentication with Pocket Option platform
+            url (str | None, optional): Custom WebSocket server URL. Defaults to None, using platform's default URL.
+            config (Config | dict | str, optional): Configuration options. Can be provided as:
+                - Config object: Direct instance of Config class
+                - dict: Dictionary of configuration parameters
+                - str: JSON string containing configuration parameters
+                Configuration parameters include:
+                    - max_allowed_loops (int): Maximum number of event loop iterations
+                    - sleep_interval (int): Sleep time between operations in milliseconds
+                    - reconnect_time (int): Time to wait before reconnection attempts in seconds
+                    - connection_initialization_timeout_secs (int): Connection initialization timeout
+                    - timeout_secs (int): General operation timeout
+                    - urls (List[str]): List of fallback WebSocket URLs
+            **_: Additional keyword arguments (ignored)
+
+        Examples:
+            Basic usage:
+            ```python
+            client = PocketOptionAsync("your-session-id")
+            ```
+
+            With custom WebSocket URL:
+            ```python
+            client = PocketOptionAsync("your-session-id", url="wss://custom-server.com/ws")
+            ```
+
+            With configuration object:
+            ```python
+            config = Config()
+            config.timeout_secs = 60
+            config.reconnect_time = 10
+            client = PocketOptionAsync("your-session-id", config=config)
+            ```
+
+            With configuration dictionary:
+            ```python
+            config_dict = {
+                "timeout_secs": 60,
+                "reconnect_time": 10,
+                "urls": ["wss://backup1.com", "wss://backup2.com"]
+            }
+            client = PocketOptionAsync("your-session-id", config=config_dict)
+            ```
+
+            With JSON configuration:
+            ```python
+            config_json = '''
+            {
+                "timeout_secs": 60,
+                "reconnect_time": 10
+            }
+            '''
+            client = PocketOptionAsync("your-session-id", config=config_json)
+            ```
+
+        Note:
+            - The configuration becomes locked once initialized and cannot be modified afterwards
+            - Custom URLs provided in the `url` parameter take precedence over URLs in the configuration
+            - Invalid configuration values will raise appropriate exceptions
+        """
+        if config is not None:
+            if isinstance(config, dict):
+                self.config = Config.from_dict(config)
+            elif isinstance(config, str):
+                self.config = Config.from_json(config)
+            elif isinstance(config, Config):
+                self.config = config
+            else:
+                raise ValueError("Config must be either a Config object, dictionary, or JSON string")
+
+            if url is not None:
+                self.client = RawPocketOption.new_with_url(ssid, url, self.config.pyconfig)
+            else:
+                self.client = RawPocketOption(ssid, config, self.config.pyconfig)
+        else: 
+            self.config = Config()
+            if url is not None:
+                self.client = RawPocketOption.new_with_url(ssid, url)
+            else:
+                self.client = RawPocketOption(ssid)
         self.logger = Logger()
     
     
@@ -120,7 +204,7 @@ class PocketOptionAsync:
                 duration = 5 # If duration is less than 0 then the trade is closed and the function should take less than 5 seconds to run
         else:
             duration = 5
-        duration += 6
+        duration += self.config.extra_duration
         
         self.logger.debug(f"Timeout set to: {duration} (6 extra seconds)")
         async def check(id):
@@ -153,7 +237,6 @@ class PocketOptionAsync:
                 - high: Highest price
                 - low: Lowest price
                 - close: Closing price
-                - volume: Trading volume
 
         Note:
             Available timeframes: 1, 5, 15, 30, 60, 300 seconds
@@ -161,6 +244,33 @@ class PocketOptionAsync:
         """
         candles = await self.client.get_candles(asset, period, offset)
         return json.loads(candles)
+    
+    async def get_candles_advanced(self, asset: str, period: int, offset: int, time: int) -> list[dict]:  
+        """
+        Retrieves historical candle data for an asset.
+
+        Args:
+            asset (str): Trading asset (e.g., "EURUSD_otc")
+            timeframe (int): Candle timeframe in seconds (e.g., 60 for 1-minute candles)
+            period (int): Historical period in seconds to fetch
+            time (int): Time to fetch candles from
+
+        Returns:
+            list[dict]: List of candles, each containing:
+                - time: Candle timestamp
+                - open: Opening price
+                - high: Highest price
+                - low: Lowest price
+                - close: Closing price
+
+        Note:
+            Available timeframes: 1, 5, 15, 30, 60, 300 seconds
+            Maximum period depends on the timeframe
+        """
+        candles = await self.client.get_candles_advanced(asset, period, offset, time)
+        return json.loads(candles)
+
+
     
     async def balance(self) -> float:
         """
@@ -353,6 +463,10 @@ class PocketOptionAsync:
             ```
         """
         return await self.client.create_raw_iterator(message, validator, timeout)
+    
+    async def get_server_time(self) -> int:
+        """Returns the current server time as a UNIX timestamp"""
+        return await self.client.get_server_time()
     
     async def is_demo(self) -> bool:
         """

@@ -1,4 +1,5 @@
 from .asyncronous import PocketOptionAsync
+from BinaryOptionsToolsV2.config import Config
 from BinaryOptionsToolsV2.validator import Validator
 from datetime import timedelta
 
@@ -18,10 +19,94 @@ class SyncSubscription:
     
 
 class PocketOption:
-    def __init__(self, ssid: str):
-        "Creates a new instance of the PocketOption class"
+    def __init__(self, ssid: str, config: Config | dict | str = None, **_):
+        """
+        Initializes a new PocketOption instance.
+
+        This class provides a synchronous wrapper around the asynchronous PocketOptionAsync class,
+        making it easier to interact with the Pocket Option trading platform in synchronous code.
+        It supports custom WebSocket URLs and configuration options for fine-tuning the connection behavior.
+
+        Args:
+            ssid (str): Session ID for authentication with Pocket Option platform
+            url (str | None, optional): Custom WebSocket server URL. Defaults to None, using platform's default URL.
+            config (Config | dict | str, optional): Configuration options. Can be provided as:
+                - Config object: Direct instance of Config class
+                - dict: Dictionary of configuration parameters
+                - str: JSON string containing configuration parameters
+                Configuration parameters include:
+                    - max_allowed_loops (int): Maximum number of event loop iterations
+                    - sleep_interval (int): Sleep time between operations in milliseconds
+                    - reconnect_time (int): Time to wait before reconnection attempts in seconds
+                    - connection_initialization_timeout_secs (int): Connection initialization timeout
+                    - timeout_secs (int): General operation timeout
+                    - urls (List[str]): List of fallback WebSocket URLs
+            **_: Additional keyword arguments (ignored)
+
+        Examples:
+            Basic usage:
+            ```python
+            client = PocketOption("your-session-id")
+            balance = client.balance()
+            print(f"Current balance: {balance}")
+            ```
+
+            With custom WebSocket URL:
+            ```python
+            client = PocketOption("your-session-id", url="wss://custom-server.com/ws")
+            ```
+
+            With configuration object:
+            ```python
+            config = Config()
+            config.timeout_secs = 60
+            config.reconnect_time = 10
+            client = PocketOption("your-session-id", config=config)
+            ```
+
+            With configuration dictionary:
+            ```python
+            config_dict = {
+                "timeout_secs": 60,
+                "reconnect_time": 10,
+                "urls": ["wss://backup1.com", "wss://backup2.com"]
+            }
+            client = PocketOption("your-session-id", config=config_dict)
+            ```
+
+            With JSON configuration:
+            ```python
+            config_json = '''
+            {
+                "timeout_secs": 60,
+                "reconnect_time": 10
+            }
+            '''
+            client = PocketOption("your-session-id", config=config_json)
+            ```
+
+            Using the client for trading:
+            ```python
+            client = PocketOption("your-session-id")
+            # Place a trade
+            trade_id, trade_data = client.buy("EURUSD", 1.0, 60)
+            print(f"Trade placed: {trade_id}")
+            
+            # Check trade result
+            result = client.check_win(trade_id)
+            print(f"Trade result: {result}")
+            ```
+
+        Note:
+            - Creates a new event loop for handling async operations synchronously
+            - The configuration becomes locked once initialized and cannot be modified afterwards
+            - Custom URLs provided in the `url` parameter take precedence over URLs in the configuration
+            - Invalid configuration values will raise appropriate exceptions
+            - The event loop is automatically closed when the instance is deleted
+            - All async operations are wrapped to provide a synchronous interface
+        """        
         self.loop = asyncio.new_event_loop()
-        self._client = PocketOptionAsync(ssid)
+        self._client = PocketOptionAsync(ssid, config)
     
     def __del__(self):
         self.loop.close()
@@ -57,6 +142,32 @@ class PocketOption:
             * low: lowest price
         """
         return self.loop.run_until_complete(self._client.get_candles(asset, period, offset))
+    
+    def get_candles_advanced(self, asset: str, period: int, offset: int, time: int) -> list[dict]:  
+        """
+        Retrieves historical candle data for an asset.
+
+        Args:
+            asset (str): Trading asset (e.g., "EURUSD_otc")
+            timeframe (int): Candle timeframe in seconds (e.g., 60 for 1-minute candles)
+            period (int): Historical period in seconds to fetch
+            time (int): Time to fetch candles from
+
+        Returns:
+            list[dict]: List of candles, each containing:
+                - time: Candle timestamp
+                - open: Opening price
+                - high: Highest price
+                - low: Lowest price
+                - close: Closing price
+
+        Note:
+            Available timeframes: 1, 5, 15, 30, 60, 300 seconds
+            Maximum period depends on the timeframe
+        """
+        
+        return self.loop.run_until_complete(self._client.get_candles_advanced(asset, period, offset, time))
+
 
     def balance(self) -> float:
         "Returns the balance of the account"

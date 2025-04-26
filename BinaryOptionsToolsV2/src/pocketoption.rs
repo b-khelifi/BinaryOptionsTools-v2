@@ -170,6 +170,22 @@ impl RawPocketOption {
         })
     }
 
+    pub fn get_candles_advanced<'py>(&self, py: Python<'py>, asset: String, period: i64, offset: i64, time: i64) -> PyResult<Bound<'py, PyAny>> {
+        let client = self.client.clone();
+
+        future_into_py(py, async move {
+            let res = client
+                .get_candles_advanced(asset, period, offset, time)
+                .await
+                .map_err(BinaryErrorPy::from)?;
+            Python::with_gil(|py| {
+                serde_json::to_string(&res)
+                    .map_err(BinaryErrorPy::from)?
+                    .into_py_any(py)
+            })
+        })    
+    }
+
     pub async fn balance(&self) -> PyResult<String> {
         let res = self.client.get_balance().await;
         Ok(serde_json::to_string(&res).map_err(BinaryErrorPy::from)?)

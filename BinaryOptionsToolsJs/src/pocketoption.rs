@@ -691,6 +691,14 @@ impl PocketOption {
         let stream = Arc::new(Mutex::new(boxed_stream));
         Ok(RawStreamIterator { stream })
     }
+
+    /// Returns the current server time as a UNIX timestamp
+    #[napi]
+    pub async fn get_server_time(&self) -> i64  {
+
+        let time = self.client.get_server_time().await;
+        time.timestamp()
+    }
 }
 
 #[napi]
